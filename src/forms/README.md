@@ -2,7 +2,7 @@
 
 > Backend Python do construtor de formulários: definições em JSON versionadas, validação, fórmulas e persistência em SQLite.
 
-Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `fotos.py`, `exportacao.py`, `cli.py`, `api.py` (com `api_esquemas.py`, `api_rotas.py` e `exportar_openapi.py`) e os módulos `servico*.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
+Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `fotos.py`, `exportacao.py`, `cli.py`, `app.py`, `api.py` (com `api_esquemas.py`, `api_rotas.py` e `exportar_openapi.py`) e os módulos `servico*.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
 
 ## models.py
 
@@ -313,3 +313,33 @@ A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio 
 ### Cuidados
 - Mudar nome ou campo de um modelo de resposta, ou o conjunto de rotas, é **mudança incompatível** com o `frontend/`: `tests/test_api_contrato.py` falha de propósito (AGENTS.md §5.3).
 - O `TestClient` do Starlette emite um aviso sobre `httpx`; é só aviso.
+
+## app.py
+
+### Responsabilidade
+A entrada do backend no app instalável (AGENTS.md §4.1). **Só monta as peças**: lê a configuração, escolhe a porta, monta a API com o front e entrega ao uvicorn. Não abre janela (isso é do Electron) e não tem regra de negócio.
+
+### O que tem aqui
+| Símbolo | Papel |
+|---|---|
+| `main()` | Sobe tudo; imprime `{"porta": N}` como **primeira linha** da saída, que o Electron lê |
+| `configuracao_do_app(ambiente)` | Banco e fotos na pasta de dados do sistema (`platformdirs`; `FORMS_DATA_DIR` sobrescreve); exige `FORMS_TOKEN` |
+| `localizar_front(ambiente)` | Acha o `frontend/dist`: `FORMS_FRONTEND_DIST`, o executável empacotado (`sys._MEIPASS/frontend_dist`) ou o repositório |
+| `abrir_soquete_local()` | Reserva uma porta livre **só em 127.0.0.1**, já escutando, e a entrega ao uvicorn |
+
+### Como se conecta
+- **Depende de:** `forms.api` (`criar_app(configuracao, pasta_do_front)`), `platformdirs` (pasta de dados correta em cada sistema; nova dependência).
+- **É usado por:** o executável do PyInstaller (`empacotamento/`) e o Electron, que o inicia como processo filho.
+
+### Decisões que moldam este código
+- O soquete é entregue ao uvicorn em vez de "achar uma porta livre e fechar", que deixaria uma janela para outro processo ocupá-la.
+- Sem `FORMS_TOKEN` o app não sobe (falha fechada, código de saída 2). O app instalado **nunca** dispensa o token, mesmo com `FORMS_SKIP_TOKEN` no ambiente.
+- Na mesma origem não há CORS. O front estático não pede token (o navegador não manda cabeçalho ao carregar a página), mas **toda rota da API e a documentação continuam exigindo**: o middleware só isenta o que nenhuma rota da API reconhece.
+- Os dados nunca ficam dentro do pacote do app (um teste confere); caminhos sempre com `pathlib`.
+
+### Como testar
+`uv run pytest tests/test_app.py` (inclui subir o servidor de verdade numa thread e consultar pela porta anunciada).
+
+### Cuidados
+- A primeira linha da saída é contrato com o Electron: nada pode ser impresso antes dela.
+- Rodar à mão: `FORMS_TOKEN=abc uv run python -m forms.app` (depois de `npm run build` no `frontend/`).

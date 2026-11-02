@@ -18,7 +18,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as ExcecaoHttp
+from starlette.routing import BaseRoute, Match
 
 from forms import servico
 from forms.api_esquemas import ErroDeCampoSaida, ErroSaida
@@ -74,8 +76,13 @@ class Configuracao:
         )
 
 
-def criar_app(configuracao: Configuracao) -> FastAPI:
-    """Monta a aplicação. Nada abre banco aqui: a conexão é aberta por requisição."""
+def criar_app(configuracao: Configuracao, pasta_do_front: Path | None = None) -> FastAPI:
+    """Monta a aplicação. Nada abre banco aqui: a conexão é aberta por requisição.
+
+    Com `pasta_do_front` (o `frontend/dist`), serve o front na mesma origem da API (app
+    instalado, §4.1): então não há CORS, e a página e os arquivos estáticos não pedem token (o
+    navegador não manda cabeçalho ao carregar o `index.html`). Toda rota da API continua exigindo.
+    """
 
     @asynccontextmanager
     async def ciclo_de_vida(app: FastAPI) -> AsyncIterator[None]:
@@ -93,11 +100,15 @@ def criar_app(configuracao: Configuracao) -> FastAPI:
     )
     app.state.configuracao = configuracao
     app.include_router(roteador)
+    # As rotas da API (e a documentação) ficam registradas ANTES do front, que vira a "sobra".
+    rotas_da_api = list(app.routes)
+    if pasta_do_front is not None:
+        app.mount("/", StaticFiles(directory=pasta_do_front, html=True), name="front")
     _registrar_tratadores_de_erro(app)
 
     # Ordem importa: o último adicionado fica por fora. O CORS vai por fora do token, para o
     # preflight (OPTIONS, que não leva o token) passar e o 401 também receber os cabeçalhos CORS.
-    app.middleware("http")(_exigir_token(configuracao))
+    app.middleware("http")(_exigir_token(configuracao, rotas_da_api, pasta_do_front is not None))
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(configuracao.origens_cors),
@@ -112,9 +123,17 @@ def criar_app(configuracao: Configuracao) -> FastAPI:
 # --- token ---
 
 
-def _exigir_token(configuracao: Configuracao) -> Callable:
+def _exigir_token(
+    configuracao: Configuracao, rotas_da_api: list[BaseRoute], serve_o_front: bool
+) -> Callable:
+    def e_do_front(request: Request) -> bool:
+        """Só é "do front" o que nenhuma rota da API reconhece: nunca um caminho da API."""
+        return serve_o_front and not any(
+            rota.matches(request.scope)[0] != Match.NONE for rota in rotas_da_api
+        )
+
     async def middleware(request: Request, chamar_proximo: Callable) -> Response:
-        if request.method == "OPTIONS" or configuracao.dispensar_token:
+        if request.method == "OPTIONS" or configuracao.dispensar_token or e_do_front(request):
             return await chamar_proximo(request)
         enviado = request.headers.get(CABECALHO_DO_TOKEN, "")
         if configuracao.token and secrets.compare_digest(enviado, configuracao.token):
