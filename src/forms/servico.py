@@ -1,0 +1,506 @@
+"""Casos de uso: o ponto de entrada comum de `api.py` e `cli.py` (AGENTS.md §5.1).
+
+Toda regra de negócio fica aqui e abaixo. Quem chama passa a conexão e o relógio; este módulo
+controla a transação, então cada caso de uso grava tudo ou nada.
+"""
+
+import sqlite3
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from datetime import datetime
+
+from forms import repositorio, validacao
+from forms.formulas import CONSTANTES, FUNCOES, NOMES_RESERVADOS, ordenar_calculados
+from forms.models import (
+    CicloDeDependencia,
+    Definicao,
+    DefinicaoInvalida,
+    ErroDeCampo,
+    ErrosDoFormulario,
+    Formulario,
+    LoteInvalido,
+    NaoEncontrado,
+    ValorJson,
+    Versao,
+)
+from forms.repositorio import ResumoDeFormulario, ResumoDeVersao, chave_do_nome
+from forms.tipos_campo import ESPECIFICACOES, PROPRIEDADES_COMUNS
+from forms.validacao import CampoCompartilhado, Origens
+
+# --- tipos de entrada e saída ---
+
+
+@dataclass(frozen=True)
+class Rascunho:
+    """Formulário ainda não publicado. `definicao` é JSON não confiável, validado ao publicar."""
+
+    nome: str
+    definicao: ValorJson
+
+
+@dataclass(frozen=True)
+class FormularioCriado:
+    formulario: Formulario
+    versao: Versao
+
+
+@dataclass(frozen=True)
+class FormularioComVersao:
+    formulario: Formulario
+    versao_atual: Versao
+
+
+@dataclass(frozen=True)
+class ResultadoDaValidacao:
+    valida: bool
+    erros: tuple[ErroDeCampo, ...]
+
+
+@dataclass(frozen=True)
+class TipoDoCatalogo:
+    id: str
+    rotulo: str
+    propriedades: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class FuncaoDoCatalogo:
+    nome: str
+    assinatura: str
+    descricao: str
+    exemplo: str
+
+
+@dataclass(frozen=True)
+class ConstanteDoCatalogo:
+    nome: str
+    valor: str
+    tipo: str
+    descricao: str
+
+
+@dataclass(frozen=True)
+class Catalogo:
+    tipos: tuple[TipoDoCatalogo, ...]
+    funcoes: tuple[FuncaoDoCatalogo, ...]
+    constantes: tuple[ConstanteDoCatalogo, ...]
+    nomes_reservados: tuple[str, ...]
+
+
+# --- transação ---
+
+
+@contextmanager
+def _transacao(conexao: sqlite3.Connection) -> Iterator[None]:
+    """BEGIN explícito: sem ele o `sqlite3` não abre transação para DDL e, aqui, também deixaria
+    uma falha no meio de um lote com formulários já gravados."""
+    conexao.execute("BEGIN")
+    try:
+        yield
+    except BaseException:
+        conexao.rollback()
+        raise
+    conexao.commit()
+
+
+# --- leitura ---
+
+
+def listar_formularios(conexao: sqlite3.Connection) -> list[ResumoDeFormulario]:
+    return repositorio.listar_formularios(conexao)
+
+
+def obter_formulario(conexao: sqlite3.Connection, formulario_id: int) -> FormularioComVersao:
+    """O formulário com a versão atual completa: é de onde o front tira o `versao_id`."""
+    return FormularioComVersao(
+        formulario=repositorio.obter_formulario(conexao, formulario_id),
+        versao_atual=repositorio.obter_versao_atual(conexao, formulario_id),
+    )
+
+
+def listar_versoes(conexao: sqlite3.Connection, formulario_id: int) -> list[ResumoDeVersao]:
+    repositorio.obter_formulario(conexao, formulario_id)  # 404 se o formulário não existe
+    return repositorio.listar_versoes(conexao, formulario_id)
+
+
+def obter_versao(conexao: sqlite3.Connection, formulario_id: int, versao_id: int) -> Versao:
+    """Versão com a definição, para renderizar um registro antigo."""
+    return repositorio.obter_versao(conexao, versao_id, formulario_id)
+
+
+# --- catálogo e validação sem estado ---
+
+
+def catalogo() -> Catalogo:
+    """Tipos de campo e funções de fórmula, lidos das mesmas tabelas que o avaliador usa."""
+    return Catalogo(
+        tipos=tuple(
+            TipoDoCatalogo(
+                id=especificacao.tipo.value,
+                rotulo=especificacao.rotulo,
+                propriedades=(*PROPRIEDADES_COMUNS, *especificacao.propriedades),
+            )
+            for especificacao in ESPECIFICACOES.values()
+        ),
+        funcoes=tuple(
+            FuncaoDoCatalogo(f.nome, f.assinatura, f.descricao, f.exemplo) for f in FUNCOES.values()
+        ),
+        constantes=tuple(
+            ConstanteDoCatalogo(c.nome, format(c.valor, "f"), c.tipo.value, c.descricao)
+            for c in CONSTANTES.values()
+        ),
+        nomes_reservados=tuple(sorted(NOMES_RESERVADOS)),
+    )
+
+
+def validar_definicao(conexao: sqlite3.Connection, definicao: ValorJson) -> ResultadoDaValidacao:
+    """Sem estado: não exige formulário criado. Definição incompleta é o caso normal enquanto o
+    usuário edita, então devolve os erros (todos) em vez de levantar."""
+    origens = _origens_publicadas(conexao, _referencias_brutas(definicao), {})
+    erros = validacao.validar_definicao(definicao, origens)
+    return ResultadoDaValidacao(valida=not erros, erros=erros)
+
+
+# --- criar e publicar ---
+
+
+def criar_formulario(
+    conexao: sqlite3.Connection, nome: str, definicao: ValorJson, agora: datetime
+) -> FormularioCriado:
+    """Cria o formulário e já publica a versão 1: um formulário sem versão não pode ser
+    preenchido, então esse estado não existe. Definição inválida não cria nada."""
+    with _transacao(conexao):
+        conjunto = _validar_conjunto(conexao, [Rascunho(nome, definicao)])
+        item = conjunto.itens[0]
+        if item.erros:
+            raise DefinicaoInvalida(tuple(item.erros))
+        return _gravar(conexao, conjunto, agora, versionando=None)[0]
+
+
+def publicar_versao(
+    conexao: sqlite3.Connection, formulario_id: int, definicao: ValorJson, agora: datetime
+) -> Versao:
+    """Publica a próxima versão (anterior + 1). A publicada nunca é alterada."""
+    formulario = repositorio.obter_formulario(conexao, formulario_id)
+    with _transacao(conexao):
+        conjunto = _validar_conjunto(
+            conexao, [Rascunho(formulario.nome, definicao)], versionando=formulario
+        )
+        item = conjunto.itens[0]
+        if item.erros:
+            raise DefinicaoInvalida(tuple(item.erros))
+        return _gravar(conexao, conjunto, agora, versionando=formulario)[0].versao
+
+
+def validar_conjunto(
+    conexao: sqlite3.Connection, rascunhos: Sequence[Rascunho]
+) -> list[ErrosDoFormulario]:
+    """Valida formulários ainda não publicados que podem se referenciar entre si, sem gravar.
+
+    É o que o lote e o gerador por IA usam. Devolve só os formulários com erro.
+    """
+    return _erros_do_conjunto(_validar_conjunto(conexao, rascunhos))
+
+
+def criar_formularios_em_lote(
+    conexao: sqlite3.Connection, rascunhos: Sequence[Rascunho], agora: datetime
+) -> list[FormularioCriado]:
+    """Cria todos numa só transação, origem primeiro, cada um com a versão 1. Qualquer erro
+    levanta `LoteInvalido` e não cria nada. Independe da ordem de entrada."""
+    if not rascunhos:
+        return []
+    with _transacao(conexao):
+        conjunto = _validar_conjunto(conexao, rascunhos)
+        erros = _erros_do_conjunto(conjunto)
+        if erros:
+            raise LoteInvalido(tuple(erros))
+        return _gravar(conexao, conjunto, agora, versionando=None)
+
+
+# --- o motor: valida um conjunto de rascunhos (publicar um formulário é o conjunto de 1) ---
+
+
+@dataclass
+class _Item:
+    rascunho: Rascunho
+    chave: str
+    referencias: list[tuple[str, str]]  # (id do campo, nome do formulário de origem)
+    erros: list[ErroDeCampo] = field(default_factory=list)
+    definicao: Definicao | None = None
+    compartilhados: dict[str, CampoCompartilhado] | None = None
+
+
+@dataclass
+class _Conjunto:
+    itens: list[_Item]  # na ordem de entrada
+    ordem: list[_Item]  # na ordem de criação: as origens antes de quem depende delas
+
+
+def _validar_conjunto(
+    conexao: sqlite3.Connection,
+    rascunhos: Sequence[Rascunho],
+    versionando: Formulario | None = None,
+) -> _Conjunto:
+    """`versionando` é o formulário que ganha uma nova versão; sem ele, todos são novos."""
+    itens = [_Item(r, chave_do_nome(r.nome), _referencias_brutas(r.definicao)) for r in rascunhos]
+    por_chave = _validar_nomes(conexao, itens, versionando)
+    ordem = _ordenar(itens, por_chave)
+    cache: dict[int, dict[str, CampoCompartilhado]] = {}
+
+    for item in ordem:
+        _analisar_item(conexao, item, por_chave, cache)
+        if versionando is not None:
+            _conferir_ciclo_com_dependentes(conexao, item, versionando)
+            if item.compartilhados is not None:
+                _conferir_contrato(conexao, item, versionando, cache)
+    return _Conjunto(itens, ordem)
+
+
+def _validar_nomes(
+    conexao: sqlite3.Connection, itens: Sequence[_Item], versionando: Formulario | None
+) -> dict[str, _Item]:
+    """Devolve o primeiro item de cada nome; os repetidos ganham erro no campo `nome`."""
+    por_chave: dict[str, _Item] = {}
+    for item in itens:
+        if not item.rascunho.nome.strip():
+            item.erros.append(ErroDeCampo("nome", "O nome do formulário é obrigatório."))
+        elif item.chave in por_chave:
+            item.erros.append(ErroDeCampo("nome", "Já existe um formulário com este nome no lote."))
+        elif versionando is None and repositorio.obter_formulario_por_nome(
+            conexao, item.rascunho.nome
+        ):
+            item.erros.append(ErroDeCampo("nome", "Já existe um formulário com este nome."))
+        por_chave.setdefault(item.chave, item)
+    return por_chave
+
+
+def _ordenar(itens: Sequence[_Item], por_chave: Mapping[str, _Item]) -> list[_Item]:
+    """Origens antes dos dependentes. Ciclo entre rascunhos vira erro (e fica de fora)."""
+    primeiros = [item for item in itens if por_chave[item.chave] is item]
+    grafo = {
+        item.chave: [
+            chave for _, nome in item.referencias if (chave := chave_do_nome(nome)) in por_chave
+        ]
+        for item in primeiros
+    }
+    while True:
+        try:
+            ordem_das_chaves = ordenar_calculados(grafo)
+            break
+        except CicloDeDependencia as ciclo:
+            _registrar_ciclo(ciclo.campos, por_chave)
+            # Tira do grafo só quem está no ciclo; os demais continuam sendo validados.
+            grafo = {c: ds for c, ds in grafo.items() if c not in ciclo.campos}
+    repetidos = [item for item in itens if por_chave[item.chave] is not item]
+    return [por_chave[chave] for chave in ordem_das_chaves] + repetidos
+
+
+def _registrar_ciclo(caminho: Sequence[str], por_chave: Mapping[str, _Item]) -> None:
+    nomes = " → ".join(por_chave[chave].rascunho.nome.strip() for chave in caminho)
+    mensagem = f"Dependência circular entre os formulários: {nomes}."
+    for origem, destino in zip(caminho, caminho[1:], strict=False):
+        item = por_chave[origem]
+        campo_id = next(campo for campo, nome in item.referencias if chave_do_nome(nome) == destino)
+        item.erros.append(ErroDeCampo(f"{campo_id}.formulario", mensagem))
+
+
+def _analisar_item(
+    conexao: sqlite3.Connection,
+    item: _Item,
+    por_chave: Mapping[str, _Item],
+    cache: dict[int, dict[str, CampoCompartilhado]],
+) -> None:
+    origens: dict[str, Mapping[str, CampoCompartilhado]] = {}
+    for _, nome in item.referencias:
+        origem = por_chave.get(chave_do_nome(nome))
+        if origem is not None:
+            if origem.compartilhados is None:
+                # A origem tem erro (ou está num ciclo): apontar campo "não compartilhado"
+                # aqui seria ruído. Corrigir a origem primeiro resolve.
+                item.erros.append(
+                    ErroDeCampo(
+                        "campos",
+                        f"Corrija primeiro o formulário '{origem.rascunho.nome.strip()}', "
+                        "do qual este depende.",
+                    )
+                )
+                return
+            origens[nome] = origem.compartilhados
+        else:
+            publicado = repositorio.obter_formulario_por_nome(conexao, nome)
+            if publicado is not None:
+                origens[nome] = _compartilhados_publicados(conexao, publicado, cache)
+
+    analise = validacao.analisar_definicao(item.rascunho.definicao, origens)
+    item.erros.extend(analise.erros)
+    if analise.definicao is not None:
+        item.definicao = analise.definicao
+        item.compartilhados = validacao.compartilhados_da_definicao(
+            analise.definicao, analise.tipos_calculados
+        )
+
+
+def _conferir_ciclo_com_dependentes(
+    conexao: sqlite3.Connection, item: _Item, versionando: Formulario
+) -> None:
+    """A nova versão de uma origem não pode passar a depender de quem já depende dela."""
+    dependentes = set(repositorio.formularios_dependentes(conexao, versionando.id, transitivo=True))
+    for campo_id, nome in item.referencias:
+        alvo = repositorio.obter_formulario_por_nome(conexao, nome)
+        if alvo is not None and alvo.id in dependentes:
+            item.erros.append(
+                ErroDeCampo(
+                    f"{campo_id}.formulario",
+                    f"Dependência circular entre os formulários: {versionando.nome} → "
+                    f"{alvo.nome} → {versionando.nome}. '{alvo.nome}' já depende de "
+                    f"'{versionando.nome}' (direta ou indiretamente).",
+                )
+            )
+
+
+def _conferir_contrato(
+    conexao: sqlite3.Connection,
+    item: _Item,
+    formulario: Formulario,
+    cache: dict[int, dict[str, CampoCompartilhado]],
+) -> None:
+    """Enquanto houver dependentes, a nova versão não quebra os campos compartilhados (§2.7)."""
+    nomes = sorted(
+        repositorio.obter_formulario(conexao, i).nome
+        for i in repositorio.formularios_dependentes(conexao, formulario.id, transitivo=False)
+    )
+    if not nomes or item.compartilhados is None or item.definicao is None:
+        return
+    usados_por = ", ".join(f"'{nome}'" for nome in nomes)
+    ids_novos = {campo.id for campo in item.definicao.campos}
+    antigos = _compartilhados_publicados(conexao, formulario, cache)
+
+    for id_do_campo, antigo in antigos.items():
+        novo = item.compartilhados.get(id_do_campo)
+        if novo is None and id_do_campo not in ids_novos:
+            item.erros.append(
+                ErroDeCampo(
+                    id_do_campo,
+                    f"O campo '{id_do_campo}' é compartilhado com {usados_por} "
+                    "e não pode ser removido.",
+                )
+            )
+        elif novo is None:
+            item.erros.append(
+                ErroDeCampo(
+                    f"{id_do_campo}.compartilhado",
+                    f"O campo '{id_do_campo}' é usado por {usados_por} "
+                    "e precisa continuar compartilhado.",
+                )
+            )
+        elif novo.tipo != antigo.tipo:
+            item.erros.append(
+                ErroDeCampo(
+                    f"{id_do_campo}.tipo",
+                    f"O campo '{id_do_campo}' é usado por {usados_por} e não pode mudar de tipo "
+                    f"(de {antigo.tipo.value} para {novo.tipo.value}).",
+                )
+            )
+        elif novo.tipo_na_formula != antigo.tipo_na_formula:
+            item.erros.append(
+                ErroDeCampo(
+                    f"{id_do_campo}.formula",
+                    f"O campo calculado '{id_do_campo}' é usado por {usados_por} e o tipo do seu "
+                    f"resultado não pode mudar (de {_nome_do_tipo(antigo)} para "
+                    f"{_nome_do_tipo(novo)}).",
+                )
+            )
+
+
+def _nome_do_tipo(campo: CampoCompartilhado) -> str:
+    return "sem tipo" if campo.tipo_na_formula is None else campo.tipo_na_formula.value
+
+
+def _erros_do_conjunto(conjunto: _Conjunto) -> list[ErrosDoFormulario]:
+    return [
+        ErrosDoFormulario(item.rascunho.nome, tuple(item.erros))
+        for item in conjunto.itens
+        if item.erros
+    ]
+
+
+def _gravar(
+    conexao: sqlite3.Connection,
+    conjunto: _Conjunto,
+    agora: datetime,
+    versionando: Formulario | None,
+) -> list[FormularioCriado]:
+    """Grava na ordem de criação (origens primeiro) e registra as dependências."""
+    criados: list[FormularioCriado] = []
+    for item in conjunto.ordem:
+        assert item.definicao is not None  # sem erros, todo item tem definição
+        formulario = versionando or repositorio.criar_formulario(conexao, item.rascunho.nome, agora)
+        versao = repositorio.inserir_versao(conexao, formulario.id, item.definicao, agora)
+        origens = {
+            origem.id
+            for _, nome in item.referencias
+            if (origem := repositorio.obter_formulario_por_nome(conexao, nome)) is not None
+        }
+        repositorio.registrar_dependencias(conexao, formulario.id, origens)
+        criados.append(FormularioCriado(formulario, versao))
+    return criados
+
+
+# --- campos compartilhados de formulários já publicados ---
+
+
+def _referencias_brutas(definicao: ValorJson) -> list[tuple[str, str]]:
+    """(id do campo, nome do formulário) de cada referência, tolerando JSON malformado."""
+    campos = definicao.get("campos") if isinstance(definicao, dict) else None
+    if not isinstance(campos, list):
+        return []
+    return [
+        (campo["id"], campo["formulario"])
+        for campo in campos
+        if isinstance(campo, dict)
+        and campo.get("tipo") == "referencia"
+        and isinstance(campo.get("id"), str)
+        and isinstance(campo.get("formulario"), str)
+    ]
+
+
+def _origens_publicadas(
+    conexao: sqlite3.Connection,
+    referencias: Sequence[tuple[str, str]],
+    cache: dict[int, dict[str, CampoCompartilhado]],
+) -> Origens:
+    origens: dict[str, Mapping[str, CampoCompartilhado]] = {}
+    for _, nome in referencias:
+        formulario = repositorio.obter_formulario_por_nome(conexao, nome)
+        if formulario is not None:
+            origens[nome] = _compartilhados_publicados(conexao, formulario, cache)
+    return origens
+
+
+def _compartilhados_publicados(
+    conexao: sqlite3.Connection,
+    formulario: Formulario,
+    cache: dict[int, dict[str, CampoCompartilhado]],
+) -> dict[str, CampoCompartilhado]:
+    """Campos que a versão atual de um formulário publicado compartilha.
+
+    O tipo de um `calculado` compartilhado não é guardado: sai de analisar de novo a definição
+    publicada, o que exige as origens dela. O grafo é acíclico, então a recursão termina.
+    """
+    if formulario.id in cache:
+        return cache[formulario.id]
+    try:
+        definicao = repositorio.obter_versao_atual(conexao, formulario.id).definicao
+    except NaoEncontrado:  # formulário sem versão publicada não compartilha nada
+        cache[formulario.id] = {}
+        return {}
+    origens = _origens_publicadas(
+        conexao,
+        [(campo.id, campo.formulario) for campo in definicao.campos if campo.formulario],
+        cache,
+    )
+    analise = validacao.analisar_definicao(definicao.para_json(), origens)
+    compartilhados = validacao.compartilhados_da_definicao(definicao, analise.tipos_calculados)
+    cache[formulario.id] = compartilhados
+    return compartilhados
