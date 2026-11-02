@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 
 from forms.ia.cliente import ClienteDeLLM, IaIndisponivel
-from forms.rag.indice import IndiceBm25, ResultadoDeBusca
+from forms.rag.indice import Buscador, ResultadoDeBusca
 
 MENSAGEM_SEM_RESULTADO = "Não encontrei isso nos procedimentos."
 SINAL_DE_SEM_BASE = "NAO_ENCONTREI"
@@ -35,7 +35,7 @@ class Resposta:
 
 
 def perguntar(
-    indice: IndiceBm25, pergunta: str, cliente: ClienteDeLLM | None, k: int = 3
+    indice: Buscador, pergunta: str, cliente: ClienteDeLLM | None, k: int = 3
 ) -> Resposta:
     trechos = tuple(indice.buscar(pergunta, k))
     if not trechos:

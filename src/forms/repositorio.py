@@ -8,7 +8,7 @@ import json
 import re
 import sqlite3
 import unicodedata
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePath
@@ -123,9 +123,20 @@ def _adicionar_chave_unica_do_nome(conexao: sqlite3.Connection) -> None:
     conexao.execute("CREATE UNIQUE INDEX formularios_por_nome_chave ON formularios (nome_chave)")
 
 
+def _criar_vetores_dos_trechos(conexao: sqlite3.Connection) -> None:
+    # Embeddings dos trechos dos procedimentos (§2.5). `chave` é o hash do modelo e do texto do
+    # trecho, então trecho alterado ou outro modelo de embeddings geram outra chave e o vetor
+    # antigo é só descartado. `vetor` são float32 little-endian (4 bytes por dimensão).
+    conexao.execute("CREATE TABLE vetores_trechos (chave TEXT PRIMARY KEY, vetor BLOB NOT NULL)")
+
+
 # A migração de posição N leva o banco da versão N para a N+1. Nunca edite uma migração
 # já publicada: o banco do usuário persiste entre versões do app; acrescente uma nova.
-MIGRACOES: tuple[Migracao, ...] = (_criar_esquema_1, _adicionar_chave_unica_do_nome)
+MIGRACOES: tuple[Migracao, ...] = (
+    _criar_esquema_1,
+    _adicionar_chave_unica_do_nome,
+    _criar_vetores_dos_trechos,
+)
 VERSAO_ATUAL_DO_ESQUEMA = len(MIGRACOES)
 
 
@@ -666,3 +677,21 @@ def _caminho_portavel(caminho: str | PurePath) -> str:
     if not texto or re.match(r"[A-Za-z]:", texto) or any(parte in ("", "..") for parte in partes):
         raise ValorInvalido("O caminho do anexo deve ser relativo à pasta de dados.")
     return texto
+
+
+# --- vetores dos trechos (busca semântica, §2.5) ---
+
+
+def listar_vetores(conexao: sqlite3.Connection) -> dict[str, bytes]:
+    linhas = conexao.execute("SELECT chave, vetor FROM vetores_trechos")
+    return {linha["chave"]: linha["vetor"] for linha in linhas}
+
+
+def guardar_vetores(conexao: sqlite3.Connection, vetores: Mapping[str, bytes]) -> None:
+    conexao.executemany(
+        "INSERT OR REPLACE INTO vetores_trechos (chave, vetor) VALUES (?, ?)", vetores.items()
+    )
+
+
+def apagar_vetores(conexao: sqlite3.Connection, chaves: Iterable[str]) -> None:
+    conexao.executemany("DELETE FROM vetores_trechos WHERE chave = ?", ((c,) for c in chaves))

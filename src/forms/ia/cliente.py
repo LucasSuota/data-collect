@@ -20,6 +20,10 @@ class IaIndisponivel(ErroDeDominio):
 
 
 class ClienteDeLLM(Protocol):
+    # Identifica o espaço dos vetores: vetores de modelos diferentes não se comparam. `None`
+    # quando não há provedor de embeddings.
+    modelo_de_vetores: str | None
+
     def completar(self, sistema: str, mensagem: str, *, maximo_de_tokens: int) -> str:
         """Devolve o texto da resposta. Levanta `IaIndisponivel` se não for possível responder."""
         ...
@@ -30,6 +34,9 @@ class ClienteDeLLM(Protocol):
 
 
 class ClienteAnthropic:
+    # A Anthropic não oferece embeddings: aqui a busca semântica fica desligada e vale o BM25.
+    modelo_de_vetores: str | None = None
+
     def __init__(self, chave: str, modelo: str) -> None:
         self._chave = chave
         self.modelo = modelo
@@ -77,9 +84,11 @@ class ClienteFalso:
         self,
         respostas: Sequence[str | Exception],
         vetores: Mapping[str, list[float]] | None = None,
+        modelo_de_vetores: str | None = None,
     ) -> None:
         self._respostas = list(respostas)
         self._vetores = vetores
+        self.modelo_de_vetores = modelo_de_vetores
         self.chamadas: list[tuple[str, str]] = []
 
     def completar(self, sistema: str, mensagem: str, *, maximo_de_tokens: int) -> str:

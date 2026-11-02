@@ -10,6 +10,7 @@ import unicodedata
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 from forms.rag.chunker import Trecho
 
@@ -39,6 +40,12 @@ def _sem_acento(palavra: str) -> str:
 class ResultadoDeBusca:
     trecho: Trecho
     pontuacao: float
+
+
+class Buscador(Protocol):
+    """O que `perguntar` precisa: BM25 puro e a busca híbrida servem igualmente."""
+
+    def buscar(self, consulta: str, k: int = 3) -> list[ResultadoDeBusca]: ...
 
 
 class IndiceBm25:
