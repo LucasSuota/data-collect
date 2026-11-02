@@ -316,7 +316,8 @@ Se o tempo apertar, corte **nesta ordem**:
 ## 14. Antes de marcar uma tarefa como pronta
 
 - [ ] Testes novos/alterados cobrindo a lógica (`uv run pytest`)
-- [ ] Lint e formatação (`uv run ruff check .` e `uv run ruff format .`)
+- [ ] Lint e formatação (`uv run ruff check .` e `uv run ruff format .`). Atenção: o `ruff format` também formata blocos de Python dentro de arquivos `.md`
+- [ ] CI verde no PR (`.github/workflows/ci.yml` roda `uv sync --locked`, ruff check, ruff format --check e pytest). Se mudar dependência, commite `pyproject.toml` e `uv.lock` juntos
 - [ ] **Testado manualmente** quando mexer em API/CLI: golden path + 1 caso de borda via `/docs` ou `curl` (testes não substituem ver funcionando)
 - [ ] Contrato (OpenAPI / JSON de definição) inalterado ou mudança incompatível sinalizada (§5.3)
 - [ ] Nenhum `eval`/`exec`, nenhum SQL por concatenação, nenhum segredo no diff

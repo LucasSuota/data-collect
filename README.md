@@ -17,6 +17,8 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
+O CI (GitHub Actions) roda esses mesmos comandos em todo push na `main` e em todo pull request.
+
 A API e a CLI ainda não existem; este README será atualizado conforme forem criadas.
 
 ## Próximos passos (fora do escopo atual)
