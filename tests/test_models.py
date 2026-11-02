@@ -13,10 +13,12 @@ from forms.models import (
     ErroDeCalculo,
     ErroDeCampo,
     ErroDeDominio,
+    ErrosDoFormulario,
     ExclusaoBloqueada,
     FormulaInvalida,
     Formulario,
     FotoInvalida,
+    LoteInvalido,
     NaoEncontrado,
     Posicao,
     Registro,
@@ -201,6 +203,7 @@ def test_formula_invalida_aceita_posicao_ausente():
         ExclusaoBloqueada("x"),
         ValorInvalido("x"),
         FotoInvalida("x"),
+        LoteInvalido(()),
     ],
 )
 def test_excecoes_de_dominio_herdam_da_base(excecao: Exception):
@@ -283,3 +286,16 @@ def test_para_json_nao_compartilha_estado_com_o_campo():
 
     # assert
     assert campo.opcoes == ("A",)
+
+
+def test_lote_invalido_carrega_os_erros_agrupados_por_formulario():
+    # arrange
+    erro = ErroDeCampo(campo="a.tipo", mensagem="Tipo desconhecido")
+    formularios = (ErrosDoFormulario(nome="proctor", erros=(erro,)),)
+
+    # act
+    excecao = LoteInvalido(formularios)
+
+    # assert
+    assert excecao.formularios == formularios
+    assert "proctor" in str(excecao) and "a.tipo" in str(excecao)

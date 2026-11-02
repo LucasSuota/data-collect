@@ -200,6 +200,28 @@ class CicloDeDependencia(DefinicaoInvalida):
         self.campos = campos
 
 
+@dataclass(frozen=True)
+class ErrosDoFormulario:
+    """Erros de um formulário dentro de um lote, localizados pelo `nome` dele."""
+
+    nome: str
+    erros: tuple[ErroDeCampo, ...]
+
+
+class LoteInvalido(ErroDeDominio):
+    """Algum formulário do lote é inválido; nada foi criado (AGENTS.md §2.2)."""
+
+    def __init__(self, formularios: tuple[ErrosDoFormulario, ...]) -> None:
+        super().__init__(
+            "; ".join(
+                f"{formulario.nome}: {erro.campo}: {erro.mensagem}"
+                for formulario in formularios
+                for erro in formulario.erros
+            )
+        )
+        self.formularios = formularios
+
+
 class RegistroInvalido(ErroDeDominio):
     def __init__(self, erros: tuple[ErroDeCampo, ...]) -> None:
         super().__init__("; ".join(f"{erro.campo}: {erro.mensagem}" for erro in erros))

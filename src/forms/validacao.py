@@ -103,6 +103,22 @@ def analisar_definicao(dados: ValorJson, origens: Origens | None = None) -> Anal
     return AnaliseDeDefinicao(tuple(erros), definicao, tipos_calculados)
 
 
+def compartilhados_da_definicao(
+    definicao: Definicao, tipos_calculados: Mapping[str, TipoFormula]
+) -> dict[str, CampoCompartilhado]:
+    """Campos que a definição libera aos dependentes (§2.7), com o tipo de cada um em fórmula."""
+    compartilhados: dict[str, CampoCompartilhado] = {}
+    for campo in definicao.campos:
+        if not campo.compartilhado:
+            continue
+        if campo.tipo is TipoCampo.CALCULADO:
+            tipo_na_formula = tipos_calculados.get(campo.id)
+        else:
+            tipo_na_formula = _TIPO_NA_FORMULA.get(campo.tipo)
+        compartilhados[campo.id] = CampoCompartilhado(campo.tipo, tipo_na_formula)
+    return compartilhados
+
+
 # --- leitura da estrutura ---
 
 
