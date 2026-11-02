@@ -3,6 +3,8 @@ import { useApi } from "../api/contexto";
 import type { Esquemas, ParametrosDeConsulta } from "../api/cliente";
 import { baixarArquivo, formatarCelula } from "../lib/formatacao";
 import type { Rota } from "../rotas";
+import { Botao, Cartao, EstadoVazio, Icone } from "../ui";
+import { CLASSE_DO_CONTROLE } from "../components/FormRenderer/Campo";
 import { EsqueletoDaTabela } from "./esqueletos";
 import { Falha, mensagemDe, useCarga } from "./Estado";
 
@@ -62,83 +64,76 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
   const titulo = formulario.situacao === "pronto" ? formulario.dados.nome : "Registros";
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto text-2xl font-semibold">Registros · {titulo}</h1>
-        <button
-          type="button"
-          className="rounded bg-pedra-900 px-3 py-1.5 text-white"
-          onClick={() => navegar({ nome: "novoRegistro", formularioId })}
-        >
+        <h1 className="mr-auto text-2xl font-semibold tracking-tight">Registros · {titulo}</h1>
+        <Botao variante="primario" onClick={() => navegar({ nome: "novoRegistro", formularioId })}>
+          <Icone nome="mais" />
           Novo registro
-        </button>
-        <button
-          type="button"
-          className="rounded border border-pedra-300 px-3 py-1.5"
-          onClick={() => void exportar()}
-        >
-          Exportar CSV
-        </button>
+        </Botao>
+        <Botao onClick={() => void exportar()}>Exportar CSV</Botao>
       </div>
 
       {falhaDoCsv ? <Falha mensagem={falhaDoCsv} /> : null}
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col text-sm">
-          Versão
-          <select
-            className="rounded border border-pedra-300 px-2 py-1.5"
-            value={versaoId ?? ""}
-            onChange={(e) => trocarDeVersao(e.target.value)}
-          >
-            <option value="">Última</option>
-            {versoes.situacao === "pronto"
-              ? versoes.dados.map((versao) => (
-                  <option key={versao.id} value={versao.id}>
-                    Versão {versao.numero}
-                  </option>
-                ))
-              : null}
-          </select>
-        </label>
-        <label className="flex flex-col text-sm">
-          Criado de
-          <input
-            type="date"
-            className="rounded border border-pedra-300 px-2 py-1.5"
-            value={criadoDe}
-            onChange={(e) => {
-              setCriadoDe(e.target.value);
-              setPagina(0);
-            }}
-          />
-        </label>
-        <label className="flex flex-col text-sm">
-          Criado até
-          <input
-            type="date"
-            className="rounded border border-pedra-300 px-2 py-1.5"
-            value={criadoAte}
-            onChange={(e) => {
-              setCriadoAte(e.target.value);
-              setPagina(0);
-            }}
-          />
-        </label>
-      </div>
+      <Cartao className="flex flex-col gap-4 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
+            Versão
+            <select
+              className={CLASSE_DO_CONTROLE}
+              value={versaoId ?? ""}
+              onChange={(e) => trocarDeVersao(e.target.value)}
+            >
+              <option value="">Última</option>
+              {versoes.situacao === "pronto"
+                ? versoes.dados.map((versao) => (
+                    <option key={versao.id} value={versao.id}>
+                      Versão {versao.numero}
+                    </option>
+                  ))
+                : null}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
+            Criado de
+            <input
+              type="date"
+              className={CLASSE_DO_CONTROLE}
+              value={criadoDe}
+              onChange={(e) => {
+                setCriadoDe(e.target.value);
+                setPagina(0);
+              }}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
+            Criado até
+            <input
+              type="date"
+              className={CLASSE_DO_CONTROLE}
+              value={criadoAte}
+              onChange={(e) => {
+                setCriadoAte(e.target.value);
+                setPagina(0);
+              }}
+            />
+          </label>
+        </div>
 
-      {listagem.situacao === "pronto" ? (
-        <FiltroPorCampo
-          // Outra versão, outras colunas: recomeça o formulário de filtro.
-          key={listagem.dados.versao_id}
-          colunas={listagem.dados.colunas}
-          filtros={filtros}
-          aoMudar={(novos) => {
-            setFiltros(novos);
-            setPagina(0);
-          }}
-        />
-      ) : null}
+        {listagem.situacao === "pronto" ? (
+          <FiltroPorCampo
+            // Outra versão, outras colunas: recomeça o formulário de filtro.
+            key={listagem.dados.versao_id}
+            colunas={listagem.dados.colunas}
+            filtros={filtros}
+            aoMudar={(novos) => {
+              setFiltros(novos);
+              setPagina(0);
+            }}
+          />
+        ) : null}
+      </Cartao>
 
       {listagem.situacao === "carregando" ? <EsqueletoDaTabela /> : null}
       {listagem.situacao === "erro" ? <Falha mensagem={listagem.mensagem} /> : null}
@@ -172,70 +167,81 @@ function Tabela({
   abrir: (registroId: number) => void;
 }) {
   if (total === 0) {
-    return <p className="text-pedra-600">Nenhum registro encontrado.</p>;
+    return (
+      <EstadoVazio icone="registros" titulo="Nenhum registro encontrado.">
+        Ajuste os filtros ou crie um registro novo.
+      </EstadoVazio>
+    );
   }
   const inicio = pagina * POR_PAGINA + 1;
   const fim = pagina * POR_PAGINA + itens.length;
   return (
     <>
-      <div className="overflow-x-auto rounded border border-pedra-200">
+      <Cartao className="max-h-[70vh] overflow-auto">
         <table className="w-full text-left text-sm">
-          <thead className="bg-pedra-50">
+          <thead className="sticky top-0 z-10 bg-pedra-100 text-xs uppercase tracking-wide text-pedra-600">
             <tr>
-              <th className="p-2">#</th>
+              <th className="px-4 py-3 font-medium">#</th>
               {colunas.map((coluna) => (
-                <th key={coluna.id} className="p-2">
+                <th
+                  key={coluna.id}
+                  className={`px-4 py-3 font-medium ${eNumerica(coluna) ? "text-right" : ""}`}
+                >
                   {coluna.rotulo}
                   {coluna.unidade ? ` (${coluna.unidade})` : ""}
                 </th>
               ))}
-              <th className="p-2" />
+              <th className="px-4 py-3" />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-pedra-200">
             {itens.map((registro) => (
-              <tr key={registro.id} className="border-t border-pedra-100">
-                <td className="p-2">{registro.id}</td>
+              <tr
+                key={registro.id}
+                className="transition-colors duration-(--duracao-rapida) hover:bg-pedra-50"
+              >
+                <td className="px-4 py-3 font-mono text-pedra-500">{registro.id}</td>
                 {colunas.map((coluna) => (
-                  <td key={coluna.id} className="p-2">
+                  <td
+                    key={coluna.id}
+                    className={`px-4 py-3 ${eNumerica(coluna) ? "text-right font-mono tabular-nums" : ""}`}
+                  >
                     {formatarCelula(coluna, registro.dados[coluna.id])}
                   </td>
                 ))}
-                <td className="p-2">
-                  <button
-                    type="button"
-                    className="underline"
+                <td className="px-4 py-3 text-right">
+                  <Botao
+                    variante="fantasma"
+                    tamanho="pequeno"
                     aria-label={`Abrir o registro ${registro.id}`}
                     onClick={() => abrir(registro.id)}
                   >
                     Abrir
-                  </button>
+                  </Botao>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="flex items-center gap-3 text-sm">
-        <span>
+      </Cartao>
+      <div className="flex items-center gap-3 text-sm text-pedra-600">
+        <span className="mr-auto">
           Mostrando {inicio}–{fim} de {total}
         </span>
-        <button
-          type="button"
-          className="rounded border border-pedra-300 px-2 py-1 disabled:opacity-50"
+        <Botao
+          tamanho="pequeno"
           disabled={pagina === 0}
           onClick={() => aoMudarDePagina(pagina - 1)}
         >
           Anterior
-        </button>
-        <button
-          type="button"
-          className="rounded border border-pedra-300 px-2 py-1 disabled:opacity-50"
+        </Botao>
+        <Botao
+          tamanho="pequeno"
           disabled={fim >= total}
           onClick={() => aoMudarDePagina(pagina + 1)}
         >
           Próxima
-        </button>
+        </Botao>
       </div>
     </>
   );
@@ -268,10 +274,10 @@ function FiltroPorCampo({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col text-sm">
+        <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
           Filtrar por
           <select
-            className="rounded border border-pedra-300 px-2 py-1.5"
+            className={CLASSE_DO_CONTROLE}
             value={campoId}
             onChange={(e) => {
               setCampoId(e.target.value);
@@ -287,14 +293,9 @@ function FiltroPorCampo({
           </select>
         </label>
         {coluna ? <EntradaDoFiltro coluna={coluna} valor={valor} aoMudar={setValor} /> : null}
-        <button
-          type="button"
-          className="rounded border border-pedra-300 px-3 py-1.5 disabled:opacity-50"
-          disabled={!coluna || valor === ""}
-          onClick={aplicar}
-        >
+        <Botao disabled={!coluna || valor === ""} onClick={aplicar}>
           Aplicar filtro
-        </button>
+        </Botao>
       </div>
       <ul className="flex flex-wrap gap-2">
         {Object.entries(filtros).map(([id, texto]) => {
@@ -303,15 +304,18 @@ function FiltroPorCampo({
             Object.entries(filtros).filter(([chave]) => chave !== id),
           );
           return (
-            <li key={id} className="rounded-full bg-pedra-100 px-3 py-1 text-sm">
+            <li
+              key={id}
+              className="flex items-center gap-1.5 rounded-full border border-pedra-300 bg-pedra-100 py-0.5 pl-3 pr-1 text-sm"
+            >
               {rotulo}: {rotuloDoValor(texto)}
               <button
                 type="button"
-                className="ml-2"
+                className="grid size-5 place-items-center rounded-full text-pedra-500 hover:bg-pedra-200 hover:text-pedra-900"
                 aria-label={`Remover o filtro ${rotulo}`}
                 onClick={() => aoMudar(restantes)}
               >
-                ×
+                <Icone nome="fechar" tamanho={12} />
               </button>
             </li>
           );
@@ -330,7 +334,7 @@ function EntradaDoFiltro({
   valor: string;
   aoMudar: (valor: string) => void;
 }) {
-  const classe = "rounded border border-pedra-300 px-2 py-1.5";
+  const classe = CLASSE_DO_CONTROLE;
   const booleano = coluna.tipo === "sim_nao" || coluna.resultado === "booleano";
   if (booleano) {
     return (
@@ -376,4 +380,9 @@ function EntradaDoFiltro({
 
 function rotuloDoValor(valor: string): string {
   return valor === "true" ? "Sim" : valor === "false" ? "Não" : valor;
+}
+
+/** Números alinham à direita, em fonte de largura fixa: as casas decimais ficam em coluna. */
+function eNumerica(coluna: Coluna): boolean {
+  return coluna.tipo === "numero" || (coluna.tipo === "calculado" && coluna.resultado === "numero");
 }

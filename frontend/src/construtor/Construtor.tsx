@@ -26,7 +26,8 @@ import { EsqueletoDoConstrutor } from "../paginas/esqueletos";
 import { Falha, mensagemDe, useCarga } from "../paginas/Estado";
 import type { Rota } from "../rotas";
 import { useMovimentoReduzido } from "../lib/movimentoReduzido";
-import { Icone } from "../ui";
+import { CLASSE_DO_CONTROLE } from "../components/FormRenderer/Campo";
+import { Botao, Icone } from "../ui";
 import {
   INSTRUCOES_DO_CONSTRUTOR,
   anunciosDoConstrutor,
@@ -306,7 +307,7 @@ function Editor({
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
-        <h1 className="mr-auto text-2xl font-semibold">
+        <h1 className="mr-auto text-2xl font-semibold tracking-tight">
           {editando
             ? `Editar · ${formulario.nome}`
             : rascunho
@@ -319,17 +320,17 @@ function Editor({
             continuam na versão deles.
           </p>
         ) : (
-          <label className="flex flex-col text-sm font-medium">
+          <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
             Nome do formulário
             <input
               type="text"
-              className="rounded border border-pedra-300 px-2 py-1.5"
+              className={CLASSE_DO_CONTROLE}
               value={nome}
               aria-invalid={erroDoNome.length > 0}
               onChange={(e) => setNome(e.target.value)}
             />
             {erroDoNome.map((mensagem) => (
-              <span key={mensagem} role="alert" className="font-normal text-red-700">
+              <span key={mensagem} role="alert" className="font-normal text-erro-700">
                 {mensagem}
               </span>
             ))}
@@ -337,44 +338,26 @@ function Editor({
         )}
         {rascunho ? (
           <>
-            <button
-              type="button"
-              className="rounded border border-pedra-300 px-4 py-2"
-              onClick={rascunho.aoCancelar}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="rounded bg-pedra-900 px-4 py-2 text-white"
+            <Botao onClick={rascunho.aoCancelar}>Cancelar</Botao>
+            <Botao
+              variante="primario"
               onClick={() => rascunho.aoConcluir(nome, paraDefinicao(campos, aceitas))}
             >
               Concluir edição
-            </button>
+            </Botao>
           </>
         ) : (
           <>
             {!editando ? (
-              <button
-                type="button"
-                className="rounded border border-pedra-300 px-4 py-2"
-                onClick={() => navegar({ nome: "criarComIa" })}
-              >
-                Criar com IA
-              </button>
+              <Botao onClick={() => navegar({ nome: "criarComIa" })}>Criar com IA</Botao>
             ) : null}
-            <button
-              type="button"
-              disabled={publicando}
-              className="rounded bg-pedra-900 px-4 py-2 text-white disabled:opacity-60"
-              onClick={() => void publicar()}
-            >
+            <Botao variante="primario" carregando={publicando} onClick={() => void publicar()}>
               {publicando
                 ? "Publicando…"
                 : editando
                   ? "Publicar nova versão"
                   : "Publicar formulário"}
-            </button>
+            </Botao>
           </>
         )}
       </div>
@@ -629,7 +612,7 @@ function ItemDoCampo({
         entrando ? "animate-entrar" : ""
       } ${isDragging ? "border-dashed border-sinal-300 opacity-45" : ""} ${
         selecionado ? "border-pedra-900" : "border-pedra-200"
-      } ${quantidadeDeErros > 0 ? "border-red-400" : ""}`}
+      } ${quantidadeDeErros > 0 ? "border-erro-300" : ""}`}
     >
       <span
         {...attributes}
@@ -651,7 +634,7 @@ function ItemDoCampo({
           {campo.id || "(sem id)"} · {campo.tipo}
         </span>
         {quantidadeDeErros > 0 ? (
-          <span className="ml-2 text-sm text-red-700">{quantidadeDeErros} erro(s)</span>
+          <span className="ml-2 text-sm text-erro-700">{quantidadeDeErros} erro(s)</span>
         ) : null}
       </button>
       <button
@@ -674,7 +657,7 @@ function ItemDoCampo({
       </button>
       <button
         type="button"
-        className="px-1 text-red-700"
+        className="px-1 text-erro-700"
         aria-label={`Remover o campo ${campo.rotulo}`}
         onClick={remover}
       >

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Esquemas, TipoDeCampo } from "../api/cliente";
+import { CLASSE_DO_CONTROLE } from "../components/FormRenderer/Campo";
 import { EditorDeFormula } from "./EditorDeFormula";
 import type { CampoEmEdicao, ErroNoCampo } from "./estado";
 
@@ -18,7 +19,7 @@ interface Props {
 }
 
 const CAMPOS_USAVEIS_EM_FORMULA: TipoDeCampo[] = ["numero", "data", "sim_nao", "calculado"];
-const CLASSE = "rounded border border-pedra-300 px-2 py-1.5 aria-[invalid=true]:border-red-500";
+const CLASSE = CLASSE_DO_CONTROLE;
 
 /**
  * Edita as propriedades de um campo. Só mostra as que o catálogo diz que o tipo aceita
@@ -43,7 +44,7 @@ export function PainelDePropriedades({
       <h2 className="text-lg font-semibold">Propriedades</h2>
 
       {errosDe("").map((erro) => (
-        <p key={erro.mensagem} role="alert" className="text-sm text-red-700">
+        <p key={erro.mensagem} role="alert" className="text-sm text-erro-700">
           {erro.mensagem}
         </p>
       ))}
@@ -191,7 +192,7 @@ export function PainelDePropriedades({
         />
       ) : null}
       {errosDe("compartilhado").map((erro) => (
-        <p key={erro.mensagem} role="alert" className="text-sm text-red-700">
+        <p key={erro.mensagem} role="alert" className="text-sm text-erro-700">
           {erro.mensagem}
         </p>
       ))}
@@ -241,7 +242,7 @@ function Moldura({
         </span>
       ) : null}
       {erros.length > 0 ? (
-        <ul id={idDosErros} role="alert" className="text-sm text-red-700">
+        <ul id={idDosErros} role="alert" className="text-sm text-erro-700">
           {erros.map((erro) => (
             <li key={erro.mensagem}>{erro.mensagem}</li>
           ))}
