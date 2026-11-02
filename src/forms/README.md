@@ -39,3 +39,30 @@ Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e n
 ### Cuidados
 - Não importar nenhuma outra camada do projeto aqui; um teste confere isso.
 - Renomear atributo de `Campo` ou de `ErroDeCampo` quebra o contrato com o `frontend/`.
+
+## formulas.py
+
+### Responsabilidade
+Ler o texto de uma fórmula e devolver a árvore já verificada, sem executar nada. Ainda não avalia valores, não infere tipos e não monta o grafo de dependências.
+
+### O que tem aqui
+| Símbolo | Papel |
+|---|---|
+| `analisar_formula(texto)` | `ast.parse` em modo `eval` + verificação da árvore; devolve `ast.Expression` ou levanta `FormulaInvalida` com `posicao` |
+| `FUNCOES_PERMITIDAS` | Nomes de função aceitos em chamadas (provisório, até existir a tabela única de funções) |
+
+### Como se conecta
+- **Depende de:** `ast` e `forms.models` (`FormulaInvalida`, `Posicao`).
+- **É usado por:** nenhum módulo ainda.
+
+### Decisões que moldam este código
+- Allowlist de nós de expressão: constante numérica ou booleana, nome, `+ - * / **`, `-` e `not` unários, `and`/`or`, comparações simples e chamadas às funções permitidas (AGENTS.md §7).
+- Nó fora da lista é erro explícito, nunca ignorado; só o primeiro problema é reportado.
+- A `posicao` é em caracteres: o `ast` mede em bytes UTF-8, e o front sublinha por caracteres.
+
+### Como testar
+`uv run pytest tests/test_formulas.py`
+
+### Cuidados
+- Nunca chamar `eval`, `exec`, `compile` nem `__import__`; um teste confere o fonte do módulo.
+- Constantes como `0.1` chegam da árvore como `float`; quem avaliar deve criar o `Decimal` a partir do texto original, nunca do `float` (AGENTS.md §7).
