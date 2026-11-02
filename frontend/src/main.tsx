@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { ApiProvider } from "./api/contexto";
 import { App } from "./App";
 import "./index.css";
 
@@ -10,6 +11,8 @@ if (!raiz) {
 
 createRoot(raiz).render(
   <StrictMode>
-    <App />
+    <ApiProvider>
+      <App />
+    </ApiProvider>
   </StrictMode>,
 );
