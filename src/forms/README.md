@@ -13,7 +13,7 @@ Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e n
 | Símbolo | Papel |
 |---|---|
 | `TipoCampo` | `StrEnum` com os 10 valores de `tipo` do JSON de definição |
-| `Campo`, `Definicao` | Definição de um formulário; `opcoes` é tupla e `Definicao.campos` também |
+| `Campo`, `Definicao` | Definição de um formulário; `opcoes` é tupla e `Definicao.campos` também. `para_json()` dá a forma canônica do contrato (só o que não é padrão); `de_json()` lê uma definição **já validada**, como a do banco |
 | `Formulario`, `Versao`, `Registro` | Linhas do banco como dataclasses imutáveis |
 | `Posicao`, `ErroDeCampo` | Erro localizado `{campo, mensagem}` com `posicao` opcional na fórmula (AGENTS.md §5.3) |
 | `ResultadoCalculado` | Formato `{valor, erro}` do campo calculado (AGENTS.md §7) |
@@ -116,34 +116,39 @@ Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. N�
 ## repositorio.py
 
 ### Responsabilidade
-Único módulo que fala SQL. Por enquanto só abre a conexão e mantém o esquema; as funções de formulários, versões, registros e anexos chegam nas próximas issues.
+Único módulo que fala SQL (sempre com `?`). Guarda e devolve formulários, versões, registros, relações e metadados de anexos como dataclasses do `models.py`. Não valida regra de negócio, não decide exclusão (só o banco recusa o que viola chave estrangeira) e não faz commit.
 
 ### O que tem aqui
 | Símbolo | Papel |
 |---|---|
-| `abrir_conexao(caminho)` | Abre o SQLite com `foreign_keys` ligado, linhas acessíveis por nome e esquema migrado |
-| `migrar(conexao, migracoes)` | Aplica as migrações pendentes, cada uma numa transação junto com o `PRAGMA user_version` |
-| `MIGRACOES`, `VERSAO_ATUAL_DO_ESQUEMA` | Lista ordenada de migrações; a posição N leva o banco da versão N à N+1 |
-| `EsquemaMaisNovo` | Banco criado por um app mais novo é recusado, em vez de ser lido errado |
+| `abrir_conexao`, `migrar`, `MIGRACOES` | Conexão com `foreign_keys` ligado e esquema migrado por `PRAGMA user_version`; cada migração é transacional |
+| `criar_formulario`, `obter_formulario(_por_nome)`, `listar_formularios`, `excluir_formulario` | Nome único sem diferenciar caixa, espaços nas pontas nem a forma dos acentos (`chave_do_nome`); nome repetido levanta `DefinicaoInvalida` no campo `nome` |
+| `inserir_versao`, `obter_versao(_atual)`, `listar_versoes` | Versões imutáveis: não há `update` nem `delete` de versão. O número é o anterior + 1, calculado no próprio `INSERT` |
+| `inserir_`/`atualizar_`/`obter_`/`excluir_registro`, `listar_registros` | Dados em JSON; listagem por versão, do mais recente ao mais antigo, com `total`, `FiltroDeIgualdade` e janela de datas |
+| `registrar_dependencias`, `listar_dependencias`, `formularios_dependentes` | Dependência entre formulários, direta ou transitiva |
+| `substituir_referencias`, `obter_referencias`, `registros_que_referenciam`, `registros_dependentes` | Referências entre registros; os dependentes vêm na ordem de recálculo da cascata |
+| `criar_anexo`, `vincular_`/`desvincular_`/`apagar_anexo`, `listar_anexos_do_registro`, `listar_anexos_orfaos` | Metadados das fotos; `caminho` sempre com `/` e relativo à pasta de dados |
 
 ### Como se conecta
-- **Depende de:** `sqlite3` e `forms.models` (`ErroDeDominio`).
+- **Depende de:** `sqlite3` e `forms.models`.
 - **É usado por:** nenhum módulo ainda.
-- **Contratos e dados:** as seis tabelas de AGENTS.md §5.2 (`formularios`, `versoes_formulario`, `registros`, `dependencias_formulario`, `referencias_registro`, `anexos`).
+- **Contratos e dados:** as seis tabelas de AGENTS.md §5.2, na versão 2 do esquema.
 
 ### Decisões que moldam este código
-- Datas em texto ISO; definição e dados em colunas JSON de texto (AGENTS.md §5.2).
-- Exclusões bloqueadas já no banco (sem `ON DELETE`, o SQLite recusa), além da checagem do serviço (AGENTS.md §2.7).
-- Migração num `BEGIN` explícito: sem ele o `sqlite3` não abre transação para DDL e uma falha deixaria o banco pela metade.
-- A conexão entra por parâmetro; não há singleton (AGENTS.md §9).
+- O relógio entra por parâmetro (`agora`, em UTC); o módulo nunca lê a hora. Todas as datas usam o mesmo formato ISO, então comparar texto é comparar tempo.
+- A transação é de quem chama: as funções não fazem commit, para a cascata de recálculo entrar ou sair inteira (AGENTS.md §2.7).
+- Filtro: o nome do campo precisa estar em `campos_permitidos` (calculado pelo serviço a partir da definição) **e** ter formato de identificador; o caminho JSON e o valor vão como parâmetro (AGENTS.md §2.3 e §12).
+- Exclusões já são bloqueadas no banco (sem `ON DELETE`, o SQLite recusa), além da checagem do serviço (AGENTS.md §2.7).
+- Migração num `BEGIN` explícito: sem ele o `sqlite3` não abre transação para DDL. A migração 2 (`nome_chave`) calcula a chave em Python porque o `lower()` do SQLite só entende ASCII.
 
 ### Como testar
-`uv run pytest tests/test_repositorio_esquema.py`
+`uv run pytest tests/test_repositorio_*.py`
 
 ### Cuidados
-- Nunca edite uma migração já publicada (o banco do usuário persiste); acrescente outra. Um teste compara a migração 1 com o esquema publicado, escrito literalmente.
+- Nunca edite uma migração já publicada (o banco do usuário persiste); acrescente outra. Um teste compara a migração 1 com o esquema publicado, escrito literalmente, e outro atualiza um banco real da v1 para a v2.
 - Toda mudança de esquema exige teste de atualização a partir do esquema anterior (AGENTS.md §5.2).
 - `PRAGMA user_version` não aceita `?`; o número vem de um `int` interno, nunca de texto externo.
+- `listar_registros` exige `campos_permitidos` para qualquer filtro: sem a allowlist, o filtro é recusado.
 
 ## fotos.py
 
