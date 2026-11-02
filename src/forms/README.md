@@ -2,7 +2,7 @@
 
 > Backend Python do construtor de formulários: definições em JSON versionadas, validação, fórmulas e persistência em SQLite.
 
-Hoje existem `models.py`, `formulas.py` e `tipos_campo.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
+Hoje existem `models.py`, `formulas.py`, `tipos_campo.py` e `repositorio.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
 
 ## models.py
 
@@ -98,3 +98,35 @@ Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. N�
 ### Cuidados
 - `bool` é subclasse de `int`: o número rejeita `true`/`false` de propósito.
 - Mudar o rótulo ou as propriedades de um tipo muda o catálogo que o front lê.
+
+## repositorio.py
+
+### Responsabilidade
+Único módulo que fala SQL. Por enquanto só abre a conexão e mantém o esquema; as funções de formulários, versões, registros e anexos chegam nas próximas issues.
+
+### O que tem aqui
+| Símbolo | Papel |
+|---|---|
+| `abrir_conexao(caminho)` | Abre o SQLite com `foreign_keys` ligado, linhas acessíveis por nome e esquema migrado |
+| `migrar(conexao, migracoes)` | Aplica as migrações pendentes, cada uma numa transação junto com o `PRAGMA user_version` |
+| `MIGRACOES`, `VERSAO_ATUAL_DO_ESQUEMA` | Lista ordenada de migrações; a posição N leva o banco da versão N à N+1 |
+| `EsquemaMaisNovo` | Banco criado por um app mais novo é recusado, em vez de ser lido errado |
+
+### Como se conecta
+- **Depende de:** `sqlite3` e `forms.models` (`ErroDeDominio`).
+- **É usado por:** nenhum módulo ainda.
+- **Contratos e dados:** as seis tabelas de AGENTS.md §5.2 (`formularios`, `versoes_formulario`, `registros`, `dependencias_formulario`, `referencias_registro`, `anexos`).
+
+### Decisões que moldam este código
+- Datas em texto ISO; definição e dados em colunas JSON de texto (AGENTS.md §5.2).
+- Exclusões bloqueadas já no banco (sem `ON DELETE`, o SQLite recusa), além da checagem do serviço (AGENTS.md §2.7).
+- Migração num `BEGIN` explícito: sem ele o `sqlite3` não abre transação para DDL e uma falha deixaria o banco pela metade.
+- A conexão entra por parâmetro; não há singleton (AGENTS.md §9).
+
+### Como testar
+`uv run pytest tests/test_repositorio_esquema.py`
+
+### Cuidados
+- Nunca edite uma migração já publicada (o banco do usuário persiste); acrescente outra. Um teste compara a migração 1 com o esquema publicado, escrito literalmente.
+- Toda mudança de esquema exige teste de atualização a partir do esquema anterior (AGENTS.md §5.2).
+- `PRAGMA user_version` não aceita `?`; o número vem de um `int` interno, nunca de texto externo.
