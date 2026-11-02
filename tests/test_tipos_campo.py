@@ -7,15 +7,18 @@ from forms.models import Campo, TipoCampo, ValorInvalido
 from forms.tipos_campo import (
     ESPECIFICACOES,
     PROPRIEDADES_COMUNS,
+    Localizacao,
     eh_vazio,
     especificacao_do_tipo,
     normalizar_valor,
     valor_para_json,
 )
 
+D = Decimal
 
-def _campo(tipo: TipoCampo, opcoes: tuple[str, ...] = ()) -> Campo:
-    return Campo(id="c", tipo=tipo, rotulo="C", opcoes=opcoes)
+
+def _campo(tipo: TipoCampo, opcoes: tuple[str, ...] = (), maximo: int | None = None) -> Campo:
+    return Campo(id="c", tipo=tipo, rotulo="C", opcoes=opcoes, maximo=maximo)
 
 
 # --- regra única de "vazio" ---
@@ -35,7 +38,16 @@ def test_zero_falso_e_espaco_nao_sao_vazios(valor: object):
 
 @pytest.mark.parametrize(
     "tipo",
-    [TipoCampo.TEXTO, TipoCampo.NUMERO, TipoCampo.DATA, TipoCampo.SELECAO, TipoCampo.SIM_NAO],
+    [
+        TipoCampo.TEXTO,
+        TipoCampo.NUMERO,
+        TipoCampo.DATA,
+        TipoCampo.SELECAO,
+        TipoCampo.SIM_NAO,
+        TipoCampo.REFERENCIA,
+        TipoCampo.LOCALIZACAO,
+        TipoCampo.FOTO,
+    ],
 )
 @pytest.mark.parametrize("vazio", [None, ""])
 def test_vazio_em_cada_tipo_normaliza_para_none(tipo: TipoCampo, vazio: object):
@@ -236,17 +248,11 @@ def test_texto_rejeita_o_que_nao_e_string(entrada: object):
 
 @pytest.mark.parametrize(
     "tipo",
-    [
-        TipoCampo.CALCULADO,
-        TipoCampo.SECAO,
-        TipoCampo.REFERENCIA,
-        TipoCampo.LOCALIZACAO,
-        TipoCampo.FOTO,
-    ],
+    [TipoCampo.CALCULADO, TipoCampo.SECAO],
 )
-def test_tipo_sem_normalizador_neste_modulo_e_erro_explicito(tipo: TipoCampo):
+def test_tipo_que_nao_recebe_valor_do_cliente_e_erro_explicito(tipo: TipoCampo):
     # act / assert
-    with pytest.raises(ValorInvalido, match="não é normalizado"):
+    with pytest.raises(ValorInvalido, match="não recebe valor"):
         normalizar_valor(_campo(tipo), "x")
 
 
@@ -297,3 +303,139 @@ def test_tipo_desconhecido_gera_erro_explicito():
 
     # assert
     assert "telefone" in str(excecao.value)
+
+
+# --- localizacao ---
+
+
+def test_localizacao_valida_vira_par_de_decimais_e_volta_como_strings():
+    # arrange
+    campo = _campo(TipoCampo.LOCALIZACAO)
+
+    # act
+    resultado = normalizar_valor(campo, {"latitude": "-23.550520", "longitude": -46.633308})
+
+    # assert
+    assert resultado == Localizacao(D("-23.550520"), D("-46.633308"))
+    assert valor_para_json(resultado) == {"latitude": "-23.550520", "longitude": "-46.633308"}
+
+
+@pytest.mark.parametrize(
+    ("latitude", "longitude"),
+    [("90", "180"), ("-90", "-180"), ("0", "0"), ("89.999999", "-179.999999")],
+)
+def test_localizacao_aceita_os_limites_da_faixa(latitude: str, longitude: str):
+    # act / assert
+    campo = _campo(TipoCampo.LOCALIZACAO)
+    assert normalizar_valor(campo, {"latitude": latitude, "longitude": longitude}) is not None
+
+
+@pytest.mark.parametrize(
+    ("latitude", "longitude", "trecho"),
+    [
+        ("90.000001", "0", "latitude"),
+        ("-91", "0", "latitude"),
+        ("0", "180.1", "longitude"),
+        ("0", "-181", "longitude"),
+        ("abc", "0", "latitude"),
+        ("0", "NaN", "longitude"),
+        (True, "0", "latitude"),
+        ([1], "0", "latitude"),
+    ],
+)
+def test_localizacao_fora_da_faixa_ou_invalida_e_rejeitada(
+    latitude: object, longitude: object, trecho: str
+):
+    # act
+    with pytest.raises(ValorInvalido) as excecao:
+        normalizar_valor(
+            _campo(TipoCampo.LOCALIZACAO), {"latitude": latitude, "longitude": longitude}
+        )
+
+    # assert
+    assert trecho in str(excecao.value)
+
+
+@pytest.mark.parametrize(
+    "valor",
+    [
+        {"latitude": "10"},
+        {"longitude": "10"},
+        {"latitude": "10", "longitude": ""},
+        {"latitude": None, "longitude": "5"},
+    ],
+)
+def test_localizacao_com_so_um_dos_dois_e_rejeitada(valor: dict[str, object]):
+    # act / assert
+    with pytest.raises(ValorInvalido, match="latitude e longitude"):
+        normalizar_valor(_campo(TipoCampo.LOCALIZACAO), valor)
+
+
+def test_localizacao_com_os_dois_vazios_e_vazia():
+    # act / assert
+    assert normalizar_valor(_campo(TipoCampo.LOCALIZACAO), {}) is None
+    assert (
+        normalizar_valor(_campo(TipoCampo.LOCALIZACAO), {"latitude": "", "longitude": None}) is None
+    )
+
+
+@pytest.mark.parametrize(
+    "valor", ["-23,5 / -46,6", [1, 2], 5, {"latitude": "1", "longitude": "2", "z": "3"}]
+)
+def test_localizacao_que_nao_e_um_par_latitude_longitude_e_rejeitada(valor: object):
+    # act / assert
+    with pytest.raises(ValorInvalido):
+        normalizar_valor(_campo(TipoCampo.LOCALIZACAO), valor)
+
+
+# --- foto ---
+
+
+def test_foto_aceita_lista_de_ids_de_anexo():
+    # act
+    resultado = normalizar_valor(_campo(TipoCampo.FOTO), [3, 1, 2])
+
+    # assert
+    assert resultado == (3, 1, 2)
+    assert valor_para_json(resultado) == [3, 1, 2]
+
+
+def test_foto_com_lista_vazia_e_vazia():
+    # act / assert
+    assert normalizar_valor(_campo(TipoCampo.FOTO), []) is None
+
+
+def test_foto_respeita_o_maximo():
+    # arrange
+    campo = _campo(TipoCampo.FOTO, maximo=2)
+
+    # act / assert
+    assert normalizar_valor(campo, [1, 2]) == (1, 2)
+    with pytest.raises(ValorInvalido, match="no máximo 2"):
+        normalizar_valor(campo, [1, 2, 3])
+
+
+@pytest.mark.parametrize("valor", ["1", 1, [1, "2"], [0], [-1], [True], [1.5], [1, 1], {"a": 1}])
+def test_foto_exige_lista_de_ids_inteiros_positivos_sem_repeticao(valor: object):
+    # act / assert
+    with pytest.raises(ValorInvalido):
+        normalizar_valor(_campo(TipoCampo.FOTO), valor)
+
+
+# --- referencia ---
+
+
+def test_referencia_aceita_o_id_do_registro_de_origem():
+    # act
+    resultado = normalizar_valor(_campo(TipoCampo.REFERENCIA), 42)
+
+    # assert
+    assert resultado == 42
+    assert valor_para_json(resultado) == 42
+
+
+@pytest.mark.parametrize("valor", ["42", 1.5, 0, -3, True, [1]])
+def test_referencia_exige_inteiro_positivo(valor: object):
+    # act / assert
+    with pytest.raises(ValorInvalido, match="referência"):
+        normalizar_valor(_campo(TipoCampo.REFERENCIA), valor)
