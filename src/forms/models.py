@@ -130,6 +130,14 @@ class RegistroInvalido(ErroDeDominio):
         self.erros = erros
 
 
+class ValorInvalido(ErroDeDominio):
+    """Um valor isolado não serve para o tipo do campo; quem chama sabe de qual campo veio."""
+
+
+class FotoInvalida(ErroDeDominio):
+    """A imagem enviada não pode ser aceita; a mensagem já diz o motivo ao usuário."""
+
+
 class NaoEncontrado(ErroDeDominio):
     pass
 
