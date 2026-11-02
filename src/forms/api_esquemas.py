@@ -12,6 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
+from forms.exportacao import Coluna
 from forms.models import (
     Campo,
     Definicao,
@@ -315,8 +316,51 @@ class RegistroSaida(_Modelo):
         )
 
 
+class ColunaSaida(_Modelo):
+    """Uma coluna da listagem, derivada da definição da versão listada (sem `secao`)."""
+
+    id: str
+    rotulo: str
+    unidade: str | None
+    tipo: Literal[
+        "texto",
+        "numero",
+        "data",
+        "selecao",
+        "sim_nao",
+        "calculado",
+        "referencia",
+        "localizacao",
+        "foto",
+    ]
+    casas_decimais: int | None
+    resultado: Literal["numero", "data", "booleano"] | None = Field(
+        description="Para `calculado`: o tipo do resultado (diz como exibir o valor)."
+    )
+    opcoes: list[str] = Field(description="Para `selecao`: as opções; senão, lista vazia.")
+    filtravel: bool = Field(
+        description="Aceita `filtro=campo:valor` (igualdade) na listagem e no CSV."
+    )
+
+
+def coluna_de(coluna: Coluna) -> ColunaSaida:
+    # `tipo` e `resultado` são `str` aqui e `Literal` no modelo: o Pydantic confere em execução.
+    eh_calculado = coluna.tipo.value == "calculado" and coluna.tipo_na_formula is not None
+    return ColunaSaida(
+        id=coluna.id,
+        rotulo=coluna.rotulo,
+        unidade=coluna.unidade,
+        tipo=coluna.tipo.value,
+        casas_decimais=coluna.casas_decimais,
+        resultado=coluna.tipo_na_formula.value if eh_calculado and coluna.tipo_na_formula else None,
+        opcoes=list(coluna.opcoes),
+        filtravel=coluna.filtravel,
+    )
+
+
 class ListagemDeRegistrosSaida(_Modelo):
     versao_id: int = Field(description="Versão listada (a última, se `versao_id` não foi pedido).")
+    colunas: list[ColunaSaida]
     itens: list[RegistroSaida]
     total: int
 

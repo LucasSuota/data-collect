@@ -59,7 +59,17 @@ MODELOS_DE_RESPOSTA = {
         "criado_em": True,
         "atualizado_em": True,
     },
-    "ListagemDeRegistrosSaida": {"versao_id": True, "itens": True, "total": True},
+    "ColunaSaida": {
+        "id": True,
+        "rotulo": True,
+        "unidade": True,
+        "tipo": True,
+        "casas_decimais": True,
+        "resultado": True,
+        "opcoes": True,
+        "filtravel": True,
+    },
+    "ListagemDeRegistrosSaida": {"versao_id": True, "colunas": True, "itens": True, "total": True},
     "AnexoSaida": {"id": True, "largura": True, "altura": True, "tamanho_bytes": True},
 }
 

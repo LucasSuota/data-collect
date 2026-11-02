@@ -326,6 +326,40 @@ export interface components {
             /** Nomes Reservados */
             nomes_reservados: string[];
         };
+        /**
+         * ColunaSaida
+         * @description Uma coluna da listagem, derivada da definição da versão listada (sem `secao`).
+         */
+        ColunaSaida: {
+            /** Id */
+            id: string;
+            /** Rotulo */
+            rotulo: string;
+            /** Unidade */
+            unidade: string | null;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "texto" | "numero" | "data" | "selecao" | "sim_nao" | "calculado" | "referencia" | "localizacao" | "foto";
+            /** Casas Decimais */
+            casas_decimais: number | null;
+            /**
+             * Resultado
+             * @description Para `calculado`: o tipo do resultado (diz como exibir o valor).
+             */
+            resultado: ("numero" | "data" | "booleano") | null;
+            /**
+             * Opcoes
+             * @description Para `selecao`: as opções; senão, lista vazia.
+             */
+            opcoes: string[];
+            /**
+             * Filtravel
+             * @description Aceita `filtro=campo:valor` (igualdade) na listagem e no CSV.
+             */
+            filtravel: boolean;
+        };
         /** ConstanteDoCatalogoSaida */
         ConstanteDoCatalogoSaida: {
             /** Nome */
@@ -401,6 +435,8 @@ export interface components {
              * @description Versão listada (a última, se `versao_id` não foi pedido).
              */
             versao_id: number;
+            /** Colunas */
+            colunas: components["schemas"]["ColunaSaida"][];
             /** Itens */
             itens: components["schemas"]["RegistroSaida"][];
             /** Total */

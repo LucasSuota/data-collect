@@ -641,7 +641,7 @@ def test_listagem_com_paginacao_total_e_versao(cliente):
     # assert
     assert pagina["total"] == 3 and len(pagina["itens"]) == 1
     assert pagina["versao_id"] == criado["versao_atual"]["id"]
-    assert set(pagina) == {"versao_id", "itens", "total"}
+    assert set(pagina) == {"versao_id", "colunas", "itens", "total"}
 
 
 def test_filtro_por_campo_usa_filtro_campo_valor_repetivel(cliente):
@@ -919,3 +919,52 @@ def test_definicao_volta_como_foi_escrita_sem_campos_nulos_inventados(cliente):
     obs = next(c for c in campos if c["id"] == "obs")
     assert obs == {"id": "obs", "tipo": "texto", "rotulo": "Observação"}
     assert campos == CORPO["campos"]
+
+
+def test_listagem_traz_as_colunas_com_o_que_o_front_precisa_para_exibir_e_filtrar(cliente):
+    # arrange
+    definicao = {
+        "campos": [
+            {"id": "sec", "tipo": "secao", "rotulo": "S"},
+            {"id": "fase", "tipo": "selecao", "rotulo": "Fase", "opcoes": ["A", "B"]},
+            {"id": "n", "tipo": "numero", "rotulo": "N", "unidade": "kg", "casas_decimais": 2},
+            {"id": "dobro", "tipo": "calculado", "rotulo": "Dobro", "formula": "n * 2"},
+            {"id": "alto", "tipo": "calculado", "rotulo": "Alto?", "formula": "n > 10"},
+            {"id": "dia", "tipo": "calculado", "rotulo": "Dia", "formula": "d + dias(1)"},
+            {"id": "d", "tipo": "data", "rotulo": "D"},
+        ]
+    }
+    criado = _criar(cliente, "f", definicao)
+
+    # act
+    colunas = cliente.get(f"/formularios/{criado['id']}/registros").json()["colunas"]
+    por_id = {c["id"]: c for c in colunas}
+
+    # assert: sem a seção; o calculado diz o tipo do resultado; só os tipos aceitos são filtráveis
+    assert [c["id"] for c in colunas] == ["fase", "n", "dobro", "alto", "dia", "d"]
+    assert por_id["fase"] == {
+        "id": "fase",
+        "rotulo": "Fase",
+        "unidade": None,
+        "tipo": "selecao",
+        "casas_decimais": None,
+        "resultado": None,
+        "opcoes": ["A", "B"],
+        "filtravel": True,
+    }
+    assert (por_id["n"]["unidade"], por_id["n"]["casas_decimais"], por_id["n"]["filtravel"]) == (
+        "kg",
+        2,
+        False,
+    )
+    assert [por_id[i]["resultado"] for i in ("dobro", "alto", "dia")] == [
+        "numero",
+        "booleano",
+        "data",
+    ]
+    assert [por_id[i]["filtravel"] for i in ("dobro", "alto", "dia", "d")] == [
+        False,
+        True,
+        False,
+        False,
+    ]

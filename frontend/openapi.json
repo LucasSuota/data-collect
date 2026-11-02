@@ -1680,6 +1680,99 @@
         ],
         "title": "CatalogoSaida"
       },
+      "ColunaSaida": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "rotulo": {
+            "type": "string",
+            "title": "Rotulo"
+          },
+          "unidade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unidade"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "texto",
+              "numero",
+              "data",
+              "selecao",
+              "sim_nao",
+              "calculado",
+              "referencia",
+              "localizacao",
+              "foto"
+            ],
+            "title": "Tipo"
+          },
+          "casas_decimais": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Casas Decimais"
+          },
+          "resultado": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "numero",
+                  "data",
+                  "booleano"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultado",
+            "description": "Para `calculado`: o tipo do resultado (diz como exibir o valor)."
+          },
+          "opcoes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Opcoes",
+            "description": "Para `selecao`: as opções; senão, lista vazia."
+          },
+          "filtravel": {
+            "type": "boolean",
+            "title": "Filtravel",
+            "description": "Aceita `filtro=campo:valor` (igualdade) na listagem e no CSV."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "rotulo",
+          "unidade",
+          "tipo",
+          "casas_decimais",
+          "resultado",
+          "opcoes",
+          "filtravel"
+        ],
+        "title": "ColunaSaida",
+        "description": "Uma coluna da listagem, derivada da definição da versão listada (sem `secao`)."
+      },
       "ConstanteDoCatalogoSaida": {
         "properties": {
           "nome": {
@@ -1861,6 +1954,13 @@
             "title": "Versao Id",
             "description": "Versão listada (a última, se `versao_id` não foi pedido)."
           },
+          "colunas": {
+            "items": {
+              "$ref": "#/components/schemas/ColunaSaida"
+            },
+            "type": "array",
+            "title": "Colunas"
+          },
           "itens": {
             "items": {
               "$ref": "#/components/schemas/RegistroSaida"
@@ -1877,6 +1977,7 @@
         "type": "object",
         "required": [
           "versao_id",
+          "colunas",
           "itens",
           "total"
         ],

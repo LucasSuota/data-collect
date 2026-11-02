@@ -26,6 +26,10 @@ class Coluna:
     casas_decimais: int | None
     # Para `calculado`: o tipo do resultado, que diz como formatar o valor guardado.
     tipo_na_formula: TipoFormula | None = None
+    # Para `selecao`: as opções, para o front oferecer o filtro sem reler a definição.
+    opcoes: tuple[str, ...] = ()
+    # Aceita filtro de igualdade na listagem e no CSV (§2.3): o front só oferece estes.
+    filtravel: bool = False
 
     @property
     def cabecalho(self) -> str:

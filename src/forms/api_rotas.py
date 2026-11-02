@@ -35,6 +35,7 @@ from forms.api_esquemas import (
     ValidarSaida,
     VersaoEntrada,
     VersaoSaida,
+    coluna_de,
 )
 from forms.models import ErroDeCampo, Formulario, RegistroInvalido, Versao
 from forms.servico import Conexao, Rascunho
@@ -292,6 +293,7 @@ def listar_registros(
     )
     return ListagemDeRegistrosSaida(
         versao_id=listagem.versao_id,
+        colunas=[coluna_de(c) for c in listagem.colunas],
         itens=[RegistroSaida.de(r) for r in listagem.itens],
         total=listagem.total,
     )
