@@ -23,6 +23,10 @@ from forms.api_esquemas import (
     FormularioEntrada,
     ListagemDeRegistrosSaida,
     LoteEntrada,
+    MoverFormularioEntrada,
+    PastaAtualizacao,
+    PastaEntrada,
+    PastaSaida,
     PreviaEntrada,
     PreviaSaida,
     RegistroAtualizacao,
@@ -95,7 +99,9 @@ DepPasta = Annotated[Path, Depends(obter_pasta_de_dados)]
 def criar_formulario(
     entrada: FormularioEntrada, conexao: DepConexao, agora: DepAgora
 ) -> FormularioDetalheSaida:
-    criado = servico.criar_formulario(conexao, entrada.nome, entrada.definicao, agora)
+    criado = servico.criar_formulario(
+        conexao, entrada.nome, entrada.definicao, agora, entrada.pasta_id
+    )
     return _detalhe(criado.formulario, criado.versao)
 
 
@@ -138,6 +144,24 @@ def listar_formularios(conexao: DepConexao) -> list[ResumoDeFormularioSaida]:
 def obter_formulario(formulario_id: int, conexao: DepConexao) -> FormularioDetalheSaida:
     detalhe = servico.obter_formulario(conexao, formulario_id)
     return _detalhe(detalhe.formulario, detalhe.versao_atual)
+
+
+@roteador.put(
+    "/formularios/{formulario_id}/pasta",
+    response_model=ResumoDeFormularioSaida,
+    tags=["pastas"],
+    summary="Move o formulário para uma pasta (ou para a raiz)",
+    description=(
+        "`pasta_id` nulo leva o formulário à raiz. Só troca a pasta: versões, registros e "
+        "referências não mudam. Pasta de destino inexistente é 422 no campo `pasta_id`."
+    ),
+)
+def mover_formulario(
+    formulario_id: int, entrada: MoverFormularioEntrada, conexao: DepConexao
+) -> ResumoDeFormularioSaida:
+    servico.mover_formulario(conexao, formulario_id, entrada.pasta_id)
+    detalhe = servico.obter_formulario(conexao, formulario_id)
+    return ResumoDeFormularioSaida.do_formulario(detalhe.formulario, detalhe.versao_atual)
 
 
 @roteador.delete(
@@ -186,6 +210,64 @@ def listar_versoes(formulario_id: int, conexao: DepConexao) -> list[ResumoDeVers
 )
 def obter_versao(formulario_id: int, versao_id: int, conexao: DepConexao) -> VersaoSaida:
     return VersaoSaida.de(servico.obter_versao(conexao, formulario_id, versao_id))
+
+
+# --- pastas ---
+
+
+@roteador.post(
+    "/pastas",
+    status_code=201,
+    response_model=PastaSaida,
+    tags=["pastas"],
+    summary="Cria uma pasta (na raiz ou dentro de outra)",
+    description=(
+        "O nome é único entre pastas irmãs, sem diferenciar maiúsculas/minúsculas nem espaços "
+        "nas pontas; repetido é 422 no campo `nome`."
+    ),
+)
+def criar_pasta(entrada: PastaEntrada, conexao: DepConexao, agora: DepAgora) -> PastaSaida:
+    return PastaSaida.de(servico.criar_pasta(conexao, entrada.nome, entrada.pasta_pai_id, agora))
+
+
+@roteador.get(
+    "/pastas",
+    response_model=list[PastaSaida],
+    tags=["pastas"],
+    summary="Lista as pastas, em lista plana (o front monta a árvore)",
+)
+def listar_pastas(conexao: DepConexao) -> list[PastaSaida]:
+    return [PastaSaida.de(p) for p in servico.listar_pastas(conexao)]
+
+
+@roteador.put(
+    "/pastas/{pasta_id}",
+    response_model=PastaSaida,
+    tags=["pastas"],
+    summary="Renomeia e/ou move a pasta",
+    description=(
+        "Substitui `nome` e `pasta_pai_id`. Mover para dentro dela mesma ou de uma subpasta é 422 "
+        "no campo `pasta_pai_id`."
+    ),
+)
+def atualizar_pasta(pasta_id: int, entrada: PastaAtualizacao, conexao: DepConexao) -> PastaSaida:
+    return PastaSaida.de(
+        servico.atualizar_pasta(conexao, pasta_id, entrada.nome, entrada.pasta_pai_id)
+    )
+
+
+@roteador.delete(
+    "/pastas/{pasta_id}",
+    status_code=204,
+    response_class=Response,
+    tags=["pastas"],
+    summary="Exclui uma pasta vazia",
+    description="409 se a pasta tem subpastas ou formulários; nada é apagado em cascata.",
+    responses=_ERRO_409,
+)
+def excluir_pasta(pasta_id: int, conexao: DepConexao) -> Response:
+    servico.excluir_pasta(conexao, pasta_id)
+    return Response(status_code=204)
 
 
 # --- definições: validar, prévia, catálogo ---

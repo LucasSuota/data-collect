@@ -33,6 +33,7 @@ from forms.models import (
     FotoInvalida,
     LoteInvalido,
     NaoEncontrado,
+    PastaInvalida,
     RegistroInvalido,
     ValorInvalido,
 )
@@ -164,6 +165,12 @@ def _registrar_tratadores_de_erro(app: FastAPI) -> None:
     async def _definicao(_: Request, erro: DefinicaoInvalida) -> JSONResponse:
         return resposta_de_erro(
             422, "Definição inválida.", [ErroDeCampoSaida.de(e) for e in erro.erros]
+        )
+
+    @app.exception_handler(PastaInvalida)
+    async def _pasta(_: Request, erro: PastaInvalida) -> JSONResponse:
+        return resposta_de_erro(
+            422, "Pasta inválida.", [ErroDeCampoSaida.de(e) for e in erro.erros]
         )
 
     @app.exception_handler(RegistroInvalido)

@@ -238,7 +238,9 @@ class ResumoDeVersao:
 # --- formulários e versões ---
 
 
-def criar_formulario(conexao: sqlite3.Connection, nome: str, agora: datetime) -> Formulario:
+def criar_formulario(
+    conexao: sqlite3.Connection, nome: str, agora: datetime, pasta_id: int | None = None
+) -> Formulario:
     nome = nome.strip()
     if not nome:
         raise DefinicaoInvalida((ErroDeCampo("nome", "O nome do formulário é obrigatório."),))
@@ -246,8 +248,8 @@ def criar_formulario(conexao: sqlite3.Connection, nome: str, agora: datetime) ->
     if conexao.execute("SELECT 1 FROM formularios WHERE nome_chave = ?", (chave,)).fetchone():
         raise DefinicaoInvalida((ErroDeCampo("nome", "Já existe um formulário com este nome."),))
     cursor = conexao.execute(
-        "INSERT INTO formularios (nome, nome_chave, criado_em) VALUES (?, ?, ?)",
-        (nome, chave, _iso(agora)),
+        "INSERT INTO formularios (nome, nome_chave, criado_em, pasta_id) VALUES (?, ?, ?, ?)",
+        (nome, chave, _iso(agora), pasta_id),
     )
     return obter_formulario(conexao, _id_inserido(cursor))
 

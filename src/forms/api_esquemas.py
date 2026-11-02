@@ -18,6 +18,7 @@ from forms.models import (
     Definicao,
     ErroDeCampo,
     Formulario,
+    Pasta,
     Registro,
     ResultadoCalculado,
     Versao,
@@ -71,6 +72,9 @@ class ErroSaida(Modelo):
 class FormularioEntrada(Modelo):
     nome: str
     definicao: object = Field(description='Definição em JSON: `{"campos": [...]}`.')
+    pasta_id: int | None = Field(
+        default=None, description="Pasta onde o formulário nasce; nulo (padrão) é a raiz."
+    )
 
 
 class LoteEntrada(Modelo):
@@ -87,6 +91,7 @@ class ResumoDeFormularioSaida(Modelo):
     criado_em: str
     versao_atual_id: int | None
     versao_atual_numero: int | None
+    pasta_id: int | None = Field(default=None, description="Pasta do formulário; nulo é a raiz.")
 
     @classmethod
     def de(cls, resumo: ResumoDeFormulario) -> "ResumoDeFormularioSaida":
@@ -96,6 +101,7 @@ class ResumoDeFormularioSaida(Modelo):
             criado_em=resumo.criado_em,
             versao_atual_id=resumo.versao_atual_id,
             versao_atual_numero=resumo.versao_atual_numero,
+            pasta_id=resumo.pasta_id,
         )
 
     @classmethod
@@ -106,6 +112,7 @@ class ResumoDeFormularioSaida(Modelo):
             criado_em=formulario.criado_em,
             versao_atual_id=versao.id,
             versao_atual_numero=versao.numero,
+            pasta_id=formulario.pasta_id,
         )
 
 
@@ -188,6 +195,41 @@ class FormularioDetalheSaida(Modelo):
     nome: str
     criado_em: str
     versao_atual: VersaoSaida
+
+
+# --- pastas ---
+
+
+class PastaEntrada(Modelo):
+    nome: str
+    pasta_pai_id: int | None = Field(
+        default=None, description="Pasta onde a nova pasta nasce; nulo (padrão) é a raiz."
+    )
+
+
+class PastaAtualizacao(Modelo):
+    """`PUT` substitui os dois campos (não há `PATCH`): omitir `pasta_pai_id` é erro, para não
+    mandar a pasta para a raiz sem querer. Nulo explícito é a raiz."""
+
+    nome: str
+    pasta_pai_id: int | None
+
+
+class MoverFormularioEntrada(Modelo):
+    pasta_id: int | None = Field(description="Pasta de destino; nulo leva o formulário à raiz.")
+
+
+class PastaSaida(Modelo):
+    id: int
+    nome: str
+    pasta_pai_id: int | None
+    criado_em: str
+
+    @classmethod
+    def de(cls, pasta: Pasta) -> "PastaSaida":
+        return cls(
+            id=pasta.id, nome=pasta.nome, pasta_pai_id=pasta.pasta_pai_id, criado_em=pasta.criado_em
+        )
 
 
 # --- definições: validar, prévia, catálogo ---
