@@ -7,9 +7,11 @@ usarem as mesmas regras sem importar uns aos outros.
 import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 
 from forms import repositorio, validacao
-from forms.models import Formulario, NaoEncontrado, ValorJson
+from forms.formulas import TipoFormula
+from forms.models import Formulario, NaoEncontrado, ValorJson, Versao
 from forms.validacao import CampoCompartilhado, Origens
 
 # --- transação ---
@@ -85,3 +87,26 @@ def compartilhados_publicados(
     compartilhados = validacao.compartilhados_da_definicao(definicao, analise.tipos_calculados)
     cache[formulario.id] = compartilhados
     return compartilhados
+
+
+@dataclass
+class Cache:
+    """Evita refazer, na mesma operação, a análise das mesmas definições publicadas."""
+
+    compartilhados: dict[int, dict[str, CampoCompartilhado]] = field(default_factory=dict)
+    tipos_calculados: dict[int, dict[str, TipoFormula]] = field(default_factory=dict)
+
+
+def tipos_calculados_da_versao(
+    conexao: sqlite3.Connection, versao: Versao, cache: Cache
+) -> dict[str, TipoFormula]:
+    """Tipo inferido de cada campo `calculado` de uma versão (não é guardado: sai da análise)."""
+    if versao.id not in cache.tipos_calculados:
+        origens = origens_publicadas(
+            conexao,
+            [(c.id, c.formulario) for c in versao.definicao.campos if c.formulario],
+            cache.compartilhados,
+        )
+        analise = validacao.analisar_definicao(versao.definicao.para_json(), origens)
+        cache.tipos_calculados[versao.id] = dict(analise.tipos_calculados)
+    return cache.tipos_calculados[versao.id]

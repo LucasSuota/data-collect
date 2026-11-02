@@ -8,6 +8,7 @@ from forms.repositorio import (
     FiltroDeIgualdade,
     abrir_conexao,
     atualizar_registro,
+    contar_registros,
     criar_formulario,
     excluir_registro,
     inserir_registro,
@@ -375,3 +376,18 @@ def test_filtro_exige_a_allowlist(conexao, versao):
         listar_registros(
             conexao, versao.id, limite=5, deslocamento=0, filtros=[FiltroDeIgualdade("a", "x")]
         )
+
+
+def test_contar_registros_conta_todas_as_versoes_do_formulario(conexao, versao):
+    # arrange
+    segunda = inserir_versao(conexao, versao.formulario_id, DEFINICAO, AGORA)
+    _inserir(conexao, versao, {"a": "1"})
+    _inserir(conexao, segunda, {"a": "2"})
+    outro = criar_formulario(conexao, "Outro", AGORA)
+    inserir_registro(
+        conexao, outro.id, inserir_versao(conexao, outro.id, DEFINICAO, AGORA).id, {}, AGORA
+    )
+
+    # act / assert
+    assert contar_registros(conexao, versao.formulario_id) == 2
+    assert contar_registros(conexao, 999) == 0

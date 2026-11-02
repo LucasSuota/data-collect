@@ -392,6 +392,12 @@ def excluir_registro(conexao: sqlite3.Connection, registro_id: int) -> None:
         raise NaoEncontrado(f"Registro {registro_id} não encontrado.")
 
 
+def contar_registros(conexao: sqlite3.Connection, formulario_id: int) -> int:
+    return conexao.execute(
+        "SELECT COUNT(*) FROM registros WHERE formulario_id = ?", (formulario_id,)
+    ).fetchone()[0]
+
+
 def listar_registros(
     conexao: sqlite3.Connection,
     versao_id: int,

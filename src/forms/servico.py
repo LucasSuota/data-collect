@@ -23,11 +23,22 @@ from forms.models import (
     Versao,
 )
 from forms.repositorio import ResumoDeFormulario, ResumoDeVersao, chave_do_nome
+from forms.servico_anexos import guardar_anexo, ler_anexo, limpar_anexos_orfaos
 from forms.servico_base import (
     compartilhados_publicados,
     origens_publicadas,
     referencias_brutas,
     transacao,
+)
+from forms.servico_consulta import ListagemDeRegistros, exportar_csv, listar_registros
+from forms.servico_registros import (
+    ResultadoDaPrevia,
+    atualizar_registro,
+    criar_registro,
+    excluir_formulario,
+    excluir_registro,
+    obter_registro,
+    previa,
 )
 from forms.tipos_campo import ESPECIFICACOES, PROPRIEDADES_COMUNS
 from forms.validacao import CampoCompartilhado
@@ -433,3 +444,38 @@ def _gravar(
         repositorio.registrar_dependencias(conexao, formulario.id, origens)
         criados.append(FormularioCriado(formulario, versao))
     return criados
+
+
+# `api.py` e `cli.py` chamam tudo por aqui; cada grupo de casos de uso mora no seu módulo.
+__all__ = [
+    "FUNCOES",
+    "Catalogo",
+    "FormularioComVersao",
+    "FormularioCriado",
+    "ListagemDeRegistros",
+    "Rascunho",
+    "ResultadoDaPrevia",
+    "ResultadoDaValidacao",
+    "atualizar_registro",
+    "catalogo",
+    "criar_formulario",
+    "criar_formularios_em_lote",
+    "criar_registro",
+    "excluir_formulario",
+    "excluir_registro",
+    "exportar_csv",
+    "guardar_anexo",
+    "ler_anexo",
+    "limpar_anexos_orfaos",
+    "listar_formularios",
+    "listar_registros",
+    "listar_versoes",
+    "obter_formulario",
+    "obter_registro",
+    "obter_versao",
+    "previa",
+    "publicar_versao",
+    "repositorio",
+    "validar_conjunto",
+    "validar_definicao",
+]
