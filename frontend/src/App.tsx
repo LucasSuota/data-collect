@@ -1,6 +1,7 @@
 import { useRota } from "./rotas";
 import { PaginaDeFormularios } from "./paginas/PaginaDeFormularios";
 import { PaginaDeRegistro } from "./paginas/PaginaDeRegistro";
+import { PaginaDeRegistros } from "./paginas/PaginaDeRegistros";
 
 export function App() {
   const [rota, navegar] = useRota();
@@ -16,6 +17,9 @@ export function App() {
       </header>
       <main className="mx-auto max-w-5xl p-4">
         {rota.nome === "formularios" ? <PaginaDeFormularios navegar={navegar} /> : null}
+        {rota.nome === "registros" ? (
+          <PaginaDeRegistros formularioId={rota.formularioId} navegar={navegar} />
+        ) : null}
         {rota.nome === "novoRegistro" ? (
           <PaginaDeRegistro
             modo={{ tipo: "novo", formularioId: rota.formularioId }}
