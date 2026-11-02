@@ -11,6 +11,8 @@ interface Props {
   catalogo: Catalogo;
   /** Nomes dos formulários que podem ser origem de uma referência. */
   formulariosDeOrigem: string[];
+  /** `<referência>__<campo>` dos campos compartilhados pelas origens, para as fórmulas. */
+  camposDasReferencias: { id: string; rotulo: string }[];
   erros: ErroNoCampo[];
   aoMudar: (mudancas: Partial<CampoEmEdicao>) => void;
 }
@@ -27,6 +29,7 @@ export function PainelDePropriedades({
   todosOsCampos,
   catalogo,
   formulariosDeOrigem,
+  camposDasReferencias,
   erros,
   aoMudar,
 }: Props) {
@@ -171,7 +174,8 @@ export function PainelDePropriedades({
               (outro) =>
                 outro.chave !== campo.chave && CAMPOS_USAVEIS_EM_FORMULA.includes(outro.tipo),
             )
-            .map((outro) => ({ id: outro.id, rotulo: outro.rotulo }))}
+            .map((outro) => ({ id: outro.id, rotulo: outro.rotulo }))
+            .concat(camposDasReferencias)}
           erro={
             erroDaFormula
               ? { mensagem: erroDaFormula.mensagem, posicao: erroDaFormula.posicao }

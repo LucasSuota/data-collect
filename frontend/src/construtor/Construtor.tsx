@@ -34,6 +34,7 @@ import {
   posicaoDoDestino,
 } from "./arraste";
 import { PainelDePropriedades } from "./PainelDePropriedades";
+import { camposDeFormulaDasReferencias, useCamposDeOrigem } from "./useCamposDeOrigem";
 import {
   AREA_DA_LISTA,
   adicionarCampo,
@@ -79,6 +80,8 @@ interface Props {
 interface Carregado {
   catalogo: Catalogo;
   nomesDosFormularios: string[];
+  /** Os formulários que podem ser origem de uma referência (o próprio fica de fora). */
+  origensPossiveis: { id: number; nome: string }[];
   formulario: FormularioDetalhe | null;
 }
 
@@ -103,6 +106,9 @@ export function Construtor({ modo, navegar, atrasoDaValidacaoMs = 500 }: Props) 
     ]);
     return {
       catalogo,
+      origensPossiveis: formularios
+        .filter((f) => f.id !== formulario?.id)
+        .map((f) => ({ id: f.id, nome: f.nome })),
       nomesDosFormularios: [
         ...new Set([
           ...formularios
@@ -287,6 +293,16 @@ function Editor({
 
   const campoSelecionado = campos.find((campo) => campo.chave === selecionada) ?? null;
 
+  // Os campos que cada origem compartilha viram `<referência>__<campo>` nas fórmulas (§2.7).
+  const referencias = campos
+    .filter((campo) => campo.tipo === "referencia" && campo.formulario.trim() !== "")
+    .map((campo) => ({ id: campo.id, rotulo: campo.rotulo, formulario: campo.formulario.trim() }));
+  const origens = useCamposDeOrigem(
+    carregado.origensPossiveis,
+    referencias.map((referencia) => referencia.formulario),
+  );
+  const camposDasReferencias = camposDeFormulaDasReferencias(referencias, origens);
+
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
@@ -409,6 +425,7 @@ function Editor({
               todosOsCampos={campos}
               catalogo={catalogo}
               formulariosDeOrigem={carregado.nomesDosFormularios}
+              camposDasReferencias={camposDasReferencias}
               erros={erros.porCampo[campoSelecionado.chave] ?? []}
               aoMudar={(mudancas) =>
                 setCampos((atuais) => atualizarCampo(atuais, campoSelecionado.chave, mudancas))

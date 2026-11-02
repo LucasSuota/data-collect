@@ -586,6 +586,64 @@ describe("Construtor: criar com IA", () => {
   });
 });
 
+describe("Construtor: fórmula usando campos compartilhados da origem", () => {
+  const proctor = {
+    id: 7,
+    nome: "Proctor",
+    criado_em: "x",
+    versao_atual: {
+      id: 71,
+      formulario_id: 7,
+      numero: 1,
+      publicada_em: "x",
+      definicao: {
+        campos: [
+          { id: "ensaio", tipo: "referencia" as const, rotulo: "Ensaio", formulario: "Ensaio" },
+          { id: "massa", tipo: "numero" as const, rotulo: "Massa" },
+          { id: "seca", tipo: "calculado" as const, rotulo: "Massa seca", formula: "massa * 2" },
+        ],
+      },
+    },
+  };
+  const ensaio = {
+    id: 1,
+    nome: "Ensaio",
+    criado_em: "x",
+    versao_atual: {
+      id: 11,
+      formulario_id: 1,
+      numero: 1,
+      publicada_em: "x",
+      definicao: {
+        campos: [
+          { id: "umidade", tipo: "numero" as const, rotulo: "Umidade", compartilhado: true },
+          { id: "operador", tipo: "texto" as const, rotulo: "Operador", compartilhado: true },
+        ],
+      },
+    },
+  };
+
+  it("oferece `<referência>__<campo>` para os campos que a origem compartilha e uma fórmula pode usar", async () => {
+    renderizar(
+      { tipo: "editar", formularioId: 7 },
+      { obterFormulario: async (id: number) => (id === 7 ? proctor : ensaio) },
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Selecionar o campo Massa seca" }),
+    );
+
+    const ajuda = await screen.findByRole("group", { name: "Campos e constantes" });
+
+    expect(
+      await within(ajuda).findByRole("button", { name: /ensaio__umidade/ }),
+    ).toBeInTheDocument();
+    // texto não pode entrar em fórmula, então a origem não o oferece
+    expect(
+      within(ajuda).queryByRole("button", { name: /ensaio__operador/ }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("Construtor: editar um rascunho da IA", () => {
   const definicao = {
     campos: [
