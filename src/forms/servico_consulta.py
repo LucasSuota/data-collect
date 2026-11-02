@@ -104,8 +104,8 @@ def _consultar(
         else repositorio.obter_versao(conexao, versao_id, formulario_id)
     )
     tipos_calculados = tipos_calculados_da_versao(conexao, versao, Cache())
-    colunas = _colunas(versao, tipos_calculados)
     filtraveis = _filtraveis(versao, tipos_calculados)
+    colunas = _colunas(versao, tipos_calculados, set(filtraveis))
     pagina = repositorio.listar_registros(
         conexao,
         versao.id,
@@ -119,7 +119,9 @@ def _consultar(
     return versao, colunas, pagina
 
 
-def _colunas(versao: Versao, tipos_calculados: Mapping[str, TipoFormula]) -> tuple[Coluna, ...]:
+def _colunas(
+    versao: Versao, tipos_calculados: Mapping[str, TipoFormula], filtraveis: set[str]
+) -> tuple[Coluna, ...]:
     return tuple(
         Coluna(
             id=campo.id,
@@ -128,6 +130,8 @@ def _colunas(versao: Versao, tipos_calculados: Mapping[str, TipoFormula]) -> tup
             tipo=campo.tipo,
             casas_decimais=campo.casas_decimais,
             tipo_na_formula=tipos_calculados.get(campo.id),
+            opcoes=campo.opcoes,
+            filtravel=campo.id in filtraveis,
         )
         for campo in versao.definicao.campos
         if campo.tipo is not TipoCampo.SECAO

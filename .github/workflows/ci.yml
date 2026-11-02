@@ -59,3 +59,56 @@ jobs:
 
       - name: Testes
         run: uv run pytest
+
+  # O front tem job próprio (AGENTS.md §14): lint, formatação, typecheck, testes e build
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` falha se o package-lock.json estiver fora de sincronia com o package.json
+      - name: Instalar dependências
+        run: npm ci
+
+      # Os tipos da API são GERADOS do OpenAPI do backend, nunca escritos à mão (AGENTS.md §5.3):
+      # o CI falha se o openapi.json ou o esquema.d.ts versionados estiverem desatualizados.
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Conferir o openapi.json do backend
+        working-directory: .
+        run: |
+          uv sync --locked
+          uv run forms-openapi --conferir --saida frontend/openapi.json
+
+      - name: Conferir os tipos gerados
+        run: |
+          npm run api:tipos
+          git diff --exit-code src/api/esquema.d.ts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Formatação
+        run: npm run format:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        run: npm run build

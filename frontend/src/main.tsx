@@ -1,0 +1,18 @@
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { ApiProvider } from "./api/contexto";
+import { App } from "./App";
+import "./index.css";
+
+const raiz = document.getElementById("raiz");
+if (!raiz) {
+  throw new Error("Elemento #raiz não encontrado em index.html.");
+}
+
+createRoot(raiz).render(
+  <StrictMode>
+    <ApiProvider>
+      <App />
+    </ApiProvider>
+  </StrictMode>,
+);
