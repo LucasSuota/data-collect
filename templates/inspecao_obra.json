@@ -1,0 +1,17 @@
+{
+  "campos": [
+    {"id": "secao_identificacao", "tipo": "secao", "rotulo": "Identificação"},
+    {"id": "responsavel", "tipo": "texto", "rotulo": "Responsável", "obrigatorio": true},
+    {"id": "data_inspecao", "tipo": "data", "rotulo": "Data da inspeção", "obrigatorio": true},
+    {"id": "local", "tipo": "localizacao", "rotulo": "Local da inspeção"},
+    {"id": "secao_verificacao", "tipo": "secao", "rotulo": "Verificação"},
+    {"id": "situacao", "tipo": "selecao", "rotulo": "Situação", "obrigatorio": true,
+     "opcoes": ["Conforme", "Não conforme", "Pendente"]},
+    {"id": "epi_utilizado", "tipo": "sim_nao", "rotulo": "EPI utilizado?"},
+    {"id": "area_isolada", "tipo": "sim_nao", "rotulo": "Área isolada?"},
+    {"id": "seguranca_ok", "tipo": "calculado", "rotulo": "Segurança em ordem?",
+     "formula": "epi_utilizado and area_isolada"},
+    {"id": "fotos", "tipo": "foto", "rotulo": "Fotos", "maximo": 5},
+    {"id": "observacoes", "tipo": "texto", "rotulo": "Observações"}
+  ]
+}

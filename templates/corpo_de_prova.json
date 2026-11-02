@@ -1,0 +1,14 @@
+{
+  "campos": [
+    {"id": "fck_mpa", "tipo": "numero", "rotulo": "fck especificado", "unidade": "MPa", "obrigatorio": true},
+    {"id": "diametro_mm", "tipo": "numero", "rotulo": "Diâmetro", "unidade": "mm", "obrigatorio": true},
+    {"id": "data_moldagem", "tipo": "data", "rotulo": "Data de moldagem", "obrigatorio": true},
+    {"id": "carga_kn", "tipo": "numero", "rotulo": "Carga de ruptura", "unidade": "kN"},
+    {"id": "ruptura_28d", "tipo": "calculado", "rotulo": "Ruptura aos 28 dias",
+     "formula": "data_moldagem + dias(28)"},
+    {"id": "resistencia_mpa", "tipo": "calculado", "rotulo": "Resistência", "unidade": "MPa", "casas_decimais": 1,
+     "formula": "carga_kn * 1000 / (pi * (diametro_mm / 2) ** 2)"},
+    {"id": "conforme", "tipo": "calculado", "rotulo": "Conforme?",
+     "formula": "resistencia_mpa >= fck_mpa"}
+  ]
+}
