@@ -18,7 +18,7 @@ O projeto está no começo. Existe o esqueleto (`pyproject.toml`, CI, `src/forms
 - **Relação entre formulários.** Um formulário pode depender de outro por referência a um registro (ex.: `insitu` depende de `proctor`, que depende de `ensaio`). A origem escolhe quais campos compartilha; editar a origem recalcula os dependentes em cascata.
 - **Localização e foto.** Coordenadas (latitude e longitude) validadas por faixa. Fotos são convertidas para WebP e reduzidas para ficar em torno de 50 a 80 KB, com o EXIF removido.
 - **Registros:** criar, editar, excluir, listar com filtro simples e exportar CSV pronto para o Excel em português.
-- **IA opcional:** assistente de procedimentos (RAG com BM25 escrito à mão) e resumo de registros validado contra o banco.
+- **IA opcional:** assistente de procedimentos (RAG com BM25 escrito à mão), resumo de registros validado contra o banco e **gerador de formulário**: a pessoa descreve o que quer, a IA propõe um ou mais formulários, ligados entre si ou a formulários existentes, o código os valida e a pessoa revisa e aprova no construtor. A IA nunca salva nada sozinha.
 
 ## Exemplo de definição
 
@@ -85,7 +85,7 @@ O contrato é o OpenAPI gerado pelo FastAPI (`/docs`); os tipos TypeScript do fr
 
 | Área | Endpoints |
 |---|---|
-| Formulários e versões | `POST /formularios` (cria e publica a v1), `GET /formularios`, `GET /formularios/{id}`, `DELETE /formularios/{id}`, `POST` e `GET /formularios/{id}/versoes`, `GET /formularios/{id}/versoes/{versao_id}` |
+| Formulários e versões | `POST /formularios` (cria e publica a v1), `POST /formularios/lote` (vários de uma vez, na ordem das dependências), `GET /formularios`, `GET /formularios/{id}`, `DELETE /formularios/{id}`, `POST` e `GET /formularios/{id}/versoes`, `GET /formularios/{id}/versoes/{versao_id}` |
 | Construtor | `POST /definicoes/validar`, `POST /definicoes/previa`, `GET /catalogo` |
 | Registros | `POST /formularios/{id}/registros`, `GET`, `PUT` e `DELETE /registros/{id}` |
 | Consulta | `GET /formularios/{id}/registros` (versão, filtro por igualdade, paginação), `GET /formularios/{id}/registros/exportar` (CSV) |
@@ -134,4 +134,3 @@ O front roda separado em `http://localhost:5173` (Vite) e a API libera CORS só 
 - Fotos em HEIC e captura direta pela câmera.
 - Assinatura de código, notarização e atualização automática do instalável.
 - Usuários, cargos e permissões; modo offline com sincronização.
-- IA que sugere um formulário a partir de uma descrição em texto, com a saída validada contra o esquema de definição.
