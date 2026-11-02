@@ -12,3 +12,8 @@ node_modules/
 # Banco local
 *.db
 *.sqlite3
+
+# Gerados pelo empacotamento (PyInstaller e electron-builder)
+empacotamento/build/
+empacotamento/dist/
+empacotamento/instaladores/
