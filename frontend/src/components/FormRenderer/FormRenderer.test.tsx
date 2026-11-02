@@ -360,6 +360,7 @@ describe("FormRenderer: referência", () => {
       versao_id: 1,
       total: 2,
       itens: [registro(11), registro(12)],
+      colunas: [],
     }));
     const aoMudar = vi.fn();
     renderizarComApi(
