@@ -2,7 +2,7 @@
 
 > Backend Python do construtor de formulários: definições em JSON versionadas, validação, fórmulas e persistência em SQLite.
 
-Hoje existem `models.py`, `formulas.py`, `tipos_campo.py` e `repositorio.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
+Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `repositorio.py` e `fotos.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
 
 ## models.py
 
@@ -23,6 +23,7 @@ Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e n
 | `DefinicaoInvalida`, `RegistroInvalido` | Carregam `erros: tuple[ErroDeCampo, ...]` |
 | `CicloDeDependencia` | Subclasse de `DefinicaoInvalida`; cita os campos em `campos` |
 | `ValorInvalido` | Um valor isolado não serve para o tipo do campo (levantada por `tipos_campo.py`) |
+| `FotoInvalida` | Imagem recusada; a mensagem já traz o motivo em PT-BR (levantada por `fotos.py`) |
 | `NaoEncontrado`, `ExclusaoBloqueada` | Recurso inexistente (404) e exclusão bloqueada por vínculo (409) |
 
 ### Como se conecta
@@ -130,3 +131,33 @@ Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. N�
 - Nunca edite uma migração já publicada (o banco do usuário persiste); acrescente outra. Um teste compara a migração 1 com o esquema publicado, escrito literalmente.
 - Toda mudança de esquema exige teste de atualização a partir do esquema anterior (AGENTS.md §5.2).
 - `PRAGMA user_version` não aceita `?`; o número vem de um `int` interno, nunca de texto externo.
+
+## fotos.py
+
+### Responsabilidade
+Transformar a foto enviada num WebP pequeno e sem metadados (AGENTS.md §2.8). Função pura de bytes para bytes: não lê nem grava arquivo, não guarda o original e não conhece registro, campo nem anexo (isso é do `servico.py`).
+
+### O que tem aqui
+| Símbolo | Papel |
+|---|---|
+| `processar_foto(dados)` | Valida, orienta, remove metadados e comprime; devolve `FotoProcessada` ou levanta `FotoInvalida` |
+| `FotoProcessada` | `dados` (WebP), `largura`, `altura` e `tamanho_bytes` |
+| Constantes (`TAMANHO_MAXIMO_SAIDA`, `LADO_MAIOR_INICIAL`, `QUALIDADE_INICIAL`...) | Parâmetros do algoritmo, nomeados no módulo |
+
+### Como se conecta
+- **Depende de:** `Pillow` (dependência nova, só para decodificar, converter e remover EXIF) e `forms.models` (`FotoInvalida`).
+- **É usado por:** nenhum módulo ainda.
+
+### Decisões que moldam este código
+- Formato reconhecido pelo conteúdo (`Image.open(..., formats=[...])`), nunca pela extensão. HEIC tem mensagem própria.
+- Tamanho e número de pixels são conferidos antes de decodificar (AGENTS.md §12).
+- Remover metadados = copiar os pixels para uma imagem nova, que não herda `info` (EXIF, XMP, ICC, textos do PNG).
+- Transparência vira fundo branco; `convert("RGB")` deixaria o transparente preto.
+- O algoritmo persegue só o teto de 80 KB; os 50 KB são alvo típico, não piso. A qualidade desce de 5 em 5 antes de reduzir as dimensões em 15%.
+
+### Como testar
+`uv run pytest tests/test_fotos.py` (leva alguns segundos: o pior caso é um ruído grande).
+
+### Cuidados
+- O perfil de cor é descartado sem conversão para sRGB; fotos em Display P3 podem ficar um pouco menos saturadas.
+- Imagem animada (GIF não entra; WebP/PNG animados) usa só o primeiro quadro.
