@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  checks:
+  # Lint e formatação não dependem do sistema operacional: rodam uma vez só
+  lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -34,6 +35,27 @@ jobs:
 
       - name: Formatação
         run: uv run ruff format --check .
+
+  # O app é instalável nos três sistemas; quebras de caminho e de fim de linha
+  # só aparecem fora do Linux (AGENTS.md §4.1)
+  testes:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      # Sem fail-fast, para ver o resultado dos três sistemas mesmo se um falhar
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Instalar dependências
+        run: uv sync --locked
 
       - name: Testes
         run: uv run pytest
