@@ -24,6 +24,7 @@ Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e n
 | `CicloDeDependencia` | Subclasse de `DefinicaoInvalida`; cita os campos em `campos` |
 | `ValorInvalido` | Um valor isolado não serve para o tipo do campo (levantada por `tipos_campo.py`) |
 | `FotoInvalida` | Imagem recusada; a mensagem já traz o motivo em PT-BR (levantada por `fotos.py`) |
+| `ErroDeCalculo` | Falha ao executar uma fórmula válida; `calcular_campos` a guarda no campo |
 | `NaoEncontrado`, `ExclusaoBloqueada` | Recurso inexistente (404) e exclusão bloqueada por vínculo (409) |
 
 ### Como se conecta
@@ -45,29 +46,40 @@ Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e n
 ## formulas.py
 
 ### Responsabilidade
-Ler o texto de uma fórmula e devolver a árvore já verificada, sem executar nada. Ainda não avalia valores, não infere tipos e não monta o grafo de dependências.
+Tudo sobre fórmulas, sem I/O: ler o texto e verificar a árvore, inferir tipos ao publicar, achar a ordem de cálculo e avaliar com `Decimal`. Não conhece registro, banco nem API. Quem monta os tipos dos campos e os valores de entrada é a validação e o serviço.
 
 ### O que tem aqui
 | Símbolo | Papel |
 |---|---|
-| `analisar_formula(texto)` | `ast.parse` em modo `eval` + verificação da árvore; devolve `ast.Expression` ou levanta `FormulaInvalida` com `posicao` |
-| `FUNCOES_PERMITIDAS` | Nomes de função aceitos em chamadas (provisório, até existir a tabela única de funções) |
+| `analisar_formula(texto)` / `carregar_formula(texto)` | `ast.parse` em modo `eval` + allowlist de nós, aridade e profundidade; `carregar_formula` devolve `Formula` (texto + árvore) |
+| `FUNCOES`, `CONSTANTES`, `NOMES_RESERVADOS` | A tabela única de funções (assinatura, descrição, exemplo, aridade, regra de tipo, implementação), `pi` e os nomes que nenhum `id` pode ter |
+| `inferir_tipo(formula, tipos, nao_utilizaveis)` | Tipo do resultado (`numero`, `data`, `booleano`) sem executar; `duracao` só aparece no meio |
+| `nomes_usados(formula)` | Campos usados, na ordem do texto, sem funções nem `pi` |
+| `ordenar_calculados(dependencias)` | Ordem topológica determinística; ciclo (inclusive auto-referência) levanta `CicloDeDependencia` |
+| `avaliar(formula, valores)` | Calcula uma fórmula; falha vira `ErroDeCalculo` em PT-BR |
+| `calcular_campos(campos, entradas, compartilhados)` | A única função de cálculo: devolve `{valor, erro}` de cada `calculado` (salvar e prévia usam esta) |
+| `ValorDeCampo` | Valor tipado de um campo compartilhado, com o erro da origem |
 
 ### Como se conecta
-- **Depende de:** `ast` e `forms.models` (`FormulaInvalida`, `Posicao`).
+- **Depende de:** biblioteca padrão e `forms.models`.
 - **É usado por:** nenhum módulo ainda.
 
 ### Decisões que moldam este código
-- Allowlist de nós de expressão: constante numérica ou booleana, nome, `+ - * / **`, `-` e `not` unários, `and`/`or`, comparações simples e chamadas às funções permitidas (AGENTS.md §7).
-- Nó fora da lista é erro explícito, nunca ignorado; só o primeiro problema é reportado.
-- A `posicao` é em caracteres: o `ast` mede em bytes UTF-8, e o front sublinha por caracteres.
+- Allowlist de nós: constante numérica ou booleana, nome, `+ - * / **`, `-` e `not` unários, `and`/`or`, comparação simples e chamada às funções da tabela (AGENTS.md §7).
+- Vazio propaga em tudo: todos os operandos são avaliados, e qualquer vazio torna o resultado vazio, até em `and`/`or` e nas funções. A exceção é `se`, que avalia só o ramo escolhido.
+- Aritmética em contexto `Decimal` fixo (precisão 28, divisão por zero e estouro viram exceção). `pi` tem 28 dígitos.
+- Constantes como `0.1` viram `Decimal` pelo texto original, nunca pelo `float`. Resultado não finito (`0 ** -1`) vira erro de cálculo.
+- Teto de 150 níveis de aninhamento no parse: garante que inferência e avaliação, recursivas, não estourem a pilha.
+- `casas_decimais` não entra aqui: o valor guardado mantém a precisão total (AGENTS.md §7).
 
 ### Como testar
-`uv run pytest tests/test_formulas.py`
+`uv run pytest tests/test_formulas*.py`
 
 ### Cuidados
-- Nunca chamar `eval`, `exec`, `compile` nem `__import__`; um teste confere o fonte do módulo.
-- Constantes como `0.1` chegam da árvore como `float`; quem avaliar deve criar o `Decimal` a partir do texto original, nunca do `float` (AGENTS.md §7).
+- Nunca chamar `eval`, `exec`, `compile` nem `__import__`; um teste confere o fonte.
+- `TipoFormula` é `StrEnum` e portanto também é `str`: não distinga tipo de mensagem com `isinstance(x, str)`.
+- Mudar `FUNCOES` muda o parser, a inferência, o avaliador e o catálogo ao mesmo tempo, de propósito.
+- Este arquivo ficou grande (parse, tipos, grafo e avaliação). Se crescer mais, dividir é a próxima refatoração.
 
 ## tipos_campo.py
 
