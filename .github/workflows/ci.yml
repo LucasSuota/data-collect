@@ -112,3 +112,40 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # A janela Electron: a lógica pura é testada; a janela em si é verificada à mão (AGENTS.md §8)
+  desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Os testes não abrem janela: não precisam do binário do Electron (~100 MB)
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Formatação
+        run: npm run format:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        run: npm run build
