@@ -904,3 +904,18 @@ def test_inicializacao_remove_so_os_anexos_orfaos_com_mais_de_24h(app, configura
     # assert
     assert velho_depois.status_code == 404 and novo_depois.status_code == 200
     assert len(list((configuracao.pasta_de_dados / "anexos").glob("*"))) == 1
+
+
+def test_definicao_volta_como_foi_escrita_sem_campos_nulos_inventados(cliente):
+    # arrange
+    criado = _criar(cliente)
+
+    # act
+    campos = cliente.get(f"/formularios/{criado['id']}").json()["versao_atual"]["definicao"][
+        "campos"
+    ]
+
+    # assert: o campo simples não ganha `unidade: null`, `opcoes: null`...
+    obs = next(c for c in campos if c["id"] == "obs")
+    assert obs == {"id": "obs", "tipo": "texto", "rotulo": "Observação"}
+    assert campos == CORPO["campos"]

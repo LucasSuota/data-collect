@@ -8,9 +8,19 @@ resposta é mudança incompatível.
 validação (com erros por `id` de campo) é do servidor, não do Pydantic.
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
 
-from forms.models import ErroDeCampo, Formulario, Registro, ResultadoCalculado, Versao
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
+
+from forms.models import (
+    Campo,
+    Definicao,
+    ErroDeCampo,
+    Formulario,
+    Registro,
+    ResultadoCalculado,
+    Versao,
+)
 from forms.repositorio import ResumoDeFormulario, ResumoDeVersao
 from forms.servico import Catalogo
 
@@ -98,11 +108,57 @@ class ResumoDeFormularioSaida(_Modelo):
         )
 
 
+class CampoSaida(_Modelo):
+    """Um campo da definição. Só o que foi definido aparece (o resto é omitido, não é `null`)."""
+
+    id: str
+    tipo: Literal[
+        "texto",
+        "numero",
+        "data",
+        "selecao",
+        "sim_nao",
+        "calculado",
+        "secao",
+        "referencia",
+        "localizacao",
+        "foto",
+    ]
+    rotulo: str
+    obrigatorio: bool | None = None
+    unidade: str | None = None
+    casas_decimais: int | None = None
+    opcoes: list[str] | None = None
+    formula: str | None = None
+    formulario: str | None = None
+    compartilhado: bool | None = None
+    maximo: int | None = None
+
+    # Sem anotação de retorno de propósito: com `-> dict` o Pydantic trocaria o esquema do OpenAPI
+    # por um objeto genérico, e o TypeScript gerado perderia os campos.
+    @model_serializer(mode="wrap")
+    def _omitir_o_que_nao_foi_definido(self, proximo: SerializerFunctionWrapHandler):
+        # `unidade`, `opcoes`... ausentes não viram `null`: a definição sai como foi escrita.
+        return {nome: valor for nome, valor in proximo(self).items() if valor is not None}
+
+    @classmethod
+    def de(cls, campo: Campo) -> "CampoSaida":
+        return cls.model_validate(campo.para_json())
+
+
+class DefinicaoSaida(_Modelo):
+    campos: list[CampoSaida]
+
+    @classmethod
+    def de(cls, definicao: Definicao) -> "DefinicaoSaida":
+        return cls(campos=[CampoSaida.de(campo) for campo in definicao.campos])
+
+
 class VersaoSaida(_Modelo):
     id: int
     formulario_id: int
     numero: int
-    definicao: dict[str, object]
+    definicao: DefinicaoSaida
     publicada_em: str
 
     @classmethod
@@ -111,7 +167,7 @@ class VersaoSaida(_Modelo):
             id=versao.id,
             formulario_id=versao.formulario_id,
             numero=versao.numero,
-            definicao=versao.definicao.para_json(),
+            definicao=DefinicaoSaida.de(versao.definicao),
             publicada_em=versao.publicada_em,
         )
 
