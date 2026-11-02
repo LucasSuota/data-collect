@@ -17,6 +17,7 @@ from forms import fotos, servico
 from forms.api_esquemas import (
     AnexoSaida,
     CatalogoSaida,
+    DuplicarEntrada,
     ErroDeCampoSaida,
     ErroSaida,
     FormularioDetalheSaida,
@@ -144,6 +145,29 @@ def listar_formularios(conexao: DepConexao) -> list[ResumoDeFormularioSaida]:
 def obter_formulario(formulario_id: int, conexao: DepConexao) -> FormularioDetalheSaida:
     detalhe = servico.obter_formulario(conexao, formulario_id)
     return _detalhe(detalhe.formulario, detalhe.versao_atual)
+
+
+@roteador.post(
+    "/formularios/{formulario_id}/duplicar",
+    status_code=201,
+    response_model=FormularioDetalheSaida,
+    tags=["formulários"],
+    summary="Duplica o formulário",
+    description=(
+        "Cria um formulário novo com a **versão 1 igual à definição da versão atual** do original, "
+        "na mesma pasta e **sem registros**. O corpo é opcional: sem `nome`, o padrão é "
+        '"<nome> (cópia)", depois "(cópia 2)"… Um `nome` repetido é 422 no campo `nome`.'
+    ),
+)
+def duplicar_formulario(
+    formulario_id: int,
+    conexao: DepConexao,
+    agora: DepAgora,
+    entrada: DuplicarEntrada | None = None,
+) -> FormularioDetalheSaida:
+    nome = entrada.nome if entrada is not None else None
+    criado = servico.duplicar_formulario(conexao, formulario_id, nome, agora)
+    return _detalhe(criado.formulario, criado.versao)
 
 
 @roteador.put(
@@ -520,6 +544,7 @@ def _detalhe(formulario: Formulario, versao: Versao) -> FormularioDetalheSaida:
         nome=formulario.nome,
         criado_em=formulario.criado_em,
         versao_atual=VersaoSaida.de(versao),
+        pasta_id=formulario.pasta_id,
     )
 
 

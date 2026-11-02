@@ -224,6 +224,33 @@ def criar_formulario(
         return criado
 
 
+def duplicar_formulario(
+    conexao: sqlite3.Connection, formulario_id: int, nome: str | None, agora: datetime
+) -> FormularioCriado:
+    """Cria um formulário novo com a v1 igual à definição da versão atual do original (§2.10).
+
+    A cópia nasce na mesma pasta, sem registros e sem o histórico de versões; passa pela mesma
+    publicação de `criar_formulario`, então valida e registra as dependências (a cópia depende das
+    mesmas origens do original, e quem dependia do original não passa a depender dela).
+    Sem `nome`, o padrão é `<nome> (cópia)`; um `nome` informado e repetido é erro no campo.
+    """
+    original = repositorio.obter_formulario(conexao, formulario_id)
+    definicao = repositorio.obter_versao_atual(conexao, formulario_id).definicao
+    if nome is None:
+        nome = _nome_livre_da_copia(conexao, original.nome)
+    return criar_formulario(conexao, nome, definicao.para_json(), agora, original.pasta_id)
+
+
+def _nome_livre_da_copia(conexao: sqlite3.Connection, nome: str) -> str:
+    """`<nome> (cópia)`, depois `(cópia 2)`, `(cópia 3)`… até achar um que não exista."""
+    candidato = f"{nome} (cópia)"
+    numero = 1
+    while repositorio.obter_formulario_por_nome(conexao, candidato) is not None:
+        numero += 1
+        candidato = f"{nome} (cópia {numero})"
+    return candidato
+
+
 def publicar_versao(
     conexao: sqlite3.Connection, formulario_id: int, definicao: ValorJson, agora: datetime
 ) -> Versao:
@@ -551,6 +578,7 @@ __all__ = [
     "criar_formularios_em_lote",
     "criar_pasta",
     "criar_registro",
+    "duplicar_formulario",
     "excluir_formulario",
     "excluir_pasta",
     "excluir_registro",

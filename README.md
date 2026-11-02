@@ -87,7 +87,7 @@ O contrato é o OpenAPI gerado pelo FastAPI (`/docs`); os tipos TypeScript do fr
 
 | Área | Endpoints |
 |---|---|
-| Formulários e versões | `POST /formularios` (cria e publica a v1), `POST /formularios/lote` (vários de uma vez, na ordem das dependências), `GET /formularios`, `GET /formularios/{id}`, `DELETE /formularios/{id}`, `POST` e `GET /formularios/{id}/versoes`, `GET /formularios/{id}/versoes/{versao_id}` |
+| Formulários e versões | `POST /formularios` (cria e publica a v1), `POST /formularios/lote` (vários de uma vez, na ordem das dependências), `GET /formularios`, `GET /formularios/{id}`, `POST /formularios/{id}/duplicar` (cópia com a v1 igual à versão atual, na mesma pasta, sem registros), `DELETE /formularios/{id}`, `POST` e `GET /formularios/{id}/versoes`, `GET /formularios/{id}/versoes/{versao_id}` |
 | Construtor | `POST /definicoes/validar`, `POST /definicoes/previa`, `GET /catalogo` |
 | Pastas | `POST` e `GET /pastas`, `PUT` e `DELETE /pastas/{id}` (árvore que só organiza; excluir só pasta vazia), `PUT /formularios/{id}/pasta` (mover, `null` = raiz) |
 | Registros | `POST /formularios/{id}/registros`, `GET`, `PUT` e `DELETE /registros/{id}` |

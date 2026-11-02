@@ -243,6 +243,7 @@ Os casos de uso, chamados igualmente por `api.py` e `cli.py`. Toda regra de neg�
 - Cascata (§2.7): atualizar uma origem recalcula os dependentes transitivos **na mesma transação**, cada um contra a sua versão; erro de cálculo vira erro no campo e só falha de infraestrutura desfaz tudo. Quem não mudou não é regravado.
 - Arquivo de foto só é apagado **depois** do commit; falha antes dele preserva o arquivo. O caminho guardado é conferido para nunca sair da pasta de dados.
 - A prévia trata vazio e valor pela metade como vazio: não reclama de obrigatório (isso é do salvar).
+- Duplicar (`duplicar_formulario`) não tem caminho próprio de gravação: monta o nome (`<nome> (cópia)`, `(cópia 2)`…) e chama `criar_formulario` com a definição da versão atual, então a cópia é validada e registra as dependências como qualquer formulário novo. Sem registros, sem histórico de versões, na pasta do original.
 - Pasta só organiza: mover formulário troca `pasta_id` e não toca em versão, registro nem dependência. Mover pasta para dentro dela mesma ou de uma descendente é recusado; excluir só pasta vazia (409), sem cascata.
 - O filtro só aceita igualdade em `selecao`, `sim_nao`, `texto` e `calculado` booleano; o nome do campo vem de uma allowlist derivada da definição.
 
