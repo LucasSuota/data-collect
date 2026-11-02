@@ -2,7 +2,7 @@
 
 > Backend Python do construtor de formulários: definições em JSON versionadas, validação, fórmulas e persistência em SQLite.
 
-Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `fotos.py`, `exportacao.py`, `cli.py`, `app.py`, `api.py` (com `api_esquemas.py`, `api_rotas.py` e `exportar_openapi.py`) e os módulos `servico*.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
+Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `fotos.py`, `exportacao.py`, `cli.py`, `app.py`, `api.py` (com `api_esquemas.py`, `api_rotas.py`, `api_extensoes.py` e `exportar_openapi.py`), os módulos `servico*.py` e os pacotes opcionais `ia/` e `rag/` (últimas seções).
 
 ## models.py
 
@@ -129,11 +129,12 @@ Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. N�
 | `registrar_dependencias`, `listar_dependencias`, `formularios_dependentes` | Dependência entre formulários, direta ou transitiva |
 | `substituir_referencias`, `obter_referencias`, `registros_que_referenciam`, `registros_dependentes` | Referências entre registros; os dependentes vêm na ordem de recálculo da cascata |
 | `criar_anexo`, `vincular_`/`desvincular_`/`apagar_anexo`, `listar_anexos_do_registro`, `listar_anexos_orfaos` | Metadados das fotos; `caminho` sempre com `/` e relativo à pasta de dados |
+| `listar_vetores`, `guardar_vetores`, `apagar_vetores` | Embeddings dos trechos dos procedimentos (BLOB), usados só pela busca semântica do `rag/` |
 
 ### Como se conecta
 - **Depende de:** `sqlite3` e `forms.models`.
 - **É usado por:** nenhum módulo ainda.
-- **Contratos e dados:** as seis tabelas de AGENTS.md §5.2, na versão 2 do esquema.
+- **Contratos e dados:** as seis tabelas de AGENTS.md §5.2 mais `vetores_trechos` (busca semântica, opcional), na versão 3 do esquema.
 
 ### Decisões que moldam este código
 - O relógio entra por parâmetro (`agora`, em UTC); o módulo nunca lê a hora. Todas as datas usam o mesmo formato ISO, então comparar texto é comparar tempo.
@@ -146,7 +147,7 @@ Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. N�
 `uv run pytest tests/test_repositorio_*.py`
 
 ### Cuidados
-- Nunca edite uma migração já publicada (o banco do usuário persiste); acrescente outra. Um teste compara a migração 1 com o esquema publicado, escrito literalmente, e outro atualiza um banco real da v1 para a v2.
+- Nunca edite uma migração já publicada (o banco do usuário persiste); acrescente outra. Um teste compara a migração 1 com o esquema publicado, escrito literalmente; outros atualizam um banco real da v1 para a v2 e da v2 para a v3 (a tabela de vetores) sem perder dados.
 - Toda mudança de esquema exige teste de atualização a partir do esquema anterior (AGENTS.md §5.2).
 - `PRAGMA user_version` não aceita `?`; o número vem de um `int` interno, nunca de texto externo.
 - `listar_registros` exige `campos_permitidos` para qualquer filtro: sem a allowlist, o filtro é recusado.
@@ -290,6 +291,7 @@ A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio 
 | `api.py` | `criar_app(Configuracao)`, o `app` do uvicorn, o token por execução, o CORS e os tratadores de erro |
 | `api_esquemas.py` | Modelos Pydantic de entrada e saída; seus nomes e campos são o contrato com o front |
 | `api_rotas.py` | Os endpoints (formulários, versões, lote, validar, prévia, catálogo, registros, CSV, anexos) e as dependências (conexão por requisição, relógio, pasta de dados) |
+| `api_extensoes.py` | `Extensao`, `descobrir_extensoes()` e `resposta_de_erro()`: como os módulos opcionais (`ia/`, `rag/`) acrescentam rotas sem o núcleo importá-los |
 | `exportar_openapi.py` | `forms-openapi`: grava o `openapi.json` do front; `--conferir` falha se estiver desatualizado |
 
 ### Como se conecta
@@ -306,6 +308,7 @@ A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio 
 - Erro de lote: o `campo` leva o nome do formulário como prefixo (`proctor.umidade.formula`).
 - `definicao`, `valores` e `dados` são `object`: chegam como JSON não confiável, e a validação com erros por `id` é do servidor, não do Pydantic. Campo a mais num corpo de requisição é recusado.
 - Na inicialização, remove os anexos nunca vinculados há mais de 24 h.
+- **Extensões opcionais:** `criar_app(..., extensoes=descobrir_extensoes())`. O núcleo procura `forms.ia.extensao` e `forms.rag.extensao` **pelo nome**, em execução, então não os importa (AGENTS.md §5.1) e o app sobe igual, só sem essas rotas, se a pasta for removida. Só a ausência do próprio módulo é aceita: um `import` quebrado lá dentro aparece como erro. As rotas das extensões entram antes do front e do middleware do token, então também exigem o token. O PyInstaller não vê imports por nome: `empacotamento/` os declara com `--hidden-import`.
 
 ### Como testar
 `uv run pytest tests/test_api*.py` (`conftest.py` traz o app com banco temporário, token e relógio fixos).
@@ -328,7 +331,7 @@ A entrada do backend no app instalável (AGENTS.md §4.1). **Só monta as peças
 | `abrir_soquete_local()` | Reserva uma porta livre **só em 127.0.0.1**, já escutando, e a entrega ao uvicorn |
 
 ### Como se conecta
-- **Depende de:** `forms.api` (`criar_app(configuracao, pasta_do_front)`), `platformdirs` (pasta de dados correta em cada sistema; nova dependência).
+- **Depende de:** `forms.api` (`criar_app(configuracao, pasta_do_front, extensoes)`), `platformdirs` (pasta de dados correta em cada sistema; nova dependência).
 - **É usado por:** o executável do PyInstaller (`empacotamento/`) e o Electron, que o inicia como processo filho.
 
 ### Decisões que moldam este código
@@ -343,3 +346,68 @@ A entrada do backend no app instalável (AGENTS.md §4.1). **Só monta as peças
 ### Cuidados
 - A primeira linha da saída é contrato com o Electron: nada pode ser impresso antes dela.
 - Rodar à mão: `FORMS_TOKEN=abc uv run python -m forms.app` (depois de `npm run build` no `frontend/`).
+
+## ia/ (cliente.py, gerador.py, resumo.py, validacao.py, extensao.py) — opcional
+
+### Responsabilidade
+Os recursos que usam um LLM: **gerar formulários** a partir de um pedido e **resumir registros**. A IA só redige; quem calcula e valida é código determinístico (AGENTS.md §2.5 e §3.3). O app inteiro funciona com esta pasta removida.
+
+### O que tem aqui
+| Arquivo | Papel |
+|---|---|
+| `cliente.py` | O **único** lugar que importa o SDK (`anthropic`, importado só na hora de usar). `ClienteDeLLM` (protocolo: `completar`, `vetorizar`, `modelo_de_vetores`), `ClienteAnthropic`, `ClienteFalso` (testes), `criar_cliente(ambiente)` e `IaIndisponivel` |
+| `gerador.py` | `gerar(conexao, cliente, pedido, rascunhos)`: monta o prompt com o catálogo e os formulários existentes, lê o JSON proposto, valida o conjunto com `servico.validar_conjunto` e devolve os erros ao LLM para corrigir, no máximo 2 vezes. **Nunca salva** |
+| `resumo.py` | `calcular_agregados` (contagem, mínimo, máximo, soma, média, frequências, feitos em código sobre **todos** os registros que passam nos filtros) e `resumir`, que só envia os agregados ao LLM |
+| `validacao.py` | `validar_resumo`: formato do JSON, limites de tamanho e **todo número do texto tem de bater com os agregados** (arredondado para as casas escritas, meio para cima); senão `ResumoRejeitado` |
+| `extensao.py` | As rotas `POST /definicoes/gerar` e `POST /formularios/{id}/resumo` e os tratadores `IaIndisponivel` → 503, `RespostaDaIaInvalida` e `ResumoRejeitado` → 502 |
+
+### Como se conecta
+- **Depende de:** o núcleo (`servico`, `models`) e, na `extensao.py`, de `api_rotas`/`api_extensoes`. O SDK é um extra opcional (`uv sync --extra ia`).
+- **É usado por:** a API (descoberta por nome, ver `api.py`) e o front (`frontend/src/ia/`).
+- **Configuração:** `ANTHROPIC_API_KEY` no `.env` (nunca em log, em `repr` nem em mensagem de erro) e `FORMS_LLM_MODELO` (padrão `claude-sonnet-5-5`).
+
+### Decisões que moldam este código
+- A saída do LLM é **dado não confiável**: o gerador passa pela mesma validação da publicação, e o resumo é conferido número a número contra o que o código calculou.
+- O LLM nunca recebe registro nem texto livre do banco: só o pedido, metadados dos formulários (nome e campos compartilhados) e, no resumo, os agregados numéricos e as frequências de seleção e sim/não.
+- Sem chave ou sem internet, as rotas respondem 503 em português e o resto do app segue; o construtor manual continua funcionando.
+- O prompt trata `<pedido>` e `<agregados>` como dado, nunca como instrução.
+
+### Como testar
+`uv run pytest tests/test_ia_*.py tests/test_api_ia.py`. Os testes usam só o `ClienteFalso`: nenhum faz chamada de rede nem exige chave.
+
+### Cuidados
+- **Nenhuma chamada real ao LLM foi testada**: o `ClienteAnthropic` foi escrito contra a documentação do SDK, e a primeira chamada real pode mostrar ajustes (nome do modelo, formato da resposta).
+- Sem chave, a validação do corpo da requisição vem *depois* do 503 (a dependência do cliente roda antes); com chave, um pedido grande demais dá 422.
+- O `ClienteAnthropic` não tem embeddings (`vetorizar` levanta `IaIndisponivel`): a busca semântica só liga com outro provedor que implemente `ClienteDeLLM`.
+
+## rag/ (chunker.py, indice.py, semantico.py, responder.py, extensao.py) — opcional
+
+### Responsabilidade
+O **assistente de procedimentos**: responde perguntas **só com trechos** dos `.md` de `docs/`, mostrando o trecho e o arquivo de origem. Sem base nos documentos, diz que não encontrou (AGENTS.md §2.5).
+
+### O que tem aqui
+| Arquivo | Papel |
+|---|---|
+| `chunker.py` | `dividir_em_trechos` (um trecho por seção, quebrado por parágrafos acima de 800 caracteres) e `carregar_documentos` |
+| `indice.py` | BM25 escrito à mão (`IndiceBm25`), `tokenizar` (sem acento, sem palavras vazias, **sem stemming**) e o protocolo `Buscador` |
+| `semantico.py` | Busca semântica opcional: vetores em BLOB no SQLite (`vetores_trechos`), cosseno em Python, `IndiceHibrido` (BM25 + semântico fundidos por RRF) e `carregar_vetores`, que só vetoriza o que ainda não está no banco |
+| `responder.py` | `perguntar`: busca, pede ao LLM uma resposta **só com os trechos** e descarta a resposta se tiver número que não está neles. Sem LLM ou com falha, devolve só os trechos |
+| `extensao.py` | `POST /assistente/perguntar` e `localizar_docs` (`FORMS_DOCS_DIR`, o executável empacotado ou `docs/` do repositório) |
+
+### Como se conecta
+- **Depende de:** `ia/cliente.py` (`ClienteDeLLM`), `repositorio` e `servico_base.transacao` (só na busca semântica).
+- **É usado por:** a API (extensão descoberta por nome).
+
+### Decisões que moldam este código
+- O BM25 é a base e o **fallback**: sem provedor de embeddings, sem internet ou sem chave, vale só ele. A busca nunca falha por causa dos embeddings.
+- A chave do vetor é o hash do **modelo** e do texto do trecho: trocar o modelo ou editar o trecho gera vetor novo, e o antigo é apagado. A chamada de rede fica fora da transação.
+- O cosseno tem **limiar** (`LIMIAR_DE_SIMILARIDADE = 0,3`): sem ele o "vizinho mais próximo" sempre apareceria e "não encontrei" nunca existiria. O valor depende do modelo de embeddings e deve ser ajustado com perguntas reais.
+- RRF funde só as posições (`1 / (60 + posição)`), então BM25 e cosseno, que têm escalas diferentes, não precisam ser normalizados.
+- O índice é montado a cada pergunta (algumas centenas de trechos): editar um `.md` vale na hora, sem cache para invalidar.
+
+### Como testar
+`uv run pytest tests/test_rag.py tests/test_rag_semantico.py tests/test_api_ia.py`
+
+### Cuidados
+- Sem stemming: "romper" e "rompidos" são termos diferentes no BM25. É uma limitação conhecida, que a busca semântica ameniza.
+- O PyInstaller leva `docs/` junto (`--add-data`), mas só os `.md` do repositório; a pessoa não os edita no app instalado.

@@ -16,7 +16,7 @@ O projeto é também **material de portfólio/entrevista**: o autor precisa cons
 
 ### Estado atual
 
-O projeto acabou de ser iniciado: existe o esqueleto (`pyproject.toml`, `src/forms/`, `tests/`, `README.md`, `AI_NOTES.md`), mas ainda nenhum módulo do núcleo. As pastas e módulos descritos aqui são o **alvo**; ao criá-los, siga exatamente esta estrutura e atualize este arquivo se algo mudar.
+O núcleo, a API, a CLI, o `frontend/`, o `desktop/`, o empacotamento e os módulos de IA (`ia/`, `rag/`) existem e estão testados. As pastas e módulos descritos aqui continuam sendo a estrutura a seguir; atualize este arquivo se algo mudar. Ainda não verificados à mão: a janela do Electron, o fluxo no navegador real e qualquer chamada real a um LLM (os testes usam sempre o cliente falso).
 
 **Ordem de construção (de baixo para cima, sempre com TDD):** `tipos_campo.py` e `formulas.py` (tipos, vazio, datas, funções) → `validacao.py` → `repositorio.py` → `servico.py` (publicar versão, registros, relação entre formulários, cascata, exclusão) → `api.py` e `cli.py` → `frontend/` e `desktop/` (só depois que núcleo e API estiverem testados) → módulos opcionais (`rag/`, `ia/`). A relação entre formulários (§2.7) faz parte do núcleo, mas só entra depois que fórmulas, validação e registros simples estiverem testados.
 
@@ -83,6 +83,7 @@ O projeto acabou de ser iniciado: existe o esqueleto (`pyproject.toml`, `src/for
   - O prompt é montado com o catálogo (tipos de campo, funções, `pi`, nomes reservados), gerado das mesmas tabelas do `GET /catalogo`, e com os **formulários existentes**: para cada um, o `nome` e os campos que ele **compartilha** (`id`, rótulo, tipo), vindos da versão atual. Com isso a IA cria **correlações** (§2.7): campos `referencia` apontando para um formulário existente **ou para outro formulário proposto no mesmo pedido** (`formulario` = nome), e fórmulas que usam `<referência>__<campo compartilhado>`. Ex.: "crie ensaio, proctor e insitu, cada um dependendo do anterior" gera os três, com os campos `compartilhado` onde a origem libera. A validação (§2.7) barra origem inexistente, campo não compartilhado e ciclo, **tratando o conjunto proposto como se já estivesse publicado**. A IA **nunca altera um formulário já publicado**; se precisar de um campo que uma origem existente não compartilha, o erro de validação aparece e a pessoa decide ajustar essa origem no construtor. Nenhum registro nem dado do banco é enviado ao LLM, só o texto do pedido, os metadados acima e, ao refinar, os rascunhos em edição.
   - **Nunca salva.** `POST /definicoes/gerar` recebe `{pedido, rascunhos?}` (`rascunhos` = `[{nome, definicao}]` em edição, para refinar: "adicione um campo X") e devolve `{formularios: [{nome, definicao, erros}]}` sem criar nada. A pessoa pode editar, remover ou renomear cada rascunho e então aprova o conjunto, que é publicado **de uma vez** por `POST /formularios/lote` (§2.2).
   - Sem chave ou sem internet: o recurso fica indisponível, com mensagem clara em PT-BR; o construtor manual continua funcionando. O endpoint só é montado quando o módulo `ia/` existe.
+  - Resumo e assistente na API: `POST /formularios/{id}/resumo` (mesma versão e filtros da listagem; o código calcula os agregados e o resumo é descartado, com 502, se algum número não bater) e `POST /assistente/perguntar` (`{pergunta}`; devolve `{encontrou, texto, usou_ia, trechos}`; sem IA devolve só os trechos). `IaIndisponivel` vira 503 e resposta da IA fora do formato, 502, ambos no erro uniforme em PT-BR.
   - No front: ação "Criar com IA" no construtor (campo de pedido, lista de formulários propostos com os erros de cada um, edição livre de cada rascunho no editor, "Publicar todos").
 
 ### 2.6. Entregáveis de documentação
@@ -202,11 +203,11 @@ LangChain, LlamaIndex, bancos vetoriais (inclui pgvector e extensões como `sqli
 ```
 src/forms/   models.py  tipos_campo.py  formulas.py  validacao.py
              fotos.py  exportacao.py  repositorio.py  cli.py  app.py
-             api.py  api_esquemas.py  api_rotas.py  exportar_openapi.py
+             api.py  api_esquemas.py  api_rotas.py  api_extensoes.py  exportar_openapi.py
              servico.py (fachada)  servico_base.py  servico_registros.py
              servico_anexos.py  servico_consulta.py
-             rag/  chunker.py  indice.py  responder.py        (opcional)
-             ia/   cliente.py  resumo.py  validacao.py  gerador.py  (opcional)
+             rag/  chunker.py  indice.py  semantico.py  responder.py  extensao.py  (opcional)
+             ia/   cliente.py  resumo.py  validacao.py  gerador.py  extensao.py     (opcional)
 templates/   corpo_de_prova.json  inspecao_obra.json  (exemplos)
 docs/        procedimentos em .md (base do assistente)
 frontend/    React + TypeScript + Vite + Tailwind (§4)
@@ -232,11 +233,11 @@ api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py
 - **`repositorio.py`**: único módulo que fala SQL. Sempre com parâmetros (`?`), nunca f-string em SQL.
 - **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI. Para não virar um arquivo gigante, os casos de uso de registros (`servico_registros.py`), anexos (`servico_anexos.py`) e consulta/exportação (`servico_consulta.py`) moram em módulos próprios, e as peças comuns (transação, campos compartilhados) em `servico_base.py`; `servico.py` os reexporta, então API e CLI chamam tudo por `servico.<função>`.
 - **`exportacao.py`**: formatação das células e geração do CSV (§2.3, §12). Funções puras, sem I/O; usada por `servico_consulta.py`.
-- **`api.py`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP. Fica dividida em `api.py` (app, token por execução, CORS, tratadores de erro), `api_esquemas.py` (modelos Pydantic de entrada e saída) e `api_rotas.py` (endpoints); `exportar_openapi.py` gera o `openapi.json` do front.
+- **`api.py`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP. Fica dividida em `api.py` (app, token por execução, CORS, tratadores de erro), `api_esquemas.py` (modelos Pydantic de entrada e saída) e `api_rotas.py` (endpoints); `api_extensoes.py` descobre e monta as rotas dos módulos opcionais; `exportar_openapi.py` gera o `openapi.json` do front.
 - **`cli.py`**: `argparse` fino; só chama `servico.py`.
 - **`app.py`**: entrada do backend no app instalável (§4.1): sobe a API, serve o build do front e imprime a porta. Não abre janela (isso é do Electron). Só monta as peças, sem regra de negócio.
 - Dependências apontam **para baixo**: o núcleo nunca importa `api`, `cli`, `rag` ou `ia`.
-- **Módulos opcionais** (`rag/`, `ia/`) dependem do núcleo, nunca o contrário; o app inteiro funciona com eles removidos.
+- **Módulos opcionais** (`rag/`, `ia/`) dependem do núcleo, nunca o contrário; o app inteiro funciona com eles removidos. Cada um publica um `EXTENSAO` em `extensao.py` (rotas e tratadores de erro), e o núcleo o procura **pelo nome** em execução (`descobrir_extensoes()`), sem importá-lo; só a ausência do próprio módulo é tolerada. Como o PyInstaller não vê imports por nome, `empacotamento/` os declara com `--hidden-import`.
 
 ### 5.2. Modelo de dados (SQLite)
 
