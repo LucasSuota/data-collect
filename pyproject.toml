@@ -9,10 +9,12 @@ dependencies = [
     "uvicorn>=0.30",
     "python-dotenv>=1.0",
     "pillow>=13.0.0",
+    "python-multipart>=0.0.33",
 ]
 
 [project.scripts]
 forms = "forms.cli:main"
+forms-openapi = "forms.exportar_openapi:main"
 
 [dependency-groups]
 dev = [

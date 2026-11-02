@@ -2,7 +2,7 @@
 
 > Backend Python do construtor de formulários: definições em JSON versionadas, validação, fórmulas e persistência em SQLite.
 
-Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `fotos.py`, `exportacao.py`, `cli.py` e os módulos `servico*.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
+Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `fotos.py`, `exportacao.py`, `cli.py`, `api.py` (com `api_esquemas.py`, `api_rotas.py` e `exportar_openapi.py`) e os módulos `servico*.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
 
 ## models.py
 
@@ -229,7 +229,7 @@ Os casos de uso, chamados igualmente por `api.py` e `cli.py`. Toda regra de neg�
 
 ### Como se conecta
 - **Depende de:** `repositorio`, `validacao`, `formulas`, `tipos_campo`, `fotos`, `exportacao` e `models`.
-- **É usado por:** `cli.py` (a `api.py` virá).
+- **É usado por:** `cli.py` e `api_rotas.py`/`api.py`.
 
 ### Decisões que moldam este código
 - Publicar um formulário, uma versão e um lote usam **o mesmo motor** (`_validar_conjunto`): um formulário é o conjunto de 1, então mensagens e posições são idênticas.
@@ -261,7 +261,7 @@ Linha de comando enxuta sobre o `servico`: importar template, criar registro a p
 | `forms listar [FORMULARIO] [--filtro CAMPO=VALOR]... [--limite N] [--deslocamento N]` | Sem argumento, lista os formulários; com ele, os registros |
 | `forms exportar FORMULARIO [--saida ARQUIVO] [--filtro ...]` | CSV para o Excel em português (UTF-8 com BOM, `;`, vírgula decimal) |
 
-O banco vem de `--banco` (ou da variável `FORMS_BANCO`; padrão `forms.db`). O formulário é dado pelo nome ou pelo id.
+O banco vem de `--banco` (ou da variável `FORMS_DB_PATH`; padrão `forms.db`). O formulário é dado pelo nome ou pelo id.
 
 ### Como se conecta
 - **Depende de:** `forms.servico`, `forms.exportacao` (só para formatar células) e `forms.models`.
@@ -278,3 +278,38 @@ O banco vem de `--banco` (ou da variável `FORMS_BANCO`; padrão `forms.db`). O 
 ### Cuidados
 - CLI além de importar e listar é linha de corte (AGENTS.md §11).
 - A exportação sem `--saida` escreve bytes (com BOM) em `stdout.buffer`, para um redirecionamento `> arquivo.csv` abrir certo no Excel.
+
+## api.py (e api_esquemas.py, api_rotas.py, exportar_openapi.py)
+
+### Responsabilidade
+A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio em status HTTP. **Nenhuma regra de negócio.** Pydantic só existe aqui.
+
+### O que tem aqui
+| Arquivo | Papel |
+|---|---|
+| `api.py` | `criar_app(Configuracao)`, o `app` do uvicorn, o token por execução, o CORS e os tratadores de erro |
+| `api_esquemas.py` | Modelos Pydantic de entrada e saída; seus nomes e campos são o contrato com o front |
+| `api_rotas.py` | Os endpoints (formulários, versões, lote, validar, prévia, catálogo, registros, CSV, anexos) e as dependências (conexão por requisição, relógio, pasta de dados) |
+| `exportar_openapi.py` | `forms-openapi`: grava o `openapi.json` do front; `--conferir` falha se estiver desatualizado |
+
+### Como se conecta
+- **Depende de:** `forms.servico` (e dos tipos de `models`/`repositorio` só para montar respostas).
+- **É usado por:** o uvicorn (`uv run uvicorn forms.api:app --host 127.0.0.1 --port 8000`), o front e o Electron.
+- **Configuração** (variáveis de ambiente, ver `.env.example`): `FORMS_DB_PATH`, `FORMS_DATA_DIR`, `FORMS_TOKEN`, `FORMS_SKIP_TOKEN`, `FORMS_CORS_ORIGINS`.
+
+### Decisões que moldam este código
+- Erro uniforme `{detalhe, erros: [{campo, mensagem, posicao?}]}` em português, inclusive nos erros do próprio Pydantic, 404/405 e 500 (sem vazar a causa). 422 validação e definição inválida, 404 inexistente, 409 exclusão bloqueada, 401 token.
+- Token por execução no cabeçalho `X-Forms-Token`, **falha fechada**: sem token configurado e sem `FORMS_SKIP_TOKEN`, toda requisição é recusada. O middleware do token fica *dentro* do CORS, para o preflight (que não leva token) passar e o 401 também levar os cabeçalhos CORS.
+- CORS só para as origens do front (padrão: as duas do Vite); `*` é recusado na configuração.
+- Conexão aberta e fechada por requisição (dependência); o relógio também é dependência, então os testes o fixam. Importar o módulo não abre banco nem cria arquivo.
+- Filtro por campo na listagem e no CSV: `?filtro=campo:valor`, repetível (o `id` nunca contém `:`).
+- Erro de lote: o `campo` leva o nome do formulário como prefixo (`proctor.umidade.formula`).
+- `definicao`, `valores` e `dados` são `object`: chegam como JSON não confiável, e a validação com erros por `id` é do servidor, não do Pydantic. Campo a mais num corpo de requisição é recusado.
+- Na inicialização, remove os anexos nunca vinculados há mais de 24 h.
+
+### Como testar
+`uv run pytest tests/test_api*.py` (`conftest.py` traz o app com banco temporário, token e relógio fixos).
+
+### Cuidados
+- Mudar nome ou campo de um modelo de resposta, ou o conjunto de rotas, é **mudança incompatível** com o `frontend/`: `tests/test_api_contrato.py` falha de propósito (AGENTS.md §5.3).
+- O `TestClient` do Starlette emite um aviso sobre `httpx`; é só aviso.

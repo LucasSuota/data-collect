@@ -34,6 +34,7 @@ from forms.servico_base import (
     transacao,
 )
 from forms.servico_consulta import (
+    LIMITE_MAXIMO,
     LIMITE_PADRAO,
     ListagemDeRegistros,
     exportar_csv,
@@ -515,6 +516,7 @@ def _gravar(
 __all__ = [
     "FUNCOES",
     "Conexao",
+    "LIMITE_MAXIMO",
     "LIMITE_PADRAO",
     "Catalogo",
     "FormularioComVersao",
