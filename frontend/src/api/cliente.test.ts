@@ -200,6 +200,18 @@ describe("criarCliente", () => {
       expect(erro.message).toBe("Erro 502 ao falar com o servidor.");
     });
 
+    it("erro interno do servidor mostra a mensagem dele, não a de falta de conexão", async () => {
+      const { cliente } = clienteCom(
+        respostaDe({ status: 500, corpo: { detalhe: "Erro interno do servidor.", erros: [] } }),
+      );
+
+      const erro = (await cliente.listarFormularios().catch((e: unknown) => e)) as ErroDaApi;
+
+      expect(erro).toBeInstanceOf(ErroDaApi);
+      expect(erro.status).toBe(500);
+      expect(erro.message).toBe("Erro interno do servidor.");
+    });
+
     it("sem conexão, vira um erro claro em português com status 0", async () => {
       const { cliente } = clienteCom(new TypeError("Failed to fetch"));
 
