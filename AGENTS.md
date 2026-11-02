@@ -205,7 +205,7 @@ src/forms/   models.py  tipos_campo.py  formulas.py  validacao.py
              fotos.py  exportacao.py  repositorio.py  cli.py  app.py
              api.py  api_esquemas.py  api_rotas.py  api_extensoes.py  exportar_openapi.py
              servico.py (fachada)  servico_base.py  servico_registros.py
-             servico_anexos.py  servico_consulta.py
+             servico_anexos.py  servico_consulta.py  servico_pastas.py
              rag/  chunker.py  indice.py  semantico.py  responder.py  extensao.py  (opcional)
              ia/   cliente.py  resumo.py  validacao.py  gerador.py  extensao.py     (opcional)
 templates/   corpo_de_prova.json  inspecao_obra.json  (exemplos)
@@ -231,7 +231,7 @@ api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py
 - **`validacao.py`**: valida um registro contra uma definição.
 - **`fotos.py`**: processa uma imagem (valida, orienta, remove metadados, converte para WebP na faixa de tamanho, §2.8). Função pura de bytes para bytes. O I/O de arquivo (gravar e apagar o `.webp`) fica em `servico_anexos.py` (reexportado por `servico.py`), com a pasta de dados recebida por parâmetro.
 - **`repositorio.py`**: único módulo que fala SQL. Sempre com parâmetros (`?`), nunca f-string em SQL.
-- **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI. Para não virar um arquivo gigante, os casos de uso de registros (`servico_registros.py`), anexos (`servico_anexos.py`) e consulta/exportação (`servico_consulta.py`) moram em módulos próprios, e as peças comuns (transação, campos compartilhados) em `servico_base.py`; `servico.py` os reexporta, então API e CLI chamam tudo por `servico.<função>`.
+- **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI. Para não virar um arquivo gigante, os casos de uso de registros (`servico_registros.py`), anexos (`servico_anexos.py`) e consulta/exportação (`servico_consulta.py`) e pastas (`servico_pastas.py`) moram em módulos próprios, e as peças comuns (transação, campos compartilhados) em `servico_base.py`; `servico.py` os reexporta, então API e CLI chamam tudo por `servico.<função>`.
 - **`exportacao.py`**: formatação das células e geração do CSV (§2.3, §12). Funções puras, sem I/O; usada por `servico_consulta.py`.
 - **`api.py`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP. Fica dividida em `api.py` (app, token por execução, CORS, tratadores de erro), `api_esquemas.py` (modelos Pydantic de entrada e saída) e `api_rotas.py` (endpoints); `api_extensoes.py` descobre e monta as rotas dos módulos opcionais; `exportar_openapi.py` gera o `openapi.json` do front.
 - **`cli.py`**: `argparse` fino; só chama `servico.py`.
