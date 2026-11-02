@@ -221,3 +221,65 @@ def test_models_nao_importa_outras_camadas():
     # assert
     proibidos = {"forms", "pydantic", "fastapi", "sqlite3"}
     assert importados.isdisjoint(proibidos)
+
+
+# --- conversão de e para o JSON de definição ---
+
+DEFINICAO_COMPLETA = {
+    "campos": [
+        {"id": "secao_1", "tipo": "secao", "rotulo": "Dados"},
+        {
+            "id": "fck",
+            "tipo": "numero",
+            "rotulo": "fck",
+            "unidade": "MPa",
+            "casas_decimais": 1,
+            "obrigatorio": True,
+            "compartilhado": True,
+        },
+        {"id": "dia", "tipo": "data", "rotulo": "Dia"},
+        {"id": "r", "tipo": "selecao", "rotulo": "R", "opcoes": ["A", "B"]},
+        {"id": "ref", "tipo": "referencia", "rotulo": "Ref", "formulario": "ensaio"},
+        {"id": "fotos", "tipo": "foto", "rotulo": "Fotos", "maximo": 3},
+        {"id": "dobro", "tipo": "calculado", "rotulo": "Dobro", "formula": "fck * 2"},
+    ]
+}
+
+
+def test_definicao_faz_ida_e_volta_pelo_json_sem_perder_nada():
+    # act
+    definicao = Definicao.de_json(DEFINICAO_COMPLETA)
+
+    # assert
+    assert definicao.para_json() == DEFINICAO_COMPLETA
+
+
+def test_de_json_monta_campos_tipados_e_imutaveis():
+    # act
+    definicao = Definicao.de_json(DEFINICAO_COMPLETA)
+    fck, seletor = definicao.campos[1], definicao.campos[3]
+
+    # assert
+    assert fck.tipo is TipoCampo.NUMERO and fck.obrigatorio and fck.compartilhado
+    assert fck.casas_decimais == 1 and fck.unidade == "MPa"
+    assert seletor.opcoes == ("A", "B")
+    assert isinstance(definicao.campos, tuple)
+
+
+def test_para_json_omite_o_que_e_padrao():
+    # act
+    json_do_campo = Campo(id="a", tipo=TipoCampo.TEXTO, rotulo="A").para_json()
+
+    # assert
+    assert json_do_campo == {"id": "a", "tipo": "texto", "rotulo": "A"}
+
+
+def test_para_json_nao_compartilha_estado_com_o_campo():
+    # arrange
+    campo = Campo(id="s", tipo=TipoCampo.SELECAO, rotulo="S", opcoes=("A",))
+
+    # act
+    campo.para_json()["opcoes"].append("B")
+
+    # assert
+    assert campo.opcoes == ("A",)
