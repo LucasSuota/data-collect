@@ -162,3 +162,27 @@ def test_formulas_nao_usa_eval_exec_compile_nem_import_dinamico():
 
     # assert
     assert nomes_chamados.isdisjoint({"eval", "exec", "compile", "__import__"})
+
+
+def test_formula_com_aninhamento_acima_do_limite_e_rejeitada_sem_estourar_a_pilha():
+    # arrange: 200 somas encadeadas dão uma árvore de 200 níveis
+    texto = "a" + " + a" * 200
+
+    # act
+    with pytest.raises(FormulaInvalida) as excecao:
+        analisar_formula(texto)
+
+    # assert
+    assert "aninhadas" in str(excecao.value) and "soma(" in str(excecao.value)
+
+
+def test_formula_longa_dentro_do_limite_e_aceita_e_avaliada():
+    # arrange
+    from decimal import Decimal
+
+    from forms.formulas import avaliar, carregar_formula
+
+    formula = carregar_formula("a" + " + a" * 100)
+
+    # act / assert
+    assert avaliar(formula, {"a": Decimal(1)}) == Decimal(101)
