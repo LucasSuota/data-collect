@@ -1,0 +1,2270 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Construtor de Formulários Modulares",
+    "description": "API local. Todo erro tem o formato `{detalhe, erros: [{campo, mensagem}]}`. Envie o token no cabeçalho `X-Forms-Token`.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/formularios": {
+      "get": {
+        "tags": [
+          "formulários"
+        ],
+        "summary": "Lista os formulários",
+        "operationId": "listar_formularios_formularios_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ResumoDeFormularioSaida"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Formularios Formularios Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "formulários"
+        ],
+        "summary": "Cria o formulário e publica a versão 1",
+        "operationId": "criar_formulario_formularios_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormularioEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormularioDetalheSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      }
+    },
+    "/formularios/lote": {
+      "post": {
+        "tags": [
+          "formulários"
+        ],
+        "summary": "Cria vários formulários numa só transação, origem primeiro",
+        "description": "Os formulários do lote podem se referenciar entre si e a formulários já existentes, em qualquer ordem. Qualquer erro devolve 422 e **nada é criado**. Nos erros, o `campo` vem com o **nome do formulário como prefixo**: `proctor.umidade.formula`.",
+        "operationId": "criar_formularios_em_lote_formularios_lote_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoteEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ResumoDeFormularioSaida"
+                  },
+                  "type": "array",
+                  "title": "Response Criar Formularios Em Lote Formularios Lote Post"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      }
+    },
+    "/formularios/{formulario_id}": {
+      "get": {
+        "tags": [
+          "formulários"
+        ],
+        "summary": "Formulário com a versão atual completa",
+        "operationId": "obter_formulario_formularios__formulario_id__get",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormularioDetalheSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "formulários"
+        ],
+        "summary": "Exclui o formulário e suas versões",
+        "description": "409 se outro formulário depende dele ou se ele tem registros.",
+        "operationId": "excluir_formulario_formularios__formulario_id__delete",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Exclusão bloqueada por vínculo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/formularios/{formulario_id}/versoes": {
+      "post": {
+        "tags": [
+          "versões"
+        ],
+        "summary": "Publica a próxima versão",
+        "description": "Versões são imutáveis: não existe `PUT`, `PATCH` nem `DELETE` de versão.",
+        "operationId": "publicar_versao_formularios__formulario_id__versoes_post",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersaoEntrada"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersaoSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "versões"
+        ],
+        "summary": "Lista as versões, sem a definição",
+        "operationId": "listar_versoes_formularios__formulario_id__versoes_get",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ResumoDeVersaoSaida"
+                  },
+                  "title": "Response Listar Versoes Formularios  Formulario Id  Versoes Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/formularios/{formulario_id}/versoes/{versao_id}": {
+      "get": {
+        "tags": [
+          "versões"
+        ],
+        "summary": "Uma versão com a definição (para renderizar um registro antigo)",
+        "operationId": "obter_versao_formularios__formulario_id__versoes__versao_id__get",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "versao_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Versao Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersaoSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/definicoes/validar": {
+      "post": {
+        "tags": [
+          "definições"
+        ],
+        "summary": "Valida uma definição sem salvar nada",
+        "description": "Responde **200** com `{valida, erros}` mesmo quando há erros, porque definição incompleta é o caso normal enquanto o usuário edita. O 422 vale só ao publicar. Devolve todos os erros de uma vez.",
+        "operationId": "validar_definicao_definicoes_validar_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidarEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidarSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      }
+    },
+    "/definicoes/previa": {
+      "post": {
+        "tags": [
+          "definições"
+        ],
+        "summary": "Calcula os campos calculados sem salvar",
+        "description": "Usa a mesma função de cálculo do salvar. Definição inválida devolve os mesmos erros do `validar`.",
+        "operationId": "previa_definicoes_previa_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviaEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviaSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      }
+    },
+    "/catalogo": {
+      "get": {
+        "tags": [
+          "definições"
+        ],
+        "summary": "Tipos de campo, funções de fórmula, `pi` e nomes reservados",
+        "operationId": "catalogo_catalogo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogoSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      }
+    },
+    "/formularios/{formulario_id}/registros": {
+      "post": {
+        "tags": [
+          "registros"
+        ],
+        "summary": "Cria um registro numa versão explícita",
+        "operationId": "criar_registro_formularios__formulario_id__registros_post",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistroEntrada"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistroSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "registros"
+        ],
+        "summary": "Lista os registros de uma versão",
+        "description": "Filtro de igualdade por campo: repita `filtro=campo:valor` (ex.: `?filtro=resultado:Aprovado&filtro=conforme:true`). Só `selecao`, `sim_nao`, `texto` e `calculado` booleano; campo fora da definição ou de outro tipo é recusado com 422.",
+        "operationId": "listar_registros_formularios__formulario_id__registros_get",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "versao_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Versao Id"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "deslocamento",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Deslocamento"
+            }
+          },
+          {
+            "name": "criado_de",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Criado De"
+            }
+          },
+          {
+            "name": "criado_ate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Criado Ate"
+            }
+          },
+          {
+            "name": "filtro",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`campo:valor`, repetível.",
+              "title": "Filtro"
+            },
+            "description": "`campo:valor`, repetível."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListagemDeRegistrosSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/formularios/{formulario_id}/registros/exportar": {
+      "get": {
+        "tags": [
+          "registros"
+        ],
+        "summary": "Exporta os registros em CSV",
+        "description": "Mesma versão e mesmos filtros da listagem. UTF-8 com BOM, separador `;`, vírgula decimal, cabeçalho `rótulo (unidade)`.",
+        "operationId": "exportar_registros_formularios__formulario_id__registros_exportar_get",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "versao_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Versao Id"
+            }
+          },
+          {
+            "name": "criado_de",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Criado De"
+            }
+          },
+          {
+            "name": "criado_ate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Criado Ate"
+            }
+          },
+          {
+            "name": "filtro",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`campo:valor`, repetível.",
+              "title": "Filtro"
+            },
+            "description": "`campo:valor`, repetível."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV para o Excel em português.",
+            "content": {
+              "text/csv": {}
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/registros/{registro_id}": {
+      "get": {
+        "tags": [
+          "registros"
+        ],
+        "summary": "Um registro; o `versao_id` dele aponta a definição certa",
+        "operationId": "obter_registro_registros__registro_id__get",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "registro_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Registro Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistroSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "registros"
+        ],
+        "summary": "Substitui todos os valores (sem PATCH)",
+        "description": "Valida e recalcula tudo; o registro continua na versão de origem e os dependentes são recalculados.",
+        "operationId": "atualizar_registro_registros__registro_id__put",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "registro_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Registro Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistroAtualizacao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistroSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "registros"
+        ],
+        "summary": "Exclui o registro de verdade",
+        "description": "409 se outro registro o referencia.",
+        "operationId": "excluir_registro_registros__registro_id__delete",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "registro_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Registro Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Exclusão bloqueada por vínculo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/anexos": {
+      "post": {
+        "tags": [
+          "anexos"
+        ],
+        "summary": "Envia uma foto (multipart, campo `arquivo`)",
+        "description": "JPEG, PNG ou WebP até 20 MB; vira WebP sem metadados. O registro guarda a lista de `id`s. O nome do arquivo enviado nunca é usado.",
+        "operationId": "enviar_anexo_anexos_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_enviar_anexo_anexos_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnexoSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      }
+    },
+    "/anexos/{anexo_id}": {
+      "get": {
+        "tags": [
+          "anexos"
+        ],
+        "summary": "A foto em WebP",
+        "operationId": "obter_anexo_anexos__anexo_id__get",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "anexo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Anexo Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A foto em WebP.",
+            "content": {
+              "image/webp": {}
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnexoSaida": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "largura": {
+            "type": "integer",
+            "title": "Largura"
+          },
+          "altura": {
+            "type": "integer",
+            "title": "Altura"
+          },
+          "tamanho_bytes": {
+            "type": "integer",
+            "title": "Tamanho Bytes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "largura",
+          "altura",
+          "tamanho_bytes"
+        ],
+        "title": "AnexoSaida"
+      },
+      "Body_enviar_anexo_anexos_post": {
+        "properties": {
+          "arquivo": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Arquivo",
+            "description": "A imagem."
+          }
+        },
+        "type": "object",
+        "required": [
+          "arquivo"
+        ],
+        "title": "Body_enviar_anexo_anexos_post"
+      },
+      "CampoSaida": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "texto",
+              "numero",
+              "data",
+              "selecao",
+              "sim_nao",
+              "calculado",
+              "secao",
+              "referencia",
+              "localizacao",
+              "foto"
+            ],
+            "title": "Tipo"
+          },
+          "rotulo": {
+            "type": "string",
+            "title": "Rotulo"
+          },
+          "obrigatorio": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obrigatorio"
+          },
+          "unidade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unidade"
+          },
+          "casas_decimais": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Casas Decimais"
+          },
+          "opcoes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opcoes"
+          },
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula"
+          },
+          "formulario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formulario"
+          },
+          "compartilhado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compartilhado"
+          },
+          "maximo": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maximo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "tipo",
+          "rotulo"
+        ],
+        "title": "CampoSaida",
+        "description": "Um campo da definição. Só o que foi definido aparece (o resto é omitido, não é `null`)."
+      },
+      "CatalogoSaida": {
+        "properties": {
+          "tipos": {
+            "items": {
+              "$ref": "#/components/schemas/TipoDoCatalogoSaida"
+            },
+            "type": "array",
+            "title": "Tipos"
+          },
+          "funcoes": {
+            "items": {
+              "$ref": "#/components/schemas/FuncaoDoCatalogoSaida"
+            },
+            "type": "array",
+            "title": "Funcoes"
+          },
+          "constantes": {
+            "items": {
+              "$ref": "#/components/schemas/ConstanteDoCatalogoSaida"
+            },
+            "type": "array",
+            "title": "Constantes"
+          },
+          "nomes_reservados": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Nomes Reservados"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tipos",
+          "funcoes",
+          "constantes",
+          "nomes_reservados"
+        ],
+        "title": "CatalogoSaida"
+      },
+      "ConstanteDoCatalogoSaida": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "valor": {
+            "type": "string",
+            "title": "Valor"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nome",
+          "valor",
+          "tipo",
+          "descricao"
+        ],
+        "title": "ConstanteDoCatalogoSaida"
+      },
+      "DefinicaoSaida": {
+        "properties": {
+          "campos": {
+            "items": {
+              "$ref": "#/components/schemas/CampoSaida"
+            },
+            "type": "array",
+            "title": "Campos"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "campos"
+        ],
+        "title": "DefinicaoSaida"
+      },
+      "ErroDeCampoSaida": {
+        "properties": {
+          "campo": {
+            "type": "string",
+            "title": "Campo",
+            "description": "`id` do campo, ex.: `resistencia_mpa.formula`."
+          },
+          "mensagem": {
+            "type": "string",
+            "title": "Mensagem"
+          },
+          "posicao": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PosicaoSaida"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "campo",
+          "mensagem"
+        ],
+        "title": "ErroDeCampoSaida"
+      },
+      "ErroSaida": {
+        "properties": {
+          "detalhe": {
+            "type": "string",
+            "title": "Detalhe"
+          },
+          "erros": {
+            "items": {
+              "$ref": "#/components/schemas/ErroDeCampoSaida"
+            },
+            "type": "array",
+            "title": "Erros"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "detalhe"
+        ],
+        "title": "ErroSaida",
+        "description": "Formato uniforme de toda resposta de erro (401, 404, 409, 422...)."
+      },
+      "FormularioDetalheSaida": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "criado_em": {
+            "type": "string",
+            "title": "Criado Em"
+          },
+          "versao_atual": {
+            "$ref": "#/components/schemas/VersaoSaida"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "nome",
+          "criado_em",
+          "versao_atual"
+        ],
+        "title": "FormularioDetalheSaida"
+      },
+      "FormularioEntrada": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "definicao": {
+            "title": "Definicao",
+            "description": "Definição em JSON: `{\"campos\": [...]}`."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nome",
+          "definicao"
+        ],
+        "title": "FormularioEntrada"
+      },
+      "FuncaoDoCatalogoSaida": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "assinatura": {
+            "type": "string",
+            "title": "Assinatura"
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descricao"
+          },
+          "exemplo": {
+            "type": "string",
+            "title": "Exemplo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nome",
+          "assinatura",
+          "descricao",
+          "exemplo"
+        ],
+        "title": "FuncaoDoCatalogoSaida"
+      },
+      "ListagemDeRegistrosSaida": {
+        "properties": {
+          "versao_id": {
+            "type": "integer",
+            "title": "Versao Id",
+            "description": "Versão listada (a última, se `versao_id` não foi pedido)."
+          },
+          "itens": {
+            "items": {
+              "$ref": "#/components/schemas/RegistroSaida"
+            },
+            "type": "array",
+            "title": "Itens"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "versao_id",
+          "itens",
+          "total"
+        ],
+        "title": "ListagemDeRegistrosSaida"
+      },
+      "LoteEntrada": {
+        "properties": {
+          "formularios": {
+            "items": {
+              "$ref": "#/components/schemas/FormularioEntrada"
+            },
+            "type": "array",
+            "title": "Formularios"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "formularios"
+        ],
+        "title": "LoteEntrada"
+      },
+      "PosicaoSaida": {
+        "properties": {
+          "inicio": {
+            "type": "integer",
+            "title": "Inicio"
+          },
+          "fim": {
+            "type": "integer",
+            "title": "Fim"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "inicio",
+          "fim"
+        ],
+        "title": "PosicaoSaida",
+        "description": "Trecho da fórmula (offsets em caracteres) para o front sublinhar."
+      },
+      "PreviaEntrada": {
+        "properties": {
+          "definicao": {
+            "title": "Definicao"
+          },
+          "valores": {
+            "title": "Valores",
+            "description": "Valores dos campos de entrada; em campo `referencia`, o id do registro de origem."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "definicao"
+        ],
+        "title": "PreviaEntrada"
+      },
+      "PreviaSaida": {
+        "properties": {
+          "valida": {
+            "type": "boolean",
+            "title": "Valida"
+          },
+          "erros": {
+            "items": {
+              "$ref": "#/components/schemas/ErroDeCampoSaida"
+            },
+            "type": "array",
+            "title": "Erros"
+          },
+          "calculados": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ResultadoCalculadoSaida"
+            },
+            "type": "object",
+            "title": "Calculados"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "valida",
+          "erros",
+          "calculados"
+        ],
+        "title": "PreviaSaida"
+      },
+      "RegistroAtualizacao": {
+        "properties": {
+          "dados": {
+            "title": "Dados"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dados"
+        ],
+        "title": "RegistroAtualizacao",
+        "description": "`PUT` substitui todos os valores (não há `PATCH`)."
+      },
+      "RegistroEntrada": {
+        "properties": {
+          "versao_id": {
+            "type": "integer",
+            "title": "Versao Id",
+            "description": "Versão que o front renderizou; o servidor não valida contra outra."
+          },
+          "dados": {
+            "title": "Dados",
+            "description": "Só campos de entrada. Número como número ou string."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "versao_id",
+          "dados"
+        ],
+        "title": "RegistroEntrada"
+      },
+      "RegistroSaida": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "formulario_id": {
+            "type": "integer",
+            "title": "Formulario Id"
+          },
+          "versao_id": {
+            "type": "integer",
+            "title": "Versao Id"
+          },
+          "dados": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Dados",
+            "description": "Número sempre como string; campo calculado como `{valor, erro}`."
+          },
+          "criado_em": {
+            "type": "string",
+            "title": "Criado Em"
+          },
+          "atualizado_em": {
+            "type": "string",
+            "title": "Atualizado Em"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "formulario_id",
+          "versao_id",
+          "dados",
+          "criado_em",
+          "atualizado_em"
+        ],
+        "title": "RegistroSaida"
+      },
+      "ResultadoCalculadoSaida": {
+        "properties": {
+          "valor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor"
+          },
+          "erro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Erro"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "valor",
+          "erro"
+        ],
+        "title": "ResultadoCalculadoSaida"
+      },
+      "ResumoDeFormularioSaida": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "criado_em": {
+            "type": "string",
+            "title": "Criado Em"
+          },
+          "versao_atual_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versao Atual Id"
+          },
+          "versao_atual_numero": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versao Atual Numero"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "nome",
+          "criado_em",
+          "versao_atual_id",
+          "versao_atual_numero"
+        ],
+        "title": "ResumoDeFormularioSaida"
+      },
+      "ResumoDeVersaoSaida": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "numero": {
+            "type": "integer",
+            "title": "Numero"
+          },
+          "publicada_em": {
+            "type": "string",
+            "title": "Publicada Em"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "numero",
+          "publicada_em"
+        ],
+        "title": "ResumoDeVersaoSaida"
+      },
+      "TipoDoCatalogoSaida": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "rotulo": {
+            "type": "string",
+            "title": "Rotulo"
+          },
+          "propriedades": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Propriedades"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "rotulo",
+          "propriedades"
+        ],
+        "title": "TipoDoCatalogoSaida"
+      },
+      "ValidarEntrada": {
+        "properties": {
+          "definicao": {
+            "title": "Definicao"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "definicao"
+        ],
+        "title": "ValidarEntrada"
+      },
+      "ValidarSaida": {
+        "properties": {
+          "valida": {
+            "type": "boolean",
+            "title": "Valida"
+          },
+          "erros": {
+            "items": {
+              "$ref": "#/components/schemas/ErroDeCampoSaida"
+            },
+            "type": "array",
+            "title": "Erros"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "valida",
+          "erros"
+        ],
+        "title": "ValidarSaida",
+        "description": "Responde 200 mesmo com erros: definição incompleta é o caso normal ao editar."
+      },
+      "VersaoEntrada": {
+        "properties": {
+          "definicao": {
+            "title": "Definicao"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "definicao"
+        ],
+        "title": "VersaoEntrada"
+      },
+      "VersaoSaida": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "formulario_id": {
+            "type": "integer",
+            "title": "Formulario Id"
+          },
+          "numero": {
+            "type": "integer",
+            "title": "Numero"
+          },
+          "definicao": {
+            "$ref": "#/components/schemas/DefinicaoSaida"
+          },
+          "publicada_em": {
+            "type": "string",
+            "title": "Publicada Em"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "formulario_id",
+          "numero",
+          "definicao",
+          "publicada_em"
+        ],
+        "title": "VersaoSaida"
+      }
+    },
+    "securitySchemes": {
+      "TokenDaExecucao": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Forms-Token"
+      }
+    }
+  }
+}

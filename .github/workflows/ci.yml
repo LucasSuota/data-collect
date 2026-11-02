@@ -80,6 +80,24 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
+      # Os tipos da API são GERADOS do OpenAPI do backend, nunca escritos à mão (AGENTS.md §5.3):
+      # o CI falha se o openapi.json ou o esquema.d.ts versionados estiverem desatualizados.
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Conferir o openapi.json do backend
+        working-directory: .
+        run: |
+          uv sync --locked
+          uv run forms-openapi --conferir --saida frontend/openapi.json
+
+      - name: Conferir os tipos gerados
+        run: |
+          npm run api:tipos
+          git diff --exit-code src/api/esquema.d.ts
+
       - name: Lint
         run: npm run lint
 
