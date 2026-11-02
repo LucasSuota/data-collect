@@ -4,10 +4,12 @@ Toda regra de negócio fica aqui e abaixo. Quem chama passa a conexão e o reló
 controla a transação, então cada caso de uso grava tudo ou nada.
 """
 
+import json
 import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 
 from forms import repositorio, validacao
 from forms.formulas import CONSTANTES, FUNCOES, NOMES_RESERVADOS, ordenar_calculados
@@ -19,6 +21,7 @@ from forms.models import (
     ErrosDoFormulario,
     Formulario,
     LoteInvalido,
+    NaoEncontrado,
     ValorJson,
     Versao,
 )
@@ -30,7 +33,12 @@ from forms.servico_base import (
     referencias_brutas,
     transacao,
 )
-from forms.servico_consulta import ListagemDeRegistros, exportar_csv, listar_registros
+from forms.servico_consulta import (
+    LIMITE_PADRAO,
+    ListagemDeRegistros,
+    exportar_csv,
+    listar_registros,
+)
 from forms.servico_registros import (
     ResultadoDaPrevia,
     atualizar_registro,
@@ -42,6 +50,9 @@ from forms.servico_registros import (
 )
 from forms.tipos_campo import ESPECIFICACOES, PROPRIEDADES_COMUNS
 from forms.validacao import CampoCompartilhado
+
+# O tipo da conexão, para quem chama o `servico` sem importar `sqlite3` (a CLI, por exemplo).
+Conexao = sqlite3.Connection
 
 # --- tipos de entrada e saída ---
 
@@ -103,7 +114,24 @@ class Catalogo:
     nomes_reservados: tuple[str, ...]
 
 
-# --- leitura ---
+# --- banco e leitura ---
+
+
+def abrir_banco(caminho: Path | str) -> Conexao:
+    """Abre (e cria, se preciso) o banco, com o esquema migrado para a versão atual."""
+    if str(caminho) != ":memory:":
+        Path(caminho).parent.mkdir(parents=True, exist_ok=True)
+    return repositorio.abrir_conexao(caminho)
+
+
+def localizar_formulario(conexao: Conexao, referencia: str) -> FormularioComVersao:
+    """Formulário pelo `id` (só dígitos) ou pelo nome (sem diferenciar caixa nem espaços)."""
+    if referencia.strip().isdigit():
+        return obter_formulario(conexao, int(referencia))
+    formulario = repositorio.obter_formulario_por_nome(conexao, referencia)
+    if formulario is None:
+        raise NaoEncontrado(f"Formulário '{referencia}' não encontrado.")
+    return obter_formulario(conexao, formulario.id)
 
 
 def listar_formularios(conexao: sqlite3.Connection) -> list[ResumoDeFormulario]:
@@ -215,6 +243,43 @@ def criar_formularios_em_lote(
         if erros:
             raise LoteInvalido(tuple(erros))
         return _gravar(conexao, conjunto, agora, versionando=None)
+
+
+# --- templates ---
+
+
+def importar_template(
+    conexao: sqlite3.Connection, caminho: Path, agora: datetime, nome: str | None = None
+) -> FormularioCriado:
+    """Cria um formulário a partir de um arquivo de definição (por exemplo, `templates/*.json`).
+
+    O nome do formulário é o do arquivo (ou `nome`). É o nome que as referências de outros
+    templates usam, então um template dependente precisa que a origem já exista; para importar
+    vários que dependem uns dos outros, use `importar_templates`.
+    """
+    rascunho = ler_template(caminho, nome)
+    return criar_formulario(conexao, rascunho.nome, rascunho.definicao, agora)
+
+
+def importar_templates(
+    conexao: sqlite3.Connection, caminhos: Sequence[Path], agora: datetime
+) -> list[FormularioCriado]:
+    """Importa vários templates de uma vez, numa transação, origem primeiro (qualquer ordem)."""
+    return criar_formularios_em_lote(conexao, [ler_template(c) for c in caminhos], agora)
+
+
+def ler_template(caminho: Path, nome: str | None = None) -> Rascunho:
+    try:
+        texto = caminho.read_text(encoding="utf-8")
+    except FileNotFoundError as erro:
+        raise NaoEncontrado(f"Template '{caminho.name}' não encontrado.") from erro
+    try:
+        definicao = json.loads(texto)
+    except json.JSONDecodeError as erro:
+        raise DefinicaoInvalida(
+            (ErroDeCampo("arquivo", f"O template '{caminho.name}' não é um JSON válido: {erro}."),)
+        ) from erro
+    return Rascunho(nome or caminho.stem, definicao)
 
 
 # --- o motor: valida um conjunto de rascunhos (publicar um formulário é o conjunto de 1) ---
@@ -449,6 +514,8 @@ def _gravar(
 # `api.py` e `cli.py` chamam tudo por aqui; cada grupo de casos de uso mora no seu módulo.
 __all__ = [
     "FUNCOES",
+    "Conexao",
+    "LIMITE_PADRAO",
     "Catalogo",
     "FormularioComVersao",
     "FormularioCriado",
@@ -456,6 +523,7 @@ __all__ = [
     "Rascunho",
     "ResultadoDaPrevia",
     "ResultadoDaValidacao",
+    "abrir_banco",
     "atualizar_registro",
     "catalogo",
     "criar_formulario",
@@ -465,11 +533,14 @@ __all__ = [
     "excluir_registro",
     "exportar_csv",
     "guardar_anexo",
+    "importar_template",
+    "importar_templates",
     "ler_anexo",
     "limpar_anexos_orfaos",
     "listar_formularios",
     "listar_registros",
     "listar_versoes",
+    "localizar_formulario",
     "obter_formulario",
     "obter_registro",
     "obter_versao",

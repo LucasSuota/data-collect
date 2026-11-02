@@ -67,7 +67,7 @@ empacotamento/ scripts do instalável
 tests/
 ```
 
-Resumo de cada pasta com código: [src/forms/README.md](src/forms/README.md).
+Resumo de cada pasta com código: [src/forms/README.md](src/forms/README.md) e [templates/README.md](templates/README.md).
 
 A dependência sempre aponta para baixo:
 
