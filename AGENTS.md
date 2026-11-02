@@ -44,6 +44,7 @@ O projeto acabou de ser iniciado: existe o esqueleto (`pyproject.toml`, `src/for
   - `POST /formularios`: recebe `{nome, definicao}`, cria o formulário e já publica a **versão 1** (um formulário sem versão não pode ser preenchido, então não existe esse estado). Definição inválida → 422 e nada é criado. O nome fica no formulário, fora da definição, e é **único** (sem diferenciar maiúsculas/minúsculas nem espaços nas pontas); nome repetido → 422 no campo `nome`. Como as referências entre formulários usam o nome (§2.7), renomear fica para "próximos passos". Importar templates que dependem uns dos outros exige a ordem das dependências (a origem primeiro).
   - `GET /formularios`: lista `{id, nome, criado_em, versao_atual_id, versao_atual_numero}`, sem definições.
   - `GET /formularios/{id}`: formulário com a **versão atual completa** (`id`, `numero`, `definicao`); é de onde o front tira o `versao_id` para preencher.
+  - `POST /formularios/lote`: recebe `{formularios: [{nome, definicao}]}` e cria todos **numa só transação**, na ordem das dependências (origem primeiro), com a v1 de cada um. Os formulários do lote podem se referenciar entre si e a formulários já existentes. Qualquer erro (definição inválida, nome repetido dentro do lote ou já existente, ciclo) → 422 com os erros localizados por formulário e **nada é criado**. Serve a importação de templates dependentes e o gerador por IA (§2.5).
   - `POST /formularios/{id}/versoes`: recebe `{definicao}` e publica a próxima versão (`numero` anterior + 1); 422 se inválida. `GET /formularios/{id}/versoes` lista `{id, numero, publicada_em}`; `GET /formularios/{id}/versoes/{versao_id}` devolve a versão com definição (para renderizar um registro antigo).
   - Versões são imutáveis: não existe `PUT`, `PATCH` nem `DELETE` de versão (§3.3).
   - `DELETE /formularios/{id}`: regras de bloqueio em §2.7.
@@ -77,6 +78,12 @@ O projeto acabou de ser iniciado: existe o esqueleto (`pyproject.toml`, `src/for
 - **Assistente de procedimentos (RAG):** procedimentos em `.md` (escritos pelo autor, genéricos ou sintéticos), busca com **BM25 escrito à mão**, resposta do LLM **somente com os trechos recuperados**, exibindo trecho e arquivo de origem. Sem base nos documentos → responde "não encontrei". Sem internet ou chave de API → mostra só os trechos (fallback).
 - **Busca semântica (opcional dentro do RAG):** o BM25 à mão continua como base e como fallback. Se houver provedor de embeddings (chamado só via `ia/cliente.py`), os vetores ficam numa tabela do SQLite (BLOB) e são comparados por similaridade de cosseno em Python, sem extensão de banco: com algumas centenas de trechos isso é instantâneo. Sem internet ou chave, vale só o BM25.
 - **Resumo de registros por IA:** o LLM redige a partir dos dados e de agregados **calculados pelo código** (contagem, média etc.), em saída estruturada (JSON). O código confere se **todos os números do texto batem com o banco**; se não baterem, o resumo é rejeitado.
+- **Gerador de formulário por IA:** a pessoa descreve em texto o que quer e o LLM propõe **um ou mais formulários** (cada um uma **definição JSON**, ligados entre si quando o pedido pedir); a pessoa revisa, ajusta e **aprova** no construtor. O LLM só redige a definição (inclusive o texto das fórmulas): quem valida é o código (`validar_definicao`, §2.2), e nenhum valor de negócio sai do LLM.
+  - Saída do LLM é **dado não confiável**: vira JSON no esquema da definição e passa pela mesma validação da publicação. Se houver erros, eles voltam ao LLM para correção, no máximo 2 vezes; persistindo, a proposta segue para o construtor **com a lista de erros**, para a pessoa corrigir.
+  - O prompt é montado com o catálogo (tipos de campo, funções, `pi`, nomes reservados), gerado das mesmas tabelas do `GET /catalogo`, e com os **formulários existentes**: para cada um, o `nome` e os campos que ele **compartilha** (`id`, rótulo, tipo), vindos da versão atual. Com isso a IA cria **correlações** (§2.7): campos `referencia` apontando para um formulário existente **ou para outro formulário proposto no mesmo pedido** (`formulario` = nome), e fórmulas que usam `<referência>__<campo compartilhado>`. Ex.: "crie ensaio, proctor e insitu, cada um dependendo do anterior" gera os três, com os campos `compartilhado` onde a origem libera. A validação (§2.7) barra origem inexistente, campo não compartilhado e ciclo, **tratando o conjunto proposto como se já estivesse publicado**. A IA **nunca altera um formulário já publicado**; se precisar de um campo que uma origem existente não compartilha, o erro de validação aparece e a pessoa decide ajustar essa origem no construtor. Nenhum registro nem dado do banco é enviado ao LLM, só o texto do pedido, os metadados acima e, ao refinar, os rascunhos em edição.
+  - **Nunca salva.** `POST /definicoes/gerar` recebe `{pedido, rascunhos?}` (`rascunhos` = `[{nome, definicao}]` em edição, para refinar: "adicione um campo X") e devolve `{formularios: [{nome, definicao, erros}]}` sem criar nada. A pessoa pode editar, remover ou renomear cada rascunho e então aprova o conjunto, que é publicado **de uma vez** por `POST /formularios/lote` (§2.2).
+  - Sem chave ou sem internet: o recurso fica indisponível, com mensagem clara em PT-BR; o construtor manual continua funcionando. O endpoint só é montado quando o módulo `ia/` existe.
+  - No front: ação "Criar com IA" no construtor (campo de pedido, lista de formulários propostos com os erros de cada um, edição livre de cada rascunho no editor, "Publicar todos").
 
 ### 2.6. Entregáveis de documentação
 
@@ -132,7 +139,6 @@ Estas exclusões são **deliberadas**. Não implemente, não "adiante" e não su
 - Relação um-para-muitos **dentro de um mesmo registro** (ex.: lote com vários corpos de prova como linhas). A relação *entre formulários*, por referência a um registro, está no escopo (§2.7).
 - Usuários, login, cargos e permissões. O uso é local; a API ouve **só em `127.0.0.1`**.
 - Modo offline e sincronização; mapas.
-- IA que sugere um formulário a partir de texto.
 - Código de interface fora de `frontend/` e `desktop/`. O `dist/` gerado e os binários do instalável não são versionados. Para testar a API sem subir o front, use Swagger (`/docs`), `curl` ou `TestClient`.
 - Deploy, hospedagem e infraestrutura (CI além de lint e testes), assinatura/notarização do instalável, loja de apps e atualização automática. Gerar o instalável (§4.1) está no escopo.
 - `Dockerfile` e `docker-compose`: avaliado e **adiado**. SQLite local + `uv` já dão ambiente reproduzível. Só reconsiderar se alguém sem Python precisar subir a API ou se houver deploy; nesse caso é um `Dockerfile` mínimo, discutido antes.
@@ -197,7 +203,7 @@ LangChain, LlamaIndex, bancos vetoriais (inclui pgvector e extensões como `sqli
 src/forms/   models.py  tipos_campo.py  formulas.py  validacao.py
              fotos.py  repositorio.py  servico.py  cli.py  api.py  app.py
              rag/  chunker.py  indice.py  responder.py        (opcional)
-             ia/   cliente.py  resumo.py  validacao.py        (opcional)
+             ia/   cliente.py  resumo.py  validacao.py  gerador.py  (opcional)
 templates/   corpo_de_prova.json  inspecao_obra.json  (exemplos)
 docs/        procedimentos em .md (base do assistente)
 frontend/    React + TypeScript + Vite + Tailwind (§4)
@@ -376,10 +382,11 @@ TDD é a regra para o **núcleo**: `formulas.py`, `validacao.py`, `tipos_campo.p
 Se o tempo apertar, corte **nesta ordem**:
 
 1. Resumo por IA
-2. Assistente RAG
-3. CLI além de importar e listar
-4. Exportação CSV
-5. Endpoint de prévia de fórmulas (o front ainda calcula só ao salvar)
+2. Gerador de formulário por IA
+3. Assistente RAG
+4. CLI além de importar e listar
+5. Exportação CSV
+6. Endpoint de prévia de fórmulas (o front ainda calcula só ao salvar)
 
 **Nunca cortar:** README, `AI_NOTES.md`, ensaio em voz alta e **testes de fórmulas e validação**.
 
