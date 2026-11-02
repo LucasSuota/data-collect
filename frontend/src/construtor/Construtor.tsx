@@ -19,7 +19,8 @@ import { useEffect, useRef, useState } from "react";
 import { useApi } from "../api/contexto";
 import { ErroDaApi, type Esquemas, type FormularioDetalhe, type TipoDeCampo } from "../api/cliente";
 import type { Rascunho } from "../ia/rascunhos";
-import { Carregando, Falha, mensagemDe, useCarga } from "../paginas/Estado";
+import { EsqueletoDoConstrutor } from "../paginas/esqueletos";
+import { Falha, mensagemDe, useCarga } from "../paginas/Estado";
 import type { Rota } from "../rotas";
 import { PainelDePropriedades } from "./PainelDePropriedades";
 import {
@@ -103,7 +104,7 @@ export function Construtor({ modo, navegar, atrasoDaValidacaoMs = 500 }: Props) 
     };
   }, [cliente, chave]);
 
-  if (carga.situacao === "carregando") return <Carregando />;
+  if (carga.situacao === "carregando") return <EsqueletoDoConstrutor />;
   if (carga.situacao === "erro") return <Falha mensagem={carga.mensagem} />;
   return (
     <Editor

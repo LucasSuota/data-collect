@@ -3,7 +3,8 @@ import { useApi } from "../api/contexto";
 import { ErroDaApi, type ResumoDeFormulario } from "../api/cliente";
 import type { Rota } from "../rotas";
 import { Aviso, Botao, CampoDeTexto, Cartao, EstadoVazio, Icone, Selo } from "../ui";
-import { Carregando, Falha, mensagemDe, useCarga } from "./Estado";
+import { EsqueletoDaLista } from "./esqueletos";
+import { Falha, mensagemDe, useCarga } from "./Estado";
 
 interface Props {
   navegar: (rota: Rota) => void;
@@ -96,7 +97,7 @@ export function PaginaDeFormularios({ navegar }: Props) {
           «{copiado.nome}» foi criado. Os registros não foram copiados, só a definição atual.
         </Aviso>
       ) : null}
-      {carga.situacao === "carregando" ? <Carregando /> : null}
+      {carga.situacao === "carregando" ? <EsqueletoDaLista /> : null}
       {carga.situacao === "erro" ? <Falha mensagem={carga.mensagem} /> : null}
 
       {carga.situacao === "pronto" && carga.dados.length === 0 ? (

@@ -3,7 +3,8 @@ import { useApi } from "../api/contexto";
 import type { Esquemas, ParametrosDeConsulta } from "../api/cliente";
 import { baixarArquivo, formatarCelula } from "../lib/formatacao";
 import type { Rota } from "../rotas";
-import { Carregando, Falha, mensagemDe, useCarga } from "./Estado";
+import { EsqueletoDaTabela } from "./esqueletos";
+import { Falha, mensagemDe, useCarga } from "./Estado";
 
 type Coluna = Esquemas["ColunaSaida"];
 
@@ -139,7 +140,7 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
         />
       ) : null}
 
-      {listagem.situacao === "carregando" ? <Carregando /> : null}
+      {listagem.situacao === "carregando" ? <EsqueletoDaTabela /> : null}
       {listagem.situacao === "erro" ? <Falha mensagem={listagem.mensagem} /> : null}
       {listagem.situacao === "pronto" ? (
         <Tabela

@@ -42,14 +42,6 @@ export function mensagemDe(erro: unknown): string {
   return erro instanceof ErroDaApi ? erro.message : "Ocorreu um erro inesperado.";
 }
 
-export function Carregando() {
-  return (
-    <p role="status" className="text-pedra-600">
-      Carregando…
-    </p>
-  );
-}
-
 export function Falha({ mensagem }: { mensagem: string }) {
   return <Aviso tom="erro">{mensagem}</Aviso>;
 }

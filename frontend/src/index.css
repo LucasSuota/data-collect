@@ -57,6 +57,18 @@
   --ease-saida: cubic-bezier(0.2, 0.7, 0.2, 1);
   --duracao-rapida: 120ms;
   --duracao-normal: 200ms;
+
+  --animate-brilho: brilho 1.6s ease-in-out infinite;
+
+  @keyframes brilho {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
 }
 
 @layer base {
