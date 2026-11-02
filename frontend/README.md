@@ -8,12 +8,19 @@ Só apresentação. O front **não reimplementa** o avaliador de fórmulas nem a
 
 ## O que tem aqui
 
-| Caminho                                | Papel                                                     |
-| -------------------------------------- | --------------------------------------------------------- |
-| `src/main.tsx`, `src/App.tsx`          | Entrada e componente raiz                                 |
-| `src/test/setup.ts`                    | Configuração do Vitest + Testing Library                  |
-| `vite.config.ts`                       | Vite, Tailwind e Vitest (porta fixa 5173)                 |
-| `eslint.config.js`, `.prettierrc.json` | Lint (sem `any` nem `@ts-ignore` sem motivo) e formatação |
+| Caminho                        | Papel                                                                                                                                                                                                |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main.tsx`, `src/App.tsx`  | Entrada, layout e a troca de tela pela rota                                                                                                                                                          |
+| `src/rotas.ts`                 | Navegação por `#hash` (sem biblioteca de rotas: são poucas telas e o backend serve só o `index.html`)                                                                                                |
+| `src/api/cliente.ts`           | Cliente `fetch` da API: URL base e token configuráveis, erro uniforme tipado (`ErroDaApi`)                                                                                                           |
+| `src/api/contexto.tsx`         | `ApiProvider`/`useApi`: injeta o cliente (os testes o trocam por um falso)                                                                                                                           |
+| `src/api/esquema.d.ts`         | Tipos **gerados** do OpenAPI (`npm run api:tipos`); não editar                                                                                                                                       |
+| `openapi.json`                 | O OpenAPI do backend (`uv run forms-openapi --saida frontend/openapi.json`)                                                                                                                          |
+| `src/components/FormRenderer/` | Renderiza qualquer versão de formulário **por `id`**: texto, número, data, seleção, sim/não, calculado, seção, referência, localização e foto. A prévia dos calculados vem do servidor, com debounce |
+| `src/construtor/`              | O construtor: paleta vinda do `/catalogo`, arrastar e soltar (`dnd-kit`), painel de propriedades guiado pelo catálogo, editor de fórmulas com erro sublinhado por `posicao` e publicação             |
+| `src/paginas/`                 | Telas: lista de formulários, preencher/editar registro, listagem com filtros, paginação e CSV                                                                                                        |
+| `src/lib/`                     | `formatarNumero` (arredondamento decimal exato, meio para cima, só para exibição) e formatação de células                                                                                            |
+| `src/test/`                    | Configuração do Vitest e o cliente falso dos testes                                                                                                                                                  |
 
 ## Como se conecta
 
@@ -41,6 +48,14 @@ cd frontend && npm run api:tipos
 O CI falha se `openapi.json` ou `src/api/esquema.d.ts` estiverem desatualizados.
 
 **Token e URL da API:** no app instalado vêm do _preload_ do Electron (`window.formsApi`); em desenvolvimento, de `VITE_API_URL` e `VITE_FORMS_TOKEN` (ou deixe a API com `FORMS_SKIP_TOKEN=1`).
+
+## Decisões que moldam este código
+
+- **O servidor é a fonte da verdade:** o front não valida nem calcula. Os erros chegam por `id` de campo e aparecem no campo certo; o construtor valida pelo `/definicoes/validar` e a prévia pelo `/definicoes/previa`.
+- **Erros presos à identidade estável, não à posição:** no construtor cada campo tem uma `chave` própria; reordenar não desloca os erros (AGENTS.md §5.3). Depois de um publicar que falhou, a validação pausa até a próxima edição, para não apagar erros que só o publicar conhece (contrato entre versões).
+- **Editar registro antigo usa a definição da versão dele**, não a atual.
+- **Foto:** `<img src>` não manda o cabeçalho do token, então a miniatura vem por `fetch` e vira uma URL local.
+- **Dependência `@dnd-kit`:** arrastar e soltar com sensores de teclado e leitor de tela prontos; escrever isso à mão seria bem mais código e pior em acessibilidade. Todo campo também tem botões de mover, que servem ao teclado e aos testes.
 
 ## Cuidados
 

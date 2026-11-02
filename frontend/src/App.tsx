@@ -1,3 +1,4 @@
+import { Construtor } from "./construtor/Construtor";
 import { useRota } from "./rotas";
 import { PaginaDeFormularios } from "./paginas/PaginaDeFormularios";
 import { PaginaDeRegistro } from "./paginas/PaginaDeRegistro";
@@ -29,6 +30,15 @@ export function App() {
         {rota.nome === "registro" ? (
           <PaginaDeRegistro
             modo={{ tipo: "editar", registroId: rota.registroId }}
+            navegar={navegar}
+          />
+        ) : null}
+        {rota.nome === "novoFormulario" ? (
+          <Construtor modo={{ tipo: "novo" }} navegar={navegar} />
+        ) : null}
+        {rota.nome === "editarFormulario" ? (
+          <Construtor
+            modo={{ tipo: "editar", formularioId: rota.formularioId }}
             navegar={navegar}
           />
         ) : null}
