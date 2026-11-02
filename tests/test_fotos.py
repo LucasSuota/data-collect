@@ -228,6 +228,20 @@ def test_jpeg_em_tons_de_cinza_e_aceito():
     assert imagem.mode == "RGB"
 
 
+def test_webp_animado_vira_imagem_de_um_quadro_com_o_primeiro_quadro():
+    # arrange
+    quadros = [Image.new("RGB", (300, 200), cor) for cor in ((255, 0, 0), (0, 255, 0))]
+    entrada = _bytes_da_imagem(quadros[0], "WEBP", save_all=True, append_images=quadros[1:])
+
+    # act
+    imagem = _abrir(processar_foto(entrada).dados)
+
+    # assert
+    assert getattr(imagem, "n_frames", 1) == 1
+    vermelho, verde, _ = imagem.getpixel((10, 10))
+    assert vermelho > 200 and verde < 50
+
+
 # --- rejeições ---
 
 
