@@ -201,7 +201,8 @@ LangChain, LlamaIndex, bancos vetoriais (inclui pgvector e extensões como `sqli
 
 ```
 src/forms/   models.py  tipos_campo.py  formulas.py  validacao.py
-             fotos.py  exportacao.py  repositorio.py  cli.py  api.py  app.py
+             fotos.py  exportacao.py  repositorio.py  cli.py  app.py
+             api.py  api_esquemas.py  api_rotas.py  exportar_openapi.py
              servico.py (fachada)  servico_base.py  servico_registros.py
              servico_anexos.py  servico_consulta.py
              rag/  chunker.py  indice.py  responder.py        (opcional)
@@ -231,7 +232,7 @@ api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py
 - **`repositorio.py`**: único módulo que fala SQL. Sempre com parâmetros (`?`), nunca f-string em SQL.
 - **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI. Para não virar um arquivo gigante, os casos de uso de registros (`servico_registros.py`), anexos (`servico_anexos.py`) e consulta/exportação (`servico_consulta.py`) moram em módulos próprios, e as peças comuns (transação, campos compartilhados) em `servico_base.py`; `servico.py` os reexporta, então API e CLI chamam tudo por `servico.<função>`.
 - **`exportacao.py`**: formatação das células e geração do CSV (§2.3, §12). Funções puras, sem I/O; usada por `servico_consulta.py`.
-- **`api.py`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP.
+- **`api.py`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP. Fica dividida em `api.py` (app, token por execução, CORS, tratadores de erro), `api_esquemas.py` (modelos Pydantic de entrada e saída) e `api_rotas.py` (endpoints); `exportar_openapi.py` gera o `openapi.json` do front.
 - **`cli.py`**: `argparse` fino; só chama `servico.py`.
 - **`app.py`**: entrada do backend no app instalável (§4.1): sobe a API, serve o build do front e imprime a porta. Não abre janela (isso é do Electron). Só monta as peças, sem regra de negócio.
 - Dependências apontam **para baixo**: o núcleo nunca importa `api`, `cli`, `rag` ou `ia`.

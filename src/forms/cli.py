@@ -48,8 +48,8 @@ def _montar_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--banco",
-        default=os.environ.get("FORMS_BANCO", BANCO_PADRAO),
-        help=f"arquivo do banco SQLite (padrão: variável FORMS_BANCO ou {BANCO_PADRAO})",
+        default=os.environ.get("FORMS_DB_PATH", BANCO_PADRAO),
+        help=f"arquivo do banco SQLite (padrão: variável FORMS_DB_PATH ou {BANCO_PADRAO})",
     )
     comandos = parser.add_subparsers(dest="comando", required=True, metavar="comando")
 
