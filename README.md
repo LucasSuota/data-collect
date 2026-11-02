@@ -8,7 +8,7 @@ O projeto é um monorepo: backend Python, interface web e shell desktop. O conte
 
 ## Estado atual
 
-O projeto está no começo. Existe o esqueleto (`pyproject.toml`, CI, `src/forms/`, `tests/`), mas ainda **nenhum módulo do núcleo**, nem `frontend/` nem `desktop/`. Tudo abaixo descreve o alvo; a ordem de construção é de baixo para cima, sempre com TDD: tipos e fórmulas, validação, repositório, serviço, API e CLI, front e Electron, e por último os módulos de IA.
+O projeto está no começo. Existe o esqueleto (`pyproject.toml`, CI, `src/forms/`, `tests/`), e o `models.py` do núcleo, mas ainda **nenhum outro módulo**, nem `frontend/` nem `desktop/`. Tudo abaixo descreve o alvo; a ordem de construção é de baixo para cima, sempre com TDD: tipos e fórmulas, validação, repositório, serviço, API e CLI, front e Electron, e por último os módulos de IA.
 
 ## O que o sistema faz
 
@@ -66,6 +66,8 @@ templates/     corpo_de_prova.json  inspecao_obra.json
 empacotamento/ scripts do instalável
 tests/
 ```
+
+Resumo de cada pasta com código: [src/forms/README.md](src/forms/README.md).
 
 A dependência sempre aponta para baixo:
 
