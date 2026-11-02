@@ -206,6 +206,8 @@ empacotamento/  scripts do instalável (build do front, PyInstaller, electron-bu
 tests/       test_formulas.py  test_validacao.py  test_servico.py  test_api.py ...
 ```
 
+**Resumos de pasta:** cada pasta com código tem um `README.md` curto (o que é, o que tem, como se conecta, como testar), mantido pelo `doc-writer`. `src/forms/` tem um só, com uma seção por módulo. O resumo descreve o que **existe** no código; as regras e o alvo continuam aqui. A pasta `docs/` é reservada à base do RAG e não recebe esses resumos.
+
 ### 5.1. Camadas e direção de dependência
 
 ```
@@ -362,6 +364,7 @@ TDD é a regra para o **núcleo**: `formulas.py`, `validacao.py`, `tipos_campo.p
 
 ## 10. Trabalhando com IA neste repositório
 
+- **Toda tarefa começa pelo orquestrador** (`agents/orchestrator.md`): ele faz a triagem, confere o escopo e decide quais agentes chamar e em que ordem. Os demais agentes (`issue-creator`, `issue-planner`, `issue-coder`, `issue-reviewer`, `doc-writer`, `git-manager`) são chamados por ele, e não diretamente, salvo pedido explícito do autor.
 - Ao cometer ou corrigir um **erro real de IA** (lógica errada, API inventada, teste que passa por motivo errado, número alucinado), acrescente uma entrada em `AI_NOTES.md`: o que foi pedido, o que a IA fez de errado, como foi detectado e a correção. Seja honesto: o arquivo é parte da defesa do projeto.
 - Não "melhore" o núcleo além da tarefa pedida. Mudanças em `formulas.py` e `validacao.py` precisam de teste novo que as justifique.
 - Quando houver dúvida sobre escopo, consulte §2 e §3 e **pergunte** em vez de adivinhar.
@@ -438,6 +441,7 @@ Se o tempo apertar, corte **nesta ordem**:
 - [ ] Nada fora do escopo da §2 foi adicionado; nada da §3 foi violado
 - [ ] `AI_NOTES.md` atualizado se houve erro real de IA
 - [ ] Este arquivo e o README atualizados se estrutura, comandos ou escopo mudaram
+- [ ] `README.md` das pastas afetadas atualizado se um módulo mudou de responsabilidade, dependências, contrato ou arquivos (§5)
 
 ---
 
