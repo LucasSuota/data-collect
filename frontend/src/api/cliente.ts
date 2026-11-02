@@ -138,6 +138,13 @@ export function criarCliente(configuracao: Configuracao) {
     criarFormulariosEmLote: (formularios: { nome: string; definicao: unknown }[]) =>
       json<ResumoDeFormulario[]>("POST", "/formularios/lote", { corpo: { formularios } }),
     excluirFormulario: (id: number) => semCorpo("DELETE", `/formularios/${id}`),
+    /** Cria uma cópia (v1 igual à versão atual, sem registros). Sem `nome`, o servidor escolhe. */
+    duplicarFormulario: (id: number, nome?: string) =>
+      json<FormularioDetalhe>(
+        "POST",
+        `/formularios/${id}/duplicar`,
+        nome === undefined ? undefined : { corpo: { nome } },
+      ),
     listarVersoes: (formularioId: number) =>
       json<ResumoDeVersao[]>("GET", `/formularios/${formularioId}/versoes`),
     obterVersao: (formularioId: number, versaoId: number) =>
