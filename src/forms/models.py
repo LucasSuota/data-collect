@@ -38,10 +38,79 @@ class Campo:
     compartilhado: bool = False
     maximo: int | None = None
 
+    def para_json(self) -> dict[str, ValorJson]:
+        """Forma canônica do contrato (§6): só o que não é padrão, na mesma ordem sempre."""
+        dados: dict[str, ValorJson] = {
+            "id": self.id,
+            "tipo": self.tipo.value,
+            "rotulo": self.rotulo,
+        }
+        if self.obrigatorio:
+            dados["obrigatorio"] = True
+        if self.unidade is not None:
+            dados["unidade"] = self.unidade
+        if self.casas_decimais is not None:
+            dados["casas_decimais"] = self.casas_decimais
+        if self.opcoes:
+            dados["opcoes"] = list(self.opcoes)
+        if self.formula is not None:
+            dados["formula"] = self.formula
+        if self.formulario is not None:
+            dados["formulario"] = self.formulario
+        if self.compartilhado:
+            dados["compartilhado"] = True
+        if self.maximo is not None:
+            dados["maximo"] = self.maximo
+        return dados
+
+    @classmethod
+    def de_json(cls, dados: dict[str, ValorJson]) -> "Campo":
+        """Lê um campo que já foi validado (por exemplo, o guardado no banco); não valida."""
+        return cls(
+            id=str(dados["id"]),
+            tipo=TipoCampo(str(dados["tipo"])),
+            rotulo=str(dados["rotulo"]),
+            obrigatorio=dados.get("obrigatorio") is True,
+            unidade=_texto_ou_nulo(dados.get("unidade")),
+            casas_decimais=_inteiro_ou_nulo(dados.get("casas_decimais")),
+            opcoes=tuple(str(opcao) for opcao in _lista(dados.get("opcoes"))),
+            formula=_texto_ou_nulo(dados.get("formula")),
+            formulario=_texto_ou_nulo(dados.get("formulario")),
+            compartilhado=dados.get("compartilhado") is True,
+            maximo=_inteiro_ou_nulo(dados.get("maximo")),
+        )
+
+
+def _texto_ou_nulo(valor: ValorJson) -> str | None:
+    return None if valor is None else str(valor)
+
+
+def _inteiro_ou_nulo(valor: ValorJson) -> int | None:
+    return None if valor is None else int(valor)
+
+
+def _lista(valor: ValorJson) -> list[ValorJson]:
+    return valor if isinstance(valor, list) else []
+
 
 @dataclass(frozen=True)
 class Definicao:
     campos: tuple[Campo, ...]
+
+    def para_json(self) -> dict[str, ValorJson]:
+        return {"campos": [campo.para_json() for campo in self.campos]}
+
+    @classmethod
+    def de_json(cls, dados: dict[str, ValorJson]) -> "Definicao":
+        """Lê uma definição já validada (a guardada no banco); a entrada do usuário passa
+        antes por `validacao.analisar_definicao`."""
+        return cls(
+            tuple(
+                Campo.de_json(campo)
+                for campo in _lista(dados.get("campos"))
+                if isinstance(campo, dict)
+            )
+        )
 
 
 @dataclass(frozen=True)

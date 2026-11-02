@@ -134,7 +134,7 @@ def test_banco_novo_tem_as_tabelas_do_modelo_de_dados(conexao: sqlite3.Connectio
 @pytest.mark.parametrize(
     ("tabela", "colunas"),
     [
-        ("formularios", ["id", "nome", "criado_em"]),
+        ("formularios", ["id", "nome", "criado_em", "nome_chave"]),
         ("versoes_formulario", ["id", "formulario_id", "numero", "definicao", "publicada_em"]),
         (
             "registros",
@@ -450,3 +450,40 @@ def test_migracao_1_continua_igual_ao_esquema_publicado():
         return {(nome, " ".join(sql.split())) for nome, sql in linhas}
 
     assert definicoes(gerado) == definicoes(de_referencia)
+
+
+# --- atualização real: esquema 1 (já em disco) -> esquema 2 ---
+
+
+def test_atualizar_do_esquema_1_para_o_2_preenche_a_chave_do_nome_sem_perder_dados(tmp_path: Path):
+    # arrange: banco real da v1, com dois formulários e um registro
+    caminho = tmp_path / "dados.db"
+    _banco_na_versao_1_com_dados(caminho)
+    bruto = sqlite3.connect(caminho)
+    bruto.execute("INSERT INTO formularios (nome, criado_em) VALUES ('  Inspeção ', '2026-11-02')")
+    bruto.commit()
+    bruto.close()
+
+    # act
+    conexao = abrir_conexao(caminho)
+
+    # assert: dados intactos, versão atualizada e chave calculada para os nomes antigos
+    assert _versao_do_esquema(conexao) == VERSAO_ATUAL_DO_ESQUEMA >= 2
+    chaves = dict(conexao.execute("SELECT nome, nome_chave FROM formularios").fetchall())
+    assert chaves == {"ensaio": "ensaio", "  Inspeção ": "inspeção"}
+    assert conexao.execute("SELECT dados FROM registros").fetchone()["dados"] == '{"a": "1"}'
+    conexao.close()
+
+
+def test_depois_de_atualizar_a_unicidade_do_nome_vale_para_os_formularios_antigos(tmp_path: Path):
+    # arrange
+    caminho = tmp_path / "dados.db"
+    _banco_na_versao_1_com_dados(caminho)
+    conexao = abrir_conexao(caminho)
+
+    # act / assert: "ENSAIO" já existia como "ensaio" antes da atualização
+    with pytest.raises(sqlite3.IntegrityError):
+        conexao.execute(
+            "INSERT INTO formularios (nome, nome_chave, criado_em) VALUES ('ENSAIO', 'ensaio', 'x')"
+        )
+    conexao.close()
