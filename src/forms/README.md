@@ -2,7 +2,7 @@
 
 > Backend Python do construtor de formulários: definições em JSON versionadas, validação, fórmulas e persistência em SQLite.
 
-Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py` e `fotos.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
+Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `servico.py` e `fotos.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
 
 ## models.py
 
@@ -25,6 +25,7 @@ Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e n
 | `ValorInvalido` | Um valor isolado não serve para o tipo do campo (levantada por `tipos_campo.py`) |
 | `FotoInvalida` | Imagem recusada; a mensagem já traz o motivo em PT-BR (levantada por `fotos.py`) |
 | `ErroDeCalculo` | Falha ao executar uma fórmula válida; `calcular_campos` a guarda no campo |
+| `LoteInvalido`, `ErrosDoFormulario` | Erros agrupados por formulário quando um lote é recusado (nada é criado) |
 | `NaoEncontrado`, `ExclusaoBloqueada` | Recurso inexistente (404) e exclusão bloqueada por vínculo (409) |
 
 ### Como se conecta
@@ -210,4 +211,37 @@ Validar uma definição de formulário e um registro contra ela, devolvendo **to
 
 ### Cuidados
 - `tipos_calculados` é a base da regra de contrato dos compartilhados (nova versão da origem não pode mudar o tipo inferido).
-- Ciclo entre *formulários* e o contrato entre versões ficam no serviço, que conhece os outros formulários.
+- `compartilhados_da_definicao` entrega o que o formulário libera aos dependentes; ciclo entre *formulários* e o contrato entre versões são do serviço, que conhece os outros formulários.
+
+## servico.py
+
+### Responsabilidade
+Os casos de uso, chamados igualmente por `api.py` e `cli.py`. Toda regra de negócio fica aqui e abaixo. Recebe a conexão e o relógio (`agora`) por parâmetro, controla a transação (cada caso de uso grava tudo ou nada) e não conhece HTTP.
+
+### O que tem aqui (formulários e versões)
+| Símbolo | Papel |
+|---|---|
+| `criar_formulario(conexao, nome, definicao, agora)` | Cria o formulário e já publica a versão 1; definição inválida ou nome repetido não cria nada |
+| `publicar_versao(conexao, formulario_id, definicao, agora)` | Próxima versão; confere o contrato dos campos compartilhados e o ciclo com os dependentes |
+| `validar_conjunto`, `criar_formularios_em_lote` | Formulários ainda não publicados que se referenciam: validados juntos, criados origem primeiro, em qualquer ordem de entrada |
+| `validar_definicao(conexao, definicao)` | Sem estado; devolve `{valida, erros}` com todos os erros em vez de levantar |
+| `catalogo()` | Tipos, funções e constantes lidos das mesmas tabelas do avaliador |
+| `listar_formularios`, `obter_formulario`, `listar_versoes`, `obter_versao` | Leitura; `obter_formulario` traz a versão atual completa |
+
+### Como se conecta
+- **Depende de:** `forms.repositorio`, `forms.validacao`, `forms.formulas`, `forms.tipos_campo` e `forms.models`.
+- **É usado por:** nenhum módulo ainda.
+
+### Decisões que moldam este código
+- Publicar um formulário, publicar uma versão e criar em lote usam **o mesmo motor** (`_validar_conjunto`): um formulário é o conjunto de 1. Mesmas mensagens e posições em todos os caminhos.
+- Os rascunhos são validados em ordem topológica (origem antes do dependente); ciclo entre rascunhos é erro citando os formulários, e o resto do lote continua sendo validado.
+- O tipo de um `calculado` compartilhado não é guardado: sai de analisar de novo a definição publicada da origem (`_compartilhados_publicados`).
+- Contrato entre versões: com dependentes diretos, a nova versão não pode remover, descompartilhar nem mudar o tipo (inclusive o inferido) de um campo compartilhado (AGENTS.md §2.7).
+- Origem com erro não gera "campo não compartilhado" nos dependentes: o dependente é avisado de que deve corrigir a origem primeiro.
+
+### Como testar
+`uv run pytest tests/test_servico_formularios.py`
+
+### Cuidados
+- `_transacao` usa `BEGIN` explícito; as funções do repositório não fazem commit.
+- Registros, exclusão, anexos e exportação ainda não existem neste módulo.

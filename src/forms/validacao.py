@@ -340,7 +340,10 @@ def _validar_formulas(
 
     tipos_calculados: dict[str, TipoFormula] = {}
     for id_do_campo in ordem:
-        if any(nome in falhas for nome in nomes[id_do_campo]):
+        if any(
+            nome in falhas or _usa_referencia_com_erro(nome, com_erro)
+            for nome in nomes[id_do_campo]
+        ):
             falhas.add(id_do_campo)  # a causa já foi apontada na origem: sem erro em cascata
             continue
         if _faltam_compartilhados(
@@ -357,6 +360,13 @@ def _validar_formulas(
         tipos_calculados[id_do_campo] = tipo
         _conferir_casas_decimais(calculados[id_do_campo], tipo, erros)
     return tipos_calculados
+
+
+def _usa_referencia_com_erro(nome: str, com_erro: set[str]) -> bool:
+    """`ensaio__umidade` quando o campo `ensaio` não pôde ser lido (origem inexistente, por
+    exemplo): o erro já está em `ensaio.formulario`, e repeti-lo na fórmula só atrapalha."""
+    id_da_referencia, separador, _ = nome.partition("__")
+    return bool(separador) and id_da_referencia in com_erro
 
 
 def _tipos_dos_nomes(

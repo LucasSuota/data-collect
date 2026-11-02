@@ -786,3 +786,18 @@ def test_validar_nao_modifica_a_entrada():
 
     # assert
     assert CORPO_DE_PROVA == original
+
+
+def test_formula_que_usa_referencia_com_origem_inexistente_nao_repete_o_erro():
+    # arrange
+    definicao = _definicao(
+        {"id": "ensaio", "tipo": "referencia", "rotulo": "Ensaio", "formulario": "fantasma"},
+        {"id": "c", "tipo": "calculado", "rotulo": "C", "formula": "ensaio__umidade * 2"},
+        {"id": "d", "tipo": "calculado", "rotulo": "D", "formula": "c + 1"},
+    )
+
+    # act
+    campos = _campos_com_erro(definicao, ORIGENS)
+
+    # assert: só a causa (a origem que não existe), sem cascata nas fórmulas
+    assert campos == ["ensaio.formulario"]
