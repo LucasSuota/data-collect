@@ -121,6 +121,7 @@ O front roda separado em `http://localhost:5173` (Vite) e a API libera CORS só 
 - **TDD** no núcleo, com `formulas.py` e `validacao.py` primeiro e mais fundo. O LLM é sempre substituído por um cliente falso nos testes, que nunca fazem chamada de rede.
 - **CI** (GitHub Actions): `uv sync --locked`, `ruff check`, `ruff format --check` e `pytest`. Hoje o CI roda só no Linux; o alvo é rodar o pytest numa matriz com Windows, macOS e Linux, e o front terá job próprio (lint, typecheck, testes e build).
 - **Segurança:** API só em `127.0.0.1`, SQL parametrizado, upload de foto validado pelo conteúdo e sem EXIF, exportação CSV com neutralização de injeção de fórmula em células de texto, chave de API só em `.env`.
+- **Agentes** (`agents/`): o `orchestrator` recebe toda tarefa, confere o escopo e aciona `issue-creator`, `issue-planner`, `issue-coder`, `issue-reviewer`, `doc-writer` e `git-manager`, parando para o autor nas decisões que importam. O `doc-writer` mantém um `README.md` de resumo em cada pasta com código (o que é, como se conecta, como testar).
 - **`AI_NOTES.md`** registra os erros reais da IA durante a construção.
 
 ## Próximos passos (fora do escopo atual)
