@@ -42,6 +42,17 @@ export function mensagemDe(erro: unknown): string {
   return erro instanceof ErroDaApi ? erro.message : "Ocorreu um erro inesperado.";
 }
 
+/**
+ * A mensagem para mostrar fora de um campo: no 422 junta as mensagens por campo (são elas que
+ * dizem o que está errado); nos demais erros, a mensagem do servidor.
+ */
+export function mensagemDetalhada(erro: unknown): string {
+  if (erro instanceof ErroDaApi && erro.erros.length > 0) {
+    return erro.erros.map((e) => e.mensagem).join(" ");
+  }
+  return mensagemDe(erro);
+}
+
 export function Falha({ mensagem }: { mensagem: string }) {
   return <Aviso tom="erro">{mensagem}</Aviso>;
 }

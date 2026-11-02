@@ -1,8 +1,13 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ErroDaApi } from "../api/cliente";
-import { clienteFalso, renderizarComApi } from "../test/clienteFalso";
+import { clienteFalso as clienteBase, renderizarComApi } from "../test/clienteFalso";
+import type { ClienteApi } from "../api/cliente";
 import { PaginaDeFormularios } from "./PaginaDeFormularios";
+
+/** A tela sempre pede as pastas junto com os formulários; sem pastas, a lista é plana como antes. */
+const clienteFalso = (sobrescritas: Partial<ClienteApi> = {}) =>
+  clienteBase({ listarPastas: async () => [], ...sobrescritas });
 
 const resumo = (id: number, nome: string, numero = 1) => ({
   id,
@@ -140,9 +145,7 @@ describe("PaginaDeFormularios", () => {
 
       expect(duplicarFormulario).toHaveBeenCalledWith(1, undefined);
       expect(await screen.findByText("Obra (cópia)")).toBeInTheDocument();
-      expect(await screen.findByRole("status")).toHaveTextContent(
-        "Os registros não foram copiados",
-      );
+      expect(await screen.findByText(/Os registros não foram copiados/)).toBeInTheDocument();
     });
 
     it("com nome digitado, manda o nome sem as pontas em branco", async () => {

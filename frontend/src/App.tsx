@@ -34,6 +34,9 @@ export function App() {
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">
         {rota.nome === "formularios" ? <PaginaDeFormularios navegar={navegar} /> : null}
+        {rota.nome === "pasta" ? (
+          <PaginaDeFormularios navegar={navegar} pastaId={rota.pastaId} />
+        ) : null}
         {rota.nome === "registros" ? (
           <PaginaDeRegistros formularioId={rota.formularioId} navegar={navegar} />
         ) : null}
@@ -50,7 +53,7 @@ export function App() {
           />
         ) : null}
         {rota.nome === "novoFormulario" ? (
-          <Construtor modo={{ tipo: "novo" }} navegar={navegar} />
+          <Construtor modo={{ tipo: "novo", pastaId: rota.pastaId }} navegar={navegar} />
         ) : null}
         {rota.nome === "criarComIa" ? <PaginaCriarComIa navegar={navegar} /> : null}
         {rota.nome === "editarFormulario" ? (

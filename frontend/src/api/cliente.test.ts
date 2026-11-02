@@ -383,6 +383,77 @@ describe("duplicarFormulario", () => {
   });
 });
 
+describe("pastas", () => {
+  it("lista as pastas em lista plana", async () => {
+    const { cliente, fetchFalso } = clienteCom(respostaDe({ corpo: [] }));
+
+    await cliente.listarPastas();
+
+    const { url, init } = ultimaChamada(fetchFalso);
+    expect(url).toBe("http://127.0.0.1:8000/pastas");
+    expect(init.method).toBe("GET");
+  });
+
+  it("cria na raiz mandando pasta_pai_id nulo, e dentro de outra com o id dela", async () => {
+    const { cliente, fetchFalso } = clienteCom(respostaDe({ status: 201, corpo: {} }));
+
+    await cliente.criarPasta("Obras", null);
+    const naRaiz = JSON.parse(String(ultimaChamada(fetchFalso).init.body));
+    await cliente.criarPasta("Fundação", 4);
+    const dentro = JSON.parse(String(fetchFalso.mock.calls[1]?.[1]?.body));
+
+    expect(naRaiz).toEqual({ nome: "Obras", pasta_pai_id: null });
+    expect(dentro).toEqual({ nome: "Fundação", pasta_pai_id: 4 });
+  });
+
+  it("renomeia e move com PUT mandando os dois campos", async () => {
+    const { cliente, fetchFalso } = clienteCom(respostaDe({ corpo: {} }));
+
+    await cliente.atualizarPasta(7, "Estacas", null);
+
+    const { url, init } = ultimaChamada(fetchFalso);
+    expect(url).toBe("http://127.0.0.1:8000/pastas/7");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(String(init.body))).toEqual({ nome: "Estacas", pasta_pai_id: null });
+  });
+
+  it("exclui a pasta (204 sem corpo)", async () => {
+    const { cliente, fetchFalso } = clienteCom(respostaDe({ status: 204 }));
+
+    await cliente.excluirPasta(7);
+
+    const { url, init } = ultimaChamada(fetchFalso);
+    expect(url).toBe("http://127.0.0.1:8000/pastas/7");
+    expect(init.method).toBe("DELETE");
+  });
+
+  it("move o formulário para uma pasta ou para a raiz (pasta_id nulo)", async () => {
+    const { cliente, fetchFalso } = clienteCom(respostaDe({ corpo: {} }));
+
+    await cliente.moverFormulario(3, 9);
+    const { url, init } = ultimaChamada(fetchFalso);
+    await cliente.moverFormulario(3, null);
+    const naRaiz = JSON.parse(String(fetchFalso.mock.calls[1]?.[1]?.body));
+
+    expect(url).toBe("http://127.0.0.1:8000/formularios/3/pasta");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(String(init.body))).toEqual({ pasta_id: 9 });
+    expect(naRaiz).toEqual({ pasta_id: null });
+  });
+
+  it("criar formulário já dentro de uma pasta manda pasta_id", async () => {
+    const { cliente, fetchFalso } = clienteCom(respostaDe({ status: 201, corpo: {} }));
+
+    await cliente.criarFormulario({ nome: "ensaio", definicao: { campos: [] }, pasta_id: 5 });
+
+    expect(JSON.parse(String(ultimaChamada(fetchFalso).init.body))).toEqual({
+      nome: "ensaio",
+      definicao: { campos: [] },
+      pasta_id: 5,
+    });
+  });
+});
+
 describe("gerarFormularios", () => {
   it("manda o pedido e os rascunhos em edição e devolve os rascunhos propostos", async () => {
     const proposta = {

@@ -12,7 +12,7 @@ describe("esqueletos de carregamento", () => {
   it("a lista de formulários mostra um esqueleto enquanto carrega", async () => {
     renderizarComApi(
       <PaginaDeFormularios navegar={vi.fn()} />,
-      clienteFalso({ listarFormularios: pendente }),
+      clienteFalso({ listarFormularios: pendente, listarPastas: pendente }),
     );
 
     expect(await screen.findByRole("status", { name: "Carregando formulários" })).toHaveAttribute(
@@ -63,6 +63,7 @@ describe("esqueletos de carregamento", () => {
         listarFormularios: async () => {
           throw new ErroDaApi(500, "Erro interno do servidor.");
         },
+        listarPastas: async () => [],
       }),
     );
 
