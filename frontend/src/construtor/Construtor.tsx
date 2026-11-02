@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useRef, useState } from "react";
 import { useApi } from "../api/contexto";
 import { ErroDaApi, type Esquemas, type FormularioDetalhe, type TipoDeCampo } from "../api/cliente";
+import type { Rascunho } from "../ia/rascunhos";
 import { Carregando, Falha, mensagemDe, useCarga } from "../paginas/Estado";
 import type { Rota } from "../rotas";
 import { PainelDePropriedades } from "./PainelDePropriedades";
@@ -27,6 +28,7 @@ import {
   aplicarArraste,
   atualizarCampo,
   deDefinicao,
+  deRascunho,
   mapearErros,
   moverCampo,
   paraDefinicao,
@@ -39,7 +41,21 @@ import {
 
 type Catalogo = Esquemas["CatalogoSaida"];
 
-export type ModoDoConstrutor = { tipo: "novo" } | { tipo: "editar"; formularioId: number };
+export type ModoDoConstrutor =
+  | { tipo: "novo" }
+  | { tipo: "editar"; formularioId: number }
+  /**
+   * Edita um rascunho proposto pela IA, que ainda não existe no servidor: não publica nem valida
+   * sozinho (quem valida o conjunto é a publicação em lote); devolve o resultado a quem chamou.
+   */
+  | {
+      tipo: "rascunho";
+      rascunho: Rascunho;
+      /** Nomes dos outros rascunhos do conjunto, que este pode referenciar. */
+      nomesDosIrmaos: string[];
+      aoConcluir: (nome: string, definicao: ReturnType<typeof paraDefinicao>) => void;
+      aoCancelar: () => void;
+    };
 
 interface Props {
   modo: ModoDoConstrutor;
@@ -60,7 +76,12 @@ const gerarChave = () => `campo-${++proximaChave}`;
 /** Monta a definição sem editar JSON à mão: paleta, arrastar e soltar, propriedades e publicação. */
 export function Construtor({ modo, navegar, atrasoDaValidacaoMs = 500 }: Props) {
   const cliente = useApi();
-  const chave = modo.tipo === "novo" ? "novo" : `editar-${modo.formularioId}`;
+  const chave =
+    modo.tipo === "novo"
+      ? "novo"
+      : modo.tipo === "editar"
+        ? `editar-${modo.formularioId}`
+        : `rascunho-${modo.rascunho.chave}`;
 
   const carga = useCarga<Carregado>(async () => {
     const [catalogo, formularios, formulario] = await Promise.all([
@@ -70,9 +91,14 @@ export function Construtor({ modo, navegar, atrasoDaValidacaoMs = 500 }: Props) 
     ]);
     return {
       catalogo,
-      nomesDosFormularios: formularios
-        .filter((f) => f.id !== formulario?.id) // o formulário não pode se referenciar
-        .map((f) => f.nome),
+      nomesDosFormularios: [
+        ...new Set([
+          ...formularios
+            .filter((f) => f.id !== formulario?.id) // o formulário não pode se referenciar
+            .map((f) => f.nome),
+          ...(modo.tipo === "rascunho" ? modo.nomesDosIrmaos : []),
+        ]),
+      ],
       formulario,
     };
   }, [cliente, chave]);
@@ -82,6 +108,7 @@ export function Construtor({ modo, navegar, atrasoDaValidacaoMs = 500 }: Props) 
   return (
     <Editor
       key={chave}
+      modo={modo}
       carregado={carga.dados}
       navegar={navegar}
       atrasoDaValidacaoMs={atrasoDaValidacaoMs}
@@ -90,10 +117,12 @@ export function Construtor({ modo, navegar, atrasoDaValidacaoMs = 500 }: Props) 
 }
 
 function Editor({
+  modo,
   carregado,
   navegar,
   atrasoDaValidacaoMs,
 }: {
+  modo: ModoDoConstrutor;
   carregado: Carregado;
   navegar: Props["navegar"];
   atrasoDaValidacaoMs: number;
@@ -101,19 +130,29 @@ function Editor({
   const cliente = useApi();
   const { catalogo, formulario } = carregado;
   const editando = formulario !== null;
+  const rascunho = modo.tipo === "rascunho" ? modo : null;
 
   const aceitas: PropriedadesPorTipo = Object.fromEntries(
     catalogo.tipos.map((tipo) => [tipo.id, tipo.propriedades]),
   );
   const rotulosDosTipos = Object.fromEntries(catalogo.tipos.map((tipo) => [tipo.id, tipo.rotulo]));
 
-  const [nome, setNome] = useState(formulario?.nome ?? "");
-  const [campos, setCampos] = useState<CampoEmEdicao[]>(() =>
-    formulario ? deDefinicao(formulario.versao_atual.definicao, gerarChave) : [],
-  );
+  const [nome, setNome] = useState(formulario?.nome ?? rascunho?.rascunho.nome ?? "");
+  const [campos, setCampos] = useState<CampoEmEdicao[]>(() => {
+    if (formulario) return deDefinicao(formulario.versao_atual.definicao, gerarChave);
+    return rascunho ? deRascunho(rascunho.rascunho.definicao, gerarChave) : [];
+  });
   const [selecionada, setSelecionada] = useState<string | null>(null);
-  const [erros, setErros] = useState<ErrosMapeados>({ porCampo: {}, globais: [] });
-  const [erroDoNome, setErroDoNome] = useState<string[]>([]);
+  // Os erros que a IA deixou no rascunho já aparecem nos campos certos (mesma regra do publicar).
+  const [erros, setErros] = useState<ErrosMapeados>(() =>
+    mapearErros(
+      (rascunho?.rascunho.erros ?? []).filter((e) => e.campo !== "nome"),
+      campos.map(({ chave, id }) => ({ chave, id })),
+    ),
+  );
+  const [erroDoNome, setErroDoNome] = useState<string[]>(() =>
+    (rascunho?.rascunho.erros ?? []).filter((e) => e.campo === "nome").map((e) => e.mensagem),
+  );
   const [falha, setFalha] = useState<string | null>(null);
   const [publicando, setPublicando] = useState(false);
   // Os campos exatos para os quais o publicar falhou. Enquanto não houver edição, a validação
@@ -128,7 +167,8 @@ function Editor({
   // Valida no servidor (o front não conhece a gramática), com debounce. O instantâneo guarda a
   // ordem enviada: o índice de `campos[3].id` vale para ela, não para a ordem de depois.
   useEffect(() => {
-    if (campos.length === 0) return;
+    // Rascunho: o conjunto só pode ser validado junto, na publicação em lote.
+    if (campos.length === 0 || rascunho) return;
     const instantaneo = campos.map(({ chave, id }) => ({ chave, id }));
     let obsoleto = false;
     const temporizador = setTimeout(() => {
@@ -201,7 +241,11 @@ function Editor({
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
         <h1 className="mr-auto text-2xl font-semibold">
-          {editando ? `Editar · ${formulario.nome}` : "Novo formulário"}
+          {editando
+            ? `Editar · ${formulario.nome}`
+            : rascunho
+              ? "Editar rascunho"
+              : "Novo formulário"}
         </h1>
         {editando ? (
           <p className="text-sm text-slate-500">
@@ -225,15 +269,55 @@ function Editor({
             ))}
           </label>
         )}
-        <button
-          type="button"
-          disabled={publicando}
-          className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
-          onClick={() => void publicar()}
-        >
-          {publicando ? "Publicando…" : editando ? "Publicar nova versão" : "Publicar formulário"}
-        </button>
+        {rascunho ? (
+          <>
+            <button
+              type="button"
+              className="rounded border border-slate-300 px-4 py-2"
+              onClick={rascunho.aoCancelar}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="rounded bg-slate-900 px-4 py-2 text-white"
+              onClick={() => rascunho.aoConcluir(nome, paraDefinicao(campos, aceitas))}
+            >
+              Concluir edição
+            </button>
+          </>
+        ) : (
+          <>
+            {!editando ? (
+              <button
+                type="button"
+                className="rounded border border-slate-300 px-4 py-2"
+                onClick={() => navegar({ nome: "criarComIa" })}
+              >
+                Criar com IA
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={publicando}
+              className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
+              onClick={() => void publicar()}
+            >
+              {publicando
+                ? "Publicando…"
+                : editando
+                  ? "Publicar nova versão"
+                  : "Publicar formulário"}
+            </button>
+          </>
+        )}
       </div>
+      {rascunho ? (
+        <p className="text-sm text-slate-500">
+          A validação completa acontece ao publicar todos os rascunhos juntos, porque eles podem
+          depender uns dos outros.
+        </p>
+      ) : null}
 
       {falha ? <Falha mensagem={falha} /> : null}
       {erros.globais.length > 0 ? <Falha mensagem={erros.globais.join(" · ")} /> : null}

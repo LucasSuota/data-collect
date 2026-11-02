@@ -5,6 +5,7 @@ import {
   aplicarArraste,
   atualizarCampo,
   deDefinicao,
+  deRascunho,
   mapearErros,
   moverCampo,
   paraDefinicao,
@@ -392,5 +393,66 @@ describe("aplicarArraste", () => {
     );
 
     expect(novo[0]).toMatchObject({ tipo: "foto", rotulo: "foto" });
+  });
+});
+
+describe("deRascunho", () => {
+  it("lê uma definição proposta pela IA, mesmo com tipo que o catálogo não conhece", () => {
+    const campos = deRascunho(
+      {
+        campos: [
+          { id: "umidade", tipo: "numero", rotulo: "Umidade", unidade: "%", casas_decimais: 2 },
+          { id: "classe", tipo: "moeda", rotulo: "Classe", opcoes: ["A", "B"], obrigatorio: true },
+          {
+            id: "ok",
+            tipo: "calculado",
+            rotulo: "OK",
+            formula: "umidade > 3",
+            compartilhado: true,
+          },
+        ],
+      },
+      gerarChave,
+    );
+
+    expect(campos.map((c) => [c.id, c.tipo, c.unidade, c.casasDecimais])).toEqual([
+      ["umidade", "numero", "%", "2"],
+      ["classe", "moeda", "", ""],
+      ["ok", "calculado", "", ""],
+    ]);
+    expect(campos[1]).toMatchObject({ opcoes: "A\nB", obrigatorio: true });
+    expect(campos[2]).toMatchObject({ formula: "umidade > 3", compartilhado: true });
+    expect(new Set(campos.map((c) => c.chave)).size).toBe(3);
+  });
+
+  it("tolera lixo sem perder a posição dos campos (o índice dos erros precisa continuar valendo)", () => {
+    const campos = deRascunho(
+      { campos: ["texto solto", null, { id: 3, tipo: ["x"], rotulo: null }, { id: "a" }] },
+      gerarChave,
+    );
+
+    expect(campos).toHaveLength(4);
+    expect(campos.map((c) => c.id)).toEqual(["", "", "", "a"]);
+    expect(campos.every((c) => typeof c.tipo === "string" && typeof c.rotulo === "string")).toBe(
+      true,
+    );
+  });
+
+  it.each([null, undefined, 5, "x", {}, { campos: "não é lista" }])(
+    "definição sem lista de campos (%j) vira lista vazia",
+    (definicao) => {
+      expect(deRascunho(definicao, gerarChave)).toEqual([]);
+    },
+  );
+
+  it("volta igual para a definição do contrato (ida e volta)", () => {
+    const original = {
+      campos: [
+        { id: "umidade", tipo: "numero", rotulo: "Umidade", unidade: "%", obrigatorio: true },
+        { id: "ok", tipo: "calculado", rotulo: "OK", formula: "umidade > 3" },
+      ],
+    };
+
+    expect(paraDefinicao(deRascunho(original, gerarChave))).toEqual(original);
   });
 });

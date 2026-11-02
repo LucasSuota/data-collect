@@ -1,4 +1,5 @@
 import { Construtor } from "./construtor/Construtor";
+import { PaginaCriarComIa } from "./ia/PaginaCriarComIa";
 import { useRota } from "./rotas";
 import { PaginaDeFormularios } from "./paginas/PaginaDeFormularios";
 import { PaginaDeRegistro } from "./paginas/PaginaDeRegistro";
@@ -36,6 +37,7 @@ export function App() {
         {rota.nome === "novoFormulario" ? (
           <Construtor modo={{ tipo: "novo" }} navegar={navegar} />
         ) : null}
+        {rota.nome === "criarComIa" ? <PaginaCriarComIa navegar={navegar} /> : null}
         {rota.nome === "editarFormulario" ? (
           <Construtor
             modo={{ tipo: "editar", formularioId: rota.formularioId }}

@@ -131,6 +131,46 @@ export function deDefinicao(definicao: Definicao, gerarChave: () => string): Cam
   }));
 }
 
+/**
+ * Carrega o rascunho proposto pela IA. A definição é dado não confiável (pode ter tipo
+ * desconhecido, campo faltando ou lixo): nada aqui lança, e cada entrada da lista vira um campo,
+ * mesmo malformada, para o índice dos erros (`campos[3].id`) continuar apontando para o lugar certo.
+ */
+export function deRascunho(definicao: unknown, gerarChave: () => string): CampoEmEdicao[] {
+  const campos = ehObjeto(definicao) ? definicao["campos"] : undefined;
+  if (!Array.isArray(campos)) return [];
+  return campos.map((entrada: unknown) => {
+    const campo = ehObjeto(entrada) ? entrada : {};
+    return {
+      chave: gerarChave(),
+      id: texto(campo["id"]),
+      tipo: (texto(campo["tipo"]) || "texto") as TipoDeCampo,
+      rotulo: texto(campo["rotulo"]),
+      obrigatorio: campo["obrigatorio"] === true,
+      unidade: texto(campo["unidade"]),
+      casasDecimais: textoOuNumero(campo["casas_decimais"]),
+      opcoes: Array.isArray(campo["opcoes"]) ? campo["opcoes"].map(texto).join("\n") : "",
+      formula: texto(campo["formula"]),
+      formulario: texto(campo["formulario"]),
+      compartilhado: campo["compartilhado"] === true,
+      maximo: textoOuNumero(campo["maximo"]),
+    };
+  });
+}
+
+function ehObjeto(valor: unknown): valor is Record<string, unknown> {
+  return typeof valor === "object" && valor !== null && !Array.isArray(valor);
+}
+
+function texto(valor: unknown): string {
+  return typeof valor === "string" ? valor : "";
+}
+
+/** `casas_decimais` e `maximo` chegam como número ou como texto digitado. */
+function textoOuNumero(valor: unknown): string {
+  return typeof valor === "string" || typeof valor === "number" ? String(valor) : "";
+}
+
 export interface ErroNoCampo {
   /** A propriedade do campo (`formula`, `casas_decimais`...); vazio quando é do campo todo. */
   propriedade: string;
