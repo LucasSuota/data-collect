@@ -12,7 +12,18 @@ from decimal import Decimal
 
 from forms.models import Campo, TipoCampo, ValorInvalido, ValorJson
 
-type ValorNormalizado = str | bool | Decimal | date | None
+
+@dataclass(frozen=True)
+class Localizacao:
+    latitude: Decimal
+    longitude: Decimal
+
+
+# Foto é a lista de ids dos anexos; referência é o id do registro de origem (§2.7 e §2.8).
+type ValorNormalizado = str | bool | int | Decimal | date | Localizacao | tuple[int, ...] | None
+
+_LATITUDE_MAXIMA = Decimal(90)
+_LONGITUDE_MAXIMA = Decimal(180)
 
 # Propriedades que todo campo tem; `ESPECIFICACOES` lista só as demais.
 PROPRIEDADES_COMUNS = ("id", "tipo", "rotulo")
@@ -80,7 +91,7 @@ def normalizar_valor(campo: Campo, valor: ValorJson) -> ValorNormalizado:
         return None
     normalizador = _NORMALIZADORES.get(campo.tipo)
     if normalizador is None:
-        raise ValorInvalido(f"O tipo '{campo.tipo}' não é normalizado por este módulo.")
+        raise ValorInvalido(f"O campo do tipo '{campo.tipo}' não recebe valor do cliente.")
     return normalizador(campo, valor)
 
 
@@ -91,6 +102,13 @@ def valor_para_json(valor: ValorNormalizado) -> ValorJson:
         return format(valor, "f")
     if isinstance(valor, date):
         return valor.isoformat()
+    if isinstance(valor, Localizacao):
+        return {
+            "latitude": format(valor.latitude, "f"),
+            "longitude": format(valor.longitude, "f"),
+        }
+    if isinstance(valor, tuple):
+        return list(valor)
     return valor
 
 
@@ -101,6 +119,10 @@ def _normalizar_texto(campo: Campo, valor: ValorJson) -> str:
 
 
 def _normalizar_numero(campo: Campo, valor: ValorJson) -> Decimal:
+    return _decimal_de(valor)
+
+
+def _decimal_de(valor: ValorJson) -> Decimal:
     # `bool` é subclasse de `int`: sem esta checagem, `true` viraria o número 1.
     if isinstance(valor, bool) or not isinstance(valor, int | float | str):
         raise ValorInvalido("O valor deve ser um número.")
@@ -144,12 +166,65 @@ def _normalizar_sim_nao(campo: Campo, valor: ValorJson) -> bool:
     return valor
 
 
-# Só os tipos de entrada simples. Localização, foto e referência são validados junto do
-# registro (issue de validação de registro); calculado e seção nunca recebem valor do cliente.
+def _normalizar_localizacao(campo: Campo, valor: ValorJson) -> Localizacao | None:
+    if not isinstance(valor, dict) or not set(valor) <= {"latitude", "longitude"}:
+        raise ValorInvalido("A localização deve ser um objeto com latitude e longitude.")
+
+    latitude, longitude = valor.get("latitude"), valor.get("longitude")
+    if eh_vazio(latitude) and eh_vazio(longitude):
+        return None
+    if eh_vazio(latitude) or eh_vazio(longitude):
+        raise ValorInvalido("Informe latitude e longitude juntas.")
+    return Localizacao(
+        latitude=_coordenada(latitude, "latitude", _LATITUDE_MAXIMA),
+        longitude=_coordenada(longitude, "longitude", _LONGITUDE_MAXIMA),
+    )
+
+
+def _coordenada(valor: ValorJson, nome: str, limite: Decimal) -> Decimal:
+    try:
+        coordenada = _decimal_de(valor)
+    except ValorInvalido as erro:
+        raise ValorInvalido(f"A {nome} deve ser um número.") from erro
+    if abs(coordenada) > limite:
+        raise ValorInvalido(f"A {nome} deve estar entre -{limite} e {limite}.")
+    return coordenada
+
+
+def _normalizar_foto(campo: Campo, valor: ValorJson) -> tuple[int, ...] | None:
+    if not isinstance(valor, list):
+        raise ValorInvalido("As fotos devem ser uma lista de ids de anexo.")
+    if not valor:
+        return None
+    if not all(_eh_id(item) for item in valor):
+        raise ValorInvalido("Cada foto deve ser o id (inteiro positivo) de um anexo enviado.")
+    ids = tuple(item for item in valor if isinstance(item, int))
+    if len(set(ids)) != len(ids):
+        raise ValorInvalido("A mesma foto não pode aparecer duas vezes.")
+    if campo.maximo is not None and len(ids) > campo.maximo:
+        raise ValorInvalido(f"Envie no máximo {campo.maximo} fotos.")
+    return ids
+
+
+def _normalizar_referencia(campo: Campo, valor: ValorJson) -> int:
+    # Aqui só se confere o formato; a existência do registro é do serviço (§2.7).
+    if not _eh_id(valor) or not isinstance(valor, int):
+        raise ValorInvalido("O valor de uma referência deve ser o id de um registro.")
+    return valor
+
+
+def _eh_id(valor: ValorJson) -> bool:
+    return isinstance(valor, int) and not isinstance(valor, bool) and valor >= 1
+
+
+# Calculado e seção nunca recebem valor do cliente: ficam de fora de propósito.
 _NORMALIZADORES: dict[TipoCampo, Callable[[Campo, ValorJson], ValorNormalizado]] = {
     TipoCampo.TEXTO: _normalizar_texto,
     TipoCampo.NUMERO: _normalizar_numero,
     TipoCampo.DATA: _normalizar_data,
     TipoCampo.SELECAO: _normalizar_selecao,
     TipoCampo.SIM_NAO: _normalizar_sim_nao,
+    TipoCampo.LOCALIZACAO: _normalizar_localizacao,
+    TipoCampo.FOTO: _normalizar_foto,
+    TipoCampo.REFERENCIA: _normalizar_referencia,
 }

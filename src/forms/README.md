@@ -2,7 +2,7 @@
 
 > Backend Python do construtor de formulários: definições em JSON versionadas, validação, fórmulas e persistência em SQLite.
 
-Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `repositorio.py` e `fotos.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
+Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py` e `fotos.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
 
 ## models.py
 
@@ -103,7 +103,8 @@ Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. N�
 - Número nunca passa por `float`: `0.1` vira `Decimal("0.1")` pelo texto do float (AGENTS.md §7).
 - A string de número é conferida por regex ASCII antes do `Decimal`, que aceitaria `NaN`, `1_000` e dígitos de outros alfabetos.
 - A data é só `AAAA-MM-DD`; `date.fromisoformat` sozinho aceitaria também `20261101` e `2026-W44-1`.
-- Só texto, número, data, seleção e sim/não são normalizados aqui; localização, foto e referência ficam com a validação de registro.
+- Texto, número, data, seleção, sim/não, localização, foto e referência são normalizados aqui. Calculado e seção nunca recebem valor do cliente. Referência confere só o formato (inteiro positivo); a existência do registro é do serviço.
+- Localização vira `Localizacao(latitude, longitude)` em `Decimal`, com faixa -90 a 90 e -180 a 180; um sem o outro é erro. Foto é a lista de ids de anexo, sem repetição e até `maximo`.
 
 ### Como testar
 `uv run pytest tests/test_tipos_campo.py`
@@ -173,3 +174,35 @@ Transformar a foto enviada num WebP pequeno e sem metadados (AGENTS.md §2.8). F
 ### Cuidados
 - O perfil de cor é descartado sem conversão para sRGB; fotos em Display P3 podem ficar um pouco menos saturadas.
 - Imagem animada (GIF não entra; WebP/PNG animados) usa só o primeiro quadro.
+
+## validacao.py
+
+### Responsabilidade
+Validar uma definição de formulário e um registro contra ela, devolvendo **todos** os erros de uma vez, localizados pelo `id` do campo (AGENTS.md §5.3). Não calcula (isso é de `formulas.py`), não normaliza valor isolado (isso é de `tipos_campo.py`) e não faz I/O: o que viria do banco entra por parâmetro.
+
+### O que tem aqui
+| Símbolo | Papel |
+|---|---|
+| `analisar_definicao(dados, origens)` | Lê o JSON não confiável e devolve `AnaliseDeDefinicao`: `erros`, `definicao` (só se não houver erro) e `tipos_calculados` |
+| `validar_definicao(dados, origens)` | Só a tupla de erros; é o que `/definicoes/validar` vai usar |
+| `exigir_definicao_valida(dados, origens)` | Para publicar: devolve `Definicao` ou levanta `DefinicaoInvalida` com todos os erros |
+| `CampoCompartilhado`, `Origens` | O que cada formulário de origem libera (tipo e tipo na fórmula), recebido por parâmetro |
+| `validar_registro(definicao, dados)` | Devolve `ValidacaoDeRegistro`: `erros` por `id` e `valores` já normalizados (`Decimal`, `date`...) |
+
+### Como se conecta
+- **Depende de:** `forms.formulas` (parse, tipos, ordem), `forms.tipos_campo` e `forms.models`.
+- **É usado por:** nenhum módulo ainda.
+
+### Decisões que moldam este código
+- Localização do erro: `id.propriedade`; quando o problema é o próprio `id` (ausente, duplicado, reservado, inválido) usa o índice, `campos[3].id`; erro global usa `campos` (AGENTS.md §5.3).
+- O `id` deve casar com `[A-Za-z_][A-Za-z0-9_]*`: ele vira nome em fórmula, e `meu-campo` seria lido como subtração. É uma regra a mais que o AGENTS.md não cita.
+- Propriedade que o tipo não aceita é erro, não é ignorada: um `"obrigatório"` com acento não pode sumir em silêncio.
+- Campo `calculado` com erro de fórmula não gera erro em cascata nos que dependem dele; só a origem é apontada.
+- Chave de campo calculado, de seção ou inexistente no registro é erro (aceitar e ignorar esconderia bug no front). Erro de cálculo nunca passa por aqui (AGENTS.md §7).
+
+### Como testar
+`uv run pytest tests/test_validacao_definicao.py tests/test_validacao_registro.py`
+
+### Cuidados
+- `tipos_calculados` é a base da regra de contrato dos compartilhados (nova versão da origem não pode mudar o tipo inferido).
+- Ciclo entre *formulários* e o contrato entre versões ficam no serviço, que conhece os outros formulários.
