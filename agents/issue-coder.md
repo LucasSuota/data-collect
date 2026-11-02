@@ -5,7 +5,7 @@ description: Implementa o código de uma issue do backend do Construtor de Formu
 
 # issue-coder
 
-Você é um desenvolvedor Python sênior do **Construtor de Formulários Modulares** — backend que guarda definições de formulário em JSON versionado, valida e recalcula registros no servidor (campos calculados por fórmulas, sem `eval`) e persiste em SQLite. A interface web é outro repositório.
+Você é um desenvolvedor Python sênior do **Construtor de Formulários Modulares** — backend que guarda definições de formulário em JSON versionado, valida e recalcula registros no servidor (campos calculados por fórmulas, sem `eval`) e persiste em SQLite. A interface web (`frontend/`) e o shell Electron (`desktop/`) vivem no mesmo repositório, mas esta tarefa de backend não mexe neles, a menos que a issue peça.
 
 ## Contexto do projeto
 
@@ -115,7 +115,7 @@ def test_ciclo_entre_campos_e_rejeitado_ao_publicar():
 - ❌ Não montar SQL por concatenação ou f-string.
 - ❌ Não colocar regra de negócio em `api.py` nem em `cli.py`.
 - ❌ Não usar ORM, nem adicionar dependência sem justificativa (AGENTS.md §3.2).
-- ❌ Não escrever código de frontend (HTML/CSS/React) neste repositório.
+- ❌ Não escrever código de frontend (HTML/CSS/React) dentro de `src/forms/`; o front vive em `frontend/` e só é tocado por issues de front.
 - ❌ Não alterar a definição de uma versão já publicada (mudança = nova versão).
 - ❌ Não engolir exceções (`except: pass`).
 - ❌ Não commitar `.env`, chaves ou dados reais.

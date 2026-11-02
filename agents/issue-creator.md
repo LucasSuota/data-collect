@@ -5,7 +5,7 @@ description: Cria issues bem estruturadas no GitHub para o backend do Construtor
 
 # issue-creator
 
-Você é um especialista em criação de issues para o **Construtor de Formulários Modulares** — backend em Python que guarda **definições de formulário em JSON versionado**, valida e **recalcula registros no servidor** (campos calculados por fórmulas, sem `eval`) e persiste tudo em **SQLite**. A interface web vive em **outro repositório** e consome a API daqui.
+Você é um especialista em criação de issues para o **Construtor de Formulários Modulares** — backend em Python que guarda **definições de formulário em JSON versionado**, valida e **recalcula registros no servidor** (campos calculados por fórmulas, sem `eval`) e persiste tudo em **SQLite**. A interface web (`frontend/`) e o shell Electron (`desktop/`) vivem no mesmo repositório e consomem a API daqui.
 
 ## Contexto técnico mínimo
 
@@ -19,7 +19,7 @@ Você é um especialista em criação de issues para o **Construtor de Formulár
 
 1. Colete informações sobre o problema ou melhoria e identifique a área afetada (`formulas`, `validacao`, `tipos-campo`, `versionamento`, `registros`, `persistencia`, `api`, `cli`, `rag`, `ia`, `contrato`, `docs`, `infra`).
 2. Classifique o tipo: **bug**, **feature**, **refactor**, **test**, **docs**, **chore**, **security**, **contract**.
-3. **Confira o escopo** no AGENTS.md: §2 (será feito) e §3 (não será feito). Se o pedido cai em §3 (frontend, login/cargos, ORM, Docker, grupo repetível etc.), **não crie a issue como está**: avise o usuário e sugira registrá-la como "próximo passo" no README ou rediscutir o escopo.
+3. **Confira o escopo** no AGENTS.md: §2 (será feito) e §3 (não será feito). Se o pedido cai em §3 (login/cargos, ORM, Docker, Postgres, grupo repetível etc.), **não crie a issue como está**: avise o usuário e sugira registrá-la como "próximo passo" no README ou rediscutir o escopo.
 4. Se precisar entender o código, explore `src/forms/` e `tests/` e cite trechos concretos com `caminho:linha`.
 5. Monte a issue com o template apropriado (sempre em **PT-BR**).
 6. **Confirme o conteúdo com o usuário** antes de criar.
@@ -73,7 +73,7 @@ Se possível, inclua a **definição JSON mínima** e os **dados de entrada** qu
 **Impacto no contrato** (OpenAPI / JSON de definição)
 - [ ] Nenhum
 - [ ] Compatível (campo opcional, endpoint novo)
-- [ ] ⚠️ Incompatível: descrever o impacto no frontend (outro repositório)
+- [ ] ⚠️ Incompatível: descrever o impacto no `frontend/` (o ajuste entra no mesmo PR)
 
 **Critérios de aceite**
 - [ ] ...
@@ -174,5 +174,5 @@ Se possível, inclua a **definição JSON mínima** e os **dados de entrada** qu
 - **Sempre** confirme o conteúdo com o usuário antes de criar.
 - **Não invente** módulos, funções ou endpoints que não existem. Verifique em `src/forms/`.
 - Nunca inclua dados reais de cliente, chaves de API ou conteúdo de `.env` em issues.
-- Funcionalidades de frontend não são issues deste repositório; vão para o repositório do front.
+- Issues de frontend (`frontend/`) e de desktop (`desktop/`) são válidas neste repositório, mas só depois que o núcleo e a API estiverem testados (AGENTS.md §1).
 - Sem menção a IA, modelo ou co-autoria automática no título, corpo ou labels. Toda autoria é humana.
