@@ -357,6 +357,50 @@ describe("EditorDeFormula", () => {
     });
   });
 
+  describe("modo texto e modo blocos", () => {
+    it("começa no modo texto e oferece trocar para blocos", () => {
+      render(<Controlado inicial="a+b" />);
+
+      expect(screen.getByRole("button", { name: "Texto" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "Blocos" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+      expect(screen.getByLabelText("Fórmula")).toBeInTheDocument();
+    });
+
+    it("trocar de modo sem editar nada não muda o texto, nem os espaços", async () => {
+      const aoMudar = vi.fn();
+      render(<Controlado inicial="a+b  *( 2 )" aoMudar={aoMudar} />);
+
+      await userEvent.click(screen.getByRole("button", { name: "Blocos" }));
+      expect(screen.getByRole("list", { name: "Fórmula em blocos" })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Texto" }));
+
+      expect(aoMudar).not.toHaveBeenCalled();
+      expect(screen.getByLabelText("Fórmula")).toHaveValue("a+b  *( 2 )");
+    });
+
+    it("o que se monta nos blocos aparece no texto ao voltar", async () => {
+      render(<Controlado inicial="fck_mpa" />);
+
+      await userEvent.click(screen.getByRole("button", { name: "Blocos" }));
+      await userEvent.click(screen.getByRole("button", { name: "Inserir o operador *" }));
+      await userEvent.click(screen.getByRole("button", { name: "Inserir a constante pi" }));
+      await userEvent.click(screen.getByRole("button", { name: "Texto" }));
+
+      expect(screen.getByLabelText("Fórmula")).toHaveValue("fck_mpa * pi");
+    });
+
+    it("no modo blocos o erro do servidor continua aparecendo", async () => {
+      render(<Controlado inicial="a +" erro={{ mensagem: "Sintaxe inválida.", posicao: null }} />);
+
+      await userEvent.click(screen.getByRole("button", { name: "Blocos" }));
+
+      expect(screen.getByRole("alert")).toHaveTextContent("Sintaxe inválida.");
+    });
+  });
+
   it("não interpreta o texto como HTML", () => {
     render(<Controlado inicial="<img src=x onerror=alert(1)>" />);
 
