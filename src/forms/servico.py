@@ -33,7 +33,12 @@ from forms.servico_base import (
     referencias_brutas,
     transacao,
 )
-from forms.servico_consulta import ListagemDeRegistros, exportar_csv, listar_registros
+from forms.servico_consulta import (
+    LIMITE_PADRAO,
+    ListagemDeRegistros,
+    exportar_csv,
+    listar_registros,
+)
 from forms.servico_registros import (
     ResultadoDaPrevia,
     atualizar_registro,
@@ -45,6 +50,9 @@ from forms.servico_registros import (
 )
 from forms.tipos_campo import ESPECIFICACOES, PROPRIEDADES_COMUNS
 from forms.validacao import CampoCompartilhado
+
+# O tipo da conexão, para quem chama o `servico` sem importar `sqlite3` (a CLI, por exemplo).
+Conexao = sqlite3.Connection
 
 # --- tipos de entrada e saída ---
 
@@ -106,7 +114,24 @@ class Catalogo:
     nomes_reservados: tuple[str, ...]
 
 
-# --- leitura ---
+# --- banco e leitura ---
+
+
+def abrir_banco(caminho: Path | str) -> Conexao:
+    """Abre (e cria, se preciso) o banco, com o esquema migrado para a versão atual."""
+    if str(caminho) != ":memory:":
+        Path(caminho).parent.mkdir(parents=True, exist_ok=True)
+    return repositorio.abrir_conexao(caminho)
+
+
+def localizar_formulario(conexao: Conexao, referencia: str) -> FormularioComVersao:
+    """Formulário pelo `id` (só dígitos) ou pelo nome (sem diferenciar caixa nem espaços)."""
+    if referencia.strip().isdigit():
+        return obter_formulario(conexao, int(referencia))
+    formulario = repositorio.obter_formulario_por_nome(conexao, referencia)
+    if formulario is None:
+        raise NaoEncontrado(f"Formulário '{referencia}' não encontrado.")
+    return obter_formulario(conexao, formulario.id)
 
 
 def listar_formularios(conexao: sqlite3.Connection) -> list[ResumoDeFormulario]:
@@ -489,6 +514,8 @@ def _gravar(
 # `api.py` e `cli.py` chamam tudo por aqui; cada grupo de casos de uso mora no seu módulo.
 __all__ = [
     "FUNCOES",
+    "Conexao",
+    "LIMITE_PADRAO",
     "Catalogo",
     "FormularioComVersao",
     "FormularioCriado",
@@ -496,6 +523,7 @@ __all__ = [
     "Rascunho",
     "ResultadoDaPrevia",
     "ResultadoDaValidacao",
+    "abrir_banco",
     "atualizar_registro",
     "catalogo",
     "criar_formulario",
@@ -512,6 +540,7 @@ __all__ = [
     "listar_formularios",
     "listar_registros",
     "listar_versoes",
+    "localizar_formulario",
     "obter_formulario",
     "obter_registro",
     "obter_versao",

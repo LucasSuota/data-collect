@@ -2,7 +2,7 @@
 
 > Backend Python do construtor de formulários: definições em JSON versionadas, validação, fórmulas e persistência em SQLite.
 
-Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `fotos.py`, `exportacao.py` e os módulos `servico*.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
+Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `fotos.py`, `exportacao.py`, `cli.py` e os módulos `servico*.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
 
 ## models.py
 
@@ -221,7 +221,7 @@ Os casos de uso, chamados igualmente por `api.py` e `cli.py`. Toda regra de neg�
 ### O que tem aqui
 | Arquivo | Papel |
 |---|---|
-| `servico.py` | Fachada: formulários e versões (criar, publicar, lote, validar, catálogo) e reexportação de todo o resto, então a API chama `servico.<função>` |
+| `servico.py` | Fachada: formulários e versões (criar, publicar, lote, validar, catálogo, importar template) e reexportação de todo o resto, então a API chama `servico.<função>` |
 | `servico_base.py` | Transação (`transacao`), campos compartilhados dos formulários publicados e o `Cache` de uma operação |
 | `servico_registros.py` | Criar, atualizar (com cascata), excluir registro, excluir formulário e prévia |
 | `servico_anexos.py` | Upload de foto em duas etapas, leitura do WebP, limpeza de órfãos e os arquivos da pasta de dados |
@@ -229,7 +229,7 @@ Os casos de uso, chamados igualmente por `api.py` e `cli.py`. Toda regra de neg�
 
 ### Como se conecta
 - **Depende de:** `repositorio`, `validacao`, `formulas`, `tipos_campo`, `fotos`, `exportacao` e `models`.
-- **É usado por:** nenhum módulo ainda (`api.py` e `cli.py` virão).
+- **É usado por:** `cli.py` (a `api.py` virá).
 
 ### Decisões que moldam este código
 - Publicar um formulário, uma versão e um lote usam **o mesmo motor** (`_validar_conjunto`): um formulário é o conjunto de 1, então mensagens e posições são idênticas.
@@ -247,3 +247,34 @@ Os casos de uso, chamados igualmente por `api.py` e `cli.py`. Toda regra de neg�
 - `transacao` usa `BEGIN` explícito e não aceita ser chamada com uma transação já aberta: quem chama não deve deixar uma aberta.
 - Os campos compartilhados de uma origem e o tipo inferido de um `calculado` são recalculados reanalisando a definição publicada (não são guardados); `Cache` evita repetir isso dentro de uma operação.
 - A exportação CSV é a primeira candidata a corte se o tempo apertar (AGENTS.md §11).
+
+## cli.py
+
+### Responsabilidade
+Linha de comando enxuta sobre o `servico`: importar template, criar registro a partir de JSON, listar e exportar. Só `argparse` e impressão; **nenhuma regra de negócio** (um teste confere que não importa repositório, validação, fórmulas nem `sqlite3`).
+
+### O que tem aqui
+| Comando | Papel |
+|---|---|
+| `forms importar-template ARQUIVO... [--nome N]` | Cria formulários a partir de JSON; vários de uma vez entram em lote, em qualquer ordem |
+| `forms criar-registro FORMULARIO --dados ARQUIVO\|- [--versao ID]` | Cria um registro e mostra os campos calculados |
+| `forms listar [FORMULARIO] [--filtro CAMPO=VALOR]... [--limite N] [--deslocamento N]` | Sem argumento, lista os formulários; com ele, os registros |
+| `forms exportar FORMULARIO [--saida ARQUIVO] [--filtro ...]` | CSV para o Excel em português (UTF-8 com BOM, `;`, vírgula decimal) |
+
+O banco vem de `--banco` (ou da variável `FORMS_BANCO`; padrão `forms.db`). O formulário é dado pelo nome ou pelo id.
+
+### Como se conecta
+- **Depende de:** `forms.servico`, `forms.exportacao` (só para formatar células) e `forms.models`.
+- **É usado por:** o comando `forms` (`[project.scripts]` em `pyproject.toml`).
+
+### Decisões que moldam este código
+- Erro de domínio vira mensagem em português no `stderr` e código de saída 1; erro de uso do `argparse` sai com 2.
+- O relógio entra por parâmetro em `main` (`relogio`), então os testes são determinísticos.
+- Foto não é suportada pela CLI (o envio usa o seletor de arquivo do front).
+
+### Como testar
+`uv run pytest tests/test_cli.py`
+
+### Cuidados
+- CLI além de importar e listar é linha de corte (AGENTS.md §11).
+- A exportação sem `--saida` escreve bytes (com BOM) em `stdout.buffer`, para um redirecionamento `> arquivo.csv` abrir certo no Excel.

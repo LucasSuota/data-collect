@@ -11,6 +11,9 @@ dependencies = [
     "pillow>=13.0.0",
 ]
 
+[project.scripts]
+forms = "forms.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8",
