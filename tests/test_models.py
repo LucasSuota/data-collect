@@ -15,6 +15,7 @@ from forms.models import (
     ExclusaoBloqueada,
     FormulaInvalida,
     Formulario,
+    FotoInvalida,
     NaoEncontrado,
     Posicao,
     Registro,
@@ -197,6 +198,7 @@ def test_formula_invalida_aceita_posicao_ausente():
         NaoEncontrado("x"),
         ExclusaoBloqueada("x"),
         ValorInvalido("x"),
+        FotoInvalida("x"),
     ],
 )
 def test_excecoes_de_dominio_herdam_da_base(excecao: Exception):
