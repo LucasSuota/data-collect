@@ -386,7 +386,12 @@ describe("FormRenderer: referência", () => {
       />,
       clienteFalso({
         listarFormularios: async () => [origem],
-        listarRegistros: async () => ({ versao_id: 1, total: 1, itens: [registro(11)] }),
+        listarRegistros: async () => ({
+          versao_id: 1,
+          colunas: [],
+          total: 1,
+          itens: [registro(11)],
+        }),
       }),
     );
 
@@ -410,7 +415,7 @@ describe("FormRenderer: referência", () => {
       <Controlado {...semPrevia} definicao={definicao} />,
       clienteFalso({
         listarFormularios: async () => [origem],
-        listarRegistros: async () => ({ versao_id: 1, total: 0, itens: [] }),
+        listarRegistros: async () => ({ versao_id: 1, colunas: [], total: 0, itens: [] }),
       }),
     );
 

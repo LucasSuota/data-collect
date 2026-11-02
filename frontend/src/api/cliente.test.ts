@@ -77,7 +77,7 @@ describe("criarCliente", () => {
 
     it("monta a listagem com versão, janela, datas e filtros repetidos como campo:valor", async () => {
       const { cliente, fetchFalso } = clienteCom(
-        respostaDe({ corpo: { versao_id: 1, itens: [], total: 0 } }),
+        respostaDe({ corpo: { versao_id: 1, colunas: [], itens: [], total: 0 } }),
       );
 
       await cliente.listarRegistros(7, {
@@ -101,7 +101,7 @@ describe("criarCliente", () => {
 
     it("não põe parâmetros que não foram pedidos", async () => {
       const { cliente, fetchFalso } = clienteCom(
-        respostaDe({ corpo: { versao_id: 1, itens: [], total: 0 } }),
+        respostaDe({ corpo: { versao_id: 1, colunas: [], itens: [], total: 0 } }),
       );
 
       await cliente.listarRegistros(7);
@@ -111,7 +111,7 @@ describe("criarCliente", () => {
 
     it("escapa o valor do filtro", async () => {
       const { cliente, fetchFalso } = clienteCom(
-        respostaDe({ corpo: { versao_id: 1, itens: [], total: 0 } }),
+        respostaDe({ corpo: { versao_id: 1, colunas: [], itens: [], total: 0 } }),
       );
 
       await cliente.listarRegistros(1, { filtros: { obs: "a&b=c d" } });
