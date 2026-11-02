@@ -128,6 +128,7 @@ def test_banco_novo_tem_as_tabelas_do_modelo_de_dados(conexao: sqlite3.Connectio
         "dependencias_formulario",
         "referencias_registro",
         "anexos",
+        "vetores_trechos",
     }
 
 
@@ -486,4 +487,36 @@ def test_depois_de_atualizar_a_unicidade_do_nome_vale_para_os_formularios_antigo
         conexao.execute(
             "INSERT INTO formularios (nome, nome_chave, criado_em) VALUES ('ENSAIO', 'ensaio', 'x')"
         )
+    conexao.close()
+
+
+# --- atualização real: esquema 2 (já em disco) -> esquema 3 ---
+
+
+def test_atualizar_do_esquema_2_para_o_3_cria_a_tabela_de_vetores_sem_perder_dados(tmp_path: Path):
+    # arrange: banco real da v2 (migrações 1 e 2), com um formulário e um registro
+    caminho = tmp_path / "dados.db"
+    bruto = sqlite3.connect(caminho)
+    migrar(bruto, MIGRACOES[:2])
+    bruto.execute("INSERT INTO formularios (nome, nome_chave, criado_em) VALUES ('a', 'a', 'x')")
+    bruto.execute(
+        "INSERT INTO versoes_formulario (formulario_id, numero, definicao, publicada_em)"
+        " VALUES (1, 1, '{\"campos\": []}', 'x')"
+    )
+    bruto.execute(
+        "INSERT INTO registros (formulario_id, versao_id, dados, criado_em, atualizado_em)"
+        " VALUES (1, 1, '{\"n\": \"1\"}', 'x', 'x')"
+    )
+    bruto.commit()
+    assert bruto.execute("PRAGMA user_version").fetchone()[0] == 2
+    bruto.close()
+
+    # act
+    conexao = abrir_conexao(caminho)
+
+    # assert
+    assert _versao_do_esquema(conexao) == VERSAO_ATUAL_DO_ESQUEMA >= 3
+    assert _colunas(conexao, "vetores_trechos") == ["chave", "vetor"]
+    assert conexao.execute("SELECT dados FROM registros").fetchone()["dados"] == '{"n": "1"}'
+    assert conexao.execute("SELECT nome_chave FROM formularios").fetchone()[0] == "a"
     conexao.close()

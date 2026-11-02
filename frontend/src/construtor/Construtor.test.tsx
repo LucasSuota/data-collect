@@ -522,3 +522,147 @@ describe("Construtor: editar um formulário (nova versão)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Formulário 99 não encontrado.");
   });
 });
+
+describe("Construtor: criar com IA", () => {
+  it("no formulário novo há a ação Criar com IA, que leva à tela da IA", async () => {
+    const { navegar } = renderizar();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Criar com IA" }));
+
+    expect(navegar).toHaveBeenCalledWith({ nome: "criarComIa" });
+  });
+
+  it("ao editar um formulário publicado a ação não aparece", async () => {
+    renderizar(
+      { tipo: "editar", formularioId: 1 },
+      {
+        obterFormulario: async () => ({
+          id: 1,
+          nome: "Ensaio",
+          criado_em: "x",
+          versao_atual: {
+            id: 1,
+            formulario_id: 1,
+            numero: 1,
+            definicao: { campos: [] },
+            publicada_em: "x",
+          },
+        }),
+      },
+    );
+
+    await screen.findByRole("button", { name: "Publicar nova versão" });
+    expect(screen.queryByRole("button", { name: "Criar com IA" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Construtor: editar um rascunho da IA", () => {
+  const definicao = {
+    campos: [
+      { id: "umidade", tipo: "numero", rotulo: "Umidade", unidade: "%" },
+      { id: "ok", tipo: "calculado", rotulo: "OK", formula: "umidade >> 3" },
+    ],
+  };
+
+  function modoRascunho() {
+    const aoConcluir = vi.fn();
+    const aoCancelar = vi.fn();
+    const modo: ModoDoConstrutor = {
+      tipo: "rascunho",
+      rascunho: {
+        chave: "r1",
+        nome: "Insitu",
+        definicao,
+        erros: [{ campo: "ok.formula", mensagem: "Operador não permitido." }],
+      },
+      nomesDosIrmaos: ["Solo"],
+      aoConcluir,
+      aoCancelar,
+    };
+    return { modo, aoConcluir, aoCancelar };
+  }
+
+  it("carrega o nome e os campos do rascunho", async () => {
+    const { modo } = modoRascunho();
+    renderizar(modo);
+
+    expect(await screen.findByLabelText("Nome do formulário")).toHaveValue("Insitu");
+    expect(nomesDosCampos()).toEqual(["Umidade", "OK"]);
+  });
+
+  it("mostra no campo certo os erros que a IA deixou", async () => {
+    const { modo } = modoRascunho();
+    renderizar(modo);
+
+    const campoComErro = await screen.findByRole("button", { name: "Selecionar o campo OK" });
+    expect(campoComErro).toHaveTextContent("1 erro(s)");
+    await userEvent.click(campoComErro);
+
+    expect(await screen.findByText("Operador não permitido.")).toBeInTheDocument();
+  });
+
+  it("não valida no servidor enquanto edita: a validação do conjunto é ao publicar todos", async () => {
+    const validarDefinicao = vi.fn(valida);
+    const { modo } = modoRascunho();
+    renderizar(modo, { validarDefinicao });
+
+    await adicionar("Texto");
+    await act(async () => {
+      await new Promise((resolver) => setTimeout(resolver, 60));
+    });
+
+    expect(validarDefinicao).not.toHaveBeenCalled();
+  });
+
+  it("Concluir edição entrega o nome e a definição editados", async () => {
+    const { modo, aoConcluir } = modoRascunho();
+    renderizar(modo);
+    const nome = await screen.findByLabelText("Nome do formulário");
+    await userEvent.clear(nome);
+    await userEvent.type(nome, "Insitu 2");
+    await adicionar("Texto");
+
+    await userEvent.click(screen.getByRole("button", { name: "Concluir edição" }));
+
+    expect(aoConcluir).toHaveBeenCalledWith("Insitu 2", {
+      campos: [
+        { id: "umidade", tipo: "numero", rotulo: "Umidade", unidade: "%" },
+        { id: "ok", tipo: "calculado", rotulo: "OK", formula: "umidade >> 3" },
+        { id: "texto_1", tipo: "texto", rotulo: "Texto" },
+      ],
+    });
+  });
+
+  it("Cancelar descarta a edição", async () => {
+    const { modo, aoConcluir, aoCancelar } = modoRascunho();
+    renderizar(modo);
+    await adicionar("Texto");
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    expect(aoCancelar).toHaveBeenCalledOnce();
+    expect(aoConcluir).not.toHaveBeenCalled();
+  });
+
+  it("não oferece publicar nem Criar com IA: quem publica é a tela da IA, todos de uma vez", async () => {
+    const { modo } = modoRascunho();
+    renderizar(modo);
+
+    await screen.findByLabelText("Nome do formulário");
+    expect(screen.queryByRole("button", { name: /^Publicar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Criar com IA" })).not.toBeInTheDocument();
+  });
+
+  it("a referência pode apontar para os outros rascunhos e para os formulários já publicados", async () => {
+    const { modo } = modoRascunho();
+    renderizar(modo);
+    await adicionar("Referência");
+
+    const origem = await screen.findByLabelText("Formulário de origem");
+
+    const opcoes = within(origem)
+      .getAllByRole("option")
+      .map((o) => o.textContent);
+    expect(opcoes).toEqual(["— escolha —", "Ensaio", "Proctor", "Solo"]);
+  });
+});

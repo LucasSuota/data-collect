@@ -17,6 +17,8 @@ export type ResultadoPrevia = Esquemas["PreviaSaida"];
 export type ResultadoCalculado = Esquemas["ResultadoCalculadoSaida"];
 export type Catalogo = Esquemas["CatalogoSaida"];
 export type Anexo = Esquemas["AnexoSaida"];
+export type RascunhoGerado = Esquemas["RascunhoGeradoSaida"];
+export type PropostaDaIa = Esquemas["GerarSaida"];
 
 export const CABECALHO_DO_TOKEN = "X-Forms-Token";
 const URL_LOCAL_PADRAO = "http://127.0.0.1:8000";
@@ -149,6 +151,14 @@ export function criarCliente(configuracao: Configuracao) {
     previa: (definicao: unknown, valores: unknown) =>
       json<ResultadoPrevia>("POST", "/definicoes/previa", { corpo: { definicao, valores } }),
     catalogo: () => json<Catalogo>("GET", "/catalogo"),
+    /** Propõe formulários a partir de um pedido; nunca salva nada (AGENTS.md §2.5). */
+    gerarFormularios: (entrada: {
+      pedido: string;
+      rascunhos?: { nome: string; definicao: unknown }[];
+    }) =>
+      json<PropostaDaIa>("POST", "/definicoes/gerar", {
+        corpo: { pedido: entrada.pedido, rascunhos: entrada.rascunhos ?? [] },
+      }),
 
     // registros
     criarRegistro: (formularioId: number, versaoId: number, dados: unknown) =>

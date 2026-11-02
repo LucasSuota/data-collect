@@ -17,6 +17,11 @@ dependencies = [
 forms = "forms.cli:main"
 forms-openapi = "forms.exportar_openapi:main"
 
+[project.optional-dependencies]
+ia = [
+    "anthropic>=2.3.0",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8",

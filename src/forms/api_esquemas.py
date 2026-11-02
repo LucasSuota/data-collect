@@ -26,7 +26,7 @@ from forms.repositorio import ResumoDeFormulario, ResumoDeVersao
 from forms.servico import Catalogo
 
 
-class _Modelo(BaseModel):
+class Modelo(BaseModel):
     # Resposta com campo a mais ou a menos é bug de contrato: falha em vez de passar calada.
     model_config = ConfigDict(extra="forbid")
 
@@ -34,14 +34,14 @@ class _Modelo(BaseModel):
 # --- erros ---
 
 
-class PosicaoSaida(_Modelo):
+class PosicaoSaida(Modelo):
     """Trecho da fórmula (offsets em caracteres) para o front sublinhar."""
 
     inicio: int
     fim: int
 
 
-class ErroDeCampoSaida(_Modelo):
+class ErroDeCampoSaida(Modelo):
     campo: str = Field(description="`id` do campo, ex.: `resistencia_mpa.formula`.")
     mensagem: str
     posicao: PosicaoSaida | None = None
@@ -58,7 +58,7 @@ class ErroDeCampoSaida(_Modelo):
         )
 
 
-class ErroSaida(_Modelo):
+class ErroSaida(Modelo):
     """Formato uniforme de toda resposta de erro (401, 404, 409, 422...)."""
 
     detalhe: str
@@ -68,20 +68,20 @@ class ErroSaida(_Modelo):
 # --- formulários e versões ---
 
 
-class FormularioEntrada(_Modelo):
+class FormularioEntrada(Modelo):
     nome: str
     definicao: object = Field(description='Definição em JSON: `{"campos": [...]}`.')
 
 
-class LoteEntrada(_Modelo):
+class LoteEntrada(Modelo):
     formularios: list[FormularioEntrada]
 
 
-class VersaoEntrada(_Modelo):
+class VersaoEntrada(Modelo):
     definicao: object
 
 
-class ResumoDeFormularioSaida(_Modelo):
+class ResumoDeFormularioSaida(Modelo):
     id: int
     nome: str
     criado_em: str
@@ -109,7 +109,7 @@ class ResumoDeFormularioSaida(_Modelo):
         )
 
 
-class CampoSaida(_Modelo):
+class CampoSaida(Modelo):
     """Um campo da definição. Só o que foi definido aparece (o resto é omitido, não é `null`)."""
 
     id: str
@@ -147,7 +147,7 @@ class CampoSaida(_Modelo):
         return cls.model_validate(campo.para_json())
 
 
-class DefinicaoSaida(_Modelo):
+class DefinicaoSaida(Modelo):
     campos: list[CampoSaida]
 
     @classmethod
@@ -155,7 +155,7 @@ class DefinicaoSaida(_Modelo):
         return cls(campos=[CampoSaida.de(campo) for campo in definicao.campos])
 
 
-class VersaoSaida(_Modelo):
+class VersaoSaida(Modelo):
     id: int
     formulario_id: int
     numero: int
@@ -173,7 +173,7 @@ class VersaoSaida(_Modelo):
         )
 
 
-class ResumoDeVersaoSaida(_Modelo):
+class ResumoDeVersaoSaida(Modelo):
     id: int
     numero: int
     publicada_em: str
@@ -183,7 +183,7 @@ class ResumoDeVersaoSaida(_Modelo):
         return cls(id=resumo.id, numero=resumo.numero, publicada_em=resumo.publicada_em)
 
 
-class FormularioDetalheSaida(_Modelo):
+class FormularioDetalheSaida(Modelo):
     id: int
     nome: str
     criado_em: str
@@ -193,18 +193,18 @@ class FormularioDetalheSaida(_Modelo):
 # --- definições: validar, prévia, catálogo ---
 
 
-class ValidarEntrada(_Modelo):
+class ValidarEntrada(Modelo):
     definicao: object
 
 
-class ValidarSaida(_Modelo):
+class ValidarSaida(Modelo):
     """Responde 200 mesmo com erros: definição incompleta é o caso normal ao editar."""
 
     valida: bool
     erros: list[ErroDeCampoSaida]
 
 
-class PreviaEntrada(_Modelo):
+class PreviaEntrada(Modelo):
     definicao: object
     valores: object = Field(
         default_factory=dict,
@@ -214,7 +214,7 @@ class PreviaEntrada(_Modelo):
     )
 
 
-class ResultadoCalculadoSaida(_Modelo):
+class ResultadoCalculadoSaida(Modelo):
     valor: str | bool | None
     erro: str | None
 
@@ -223,33 +223,33 @@ class ResultadoCalculadoSaida(_Modelo):
         return cls(valor=resultado.valor, erro=resultado.erro)
 
 
-class PreviaSaida(_Modelo):
+class PreviaSaida(Modelo):
     valida: bool
     erros: list[ErroDeCampoSaida]
     calculados: dict[str, ResultadoCalculadoSaida]
 
 
-class TipoDoCatalogoSaida(_Modelo):
+class TipoDoCatalogoSaida(Modelo):
     id: str
     rotulo: str
     propriedades: list[str]
 
 
-class FuncaoDoCatalogoSaida(_Modelo):
+class FuncaoDoCatalogoSaida(Modelo):
     nome: str
     assinatura: str
     descricao: str
     exemplo: str
 
 
-class ConstanteDoCatalogoSaida(_Modelo):
+class ConstanteDoCatalogoSaida(Modelo):
     nome: str
     valor: str
     tipo: str
     descricao: str
 
 
-class CatalogoSaida(_Modelo):
+class CatalogoSaida(Modelo):
     tipos: list[TipoDoCatalogoSaida]
     funcoes: list[FuncaoDoCatalogoSaida]
     constantes: list[ConstanteDoCatalogoSaida]
@@ -281,20 +281,20 @@ class CatalogoSaida(_Modelo):
 # --- registros ---
 
 
-class RegistroEntrada(_Modelo):
+class RegistroEntrada(Modelo):
     versao_id: int = Field(
         description="Versão que o front renderizou; o servidor não valida contra outra."
     )
     dados: object = Field(description="Só campos de entrada. Número como número ou string.")
 
 
-class RegistroAtualizacao(_Modelo):
+class RegistroAtualizacao(Modelo):
     """`PUT` substitui todos os valores (não há `PATCH`)."""
 
     dados: object
 
 
-class RegistroSaida(_Modelo):
+class RegistroSaida(Modelo):
     id: int
     formulario_id: int
     versao_id: int
@@ -316,7 +316,7 @@ class RegistroSaida(_Modelo):
         )
 
 
-class ColunaSaida(_Modelo):
+class ColunaSaida(Modelo):
     """Uma coluna da listagem, derivada da definição da versão listada (sem `secao`)."""
 
     id: str
@@ -358,7 +358,7 @@ def coluna_de(coluna: Coluna) -> ColunaSaida:
     )
 
 
-class ListagemDeRegistrosSaida(_Modelo):
+class ListagemDeRegistrosSaida(Modelo):
     versao_id: int = Field(description="Versão listada (a última, se `versao_id` não foi pedido).")
     colunas: list[ColunaSaida]
     itens: list[RegistroSaida]
@@ -368,7 +368,7 @@ class ListagemDeRegistrosSaida(_Modelo):
 # --- anexos ---
 
 
-class AnexoSaida(_Modelo):
+class AnexoSaida(Modelo):
     id: int
     largura: int
     altura: int

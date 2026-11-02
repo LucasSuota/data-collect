@@ -261,6 +261,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/definicoes/gerar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propõe formulários a partir de um pedido em texto
+         * @description Nunca salva: devolve rascunhos validados pelo mesmo código da publicação. Rascunho com `erros` segue para o construtor para a pessoa corrigir. Aprovados, são publicados de uma vez por `POST /formularios/lote`.
+         */
+        post: operations["gerar_formularios_definicoes_gerar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/formularios/{formulario_id}/resumo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume os registros de uma versão com a IA
+         * @description Mesma versão e mesmos filtros da listagem. O código calcula os agregados e a IA só redige; se algum número do texto não bater com eles, o resumo é descartado (502).
+         */
+        post: operations["resumir_registros_formularios__formulario_id__resumo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistente/perguntar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Responde a uma pergunta só com os procedimentos
+         * @description Busca nos procedimentos (BM25, mais busca semântica se houver provedor de embeddings) e a IA redige a resposta só com os trechos recuperados. Sem base nos documentos, responde que não encontrou. Sem IA, devolve só os trechos.
+         */
+        post: operations["perguntar_aos_procedimentos_assistente_perguntar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -428,6 +488,24 @@ export interface components {
             /** Exemplo */
             exemplo: string;
         };
+        /** GerarEntrada */
+        GerarEntrada: {
+            /**
+             * Pedido
+             * @description O que a pessoa quer, em texto livre.
+             */
+            pedido: string;
+            /**
+             * Rascunhos
+             * @description Rascunhos em edição, para refinar (ex.: 'adicione o campo X').
+             */
+            rascunhos?: components["schemas"]["FormularioEntrada"][];
+        };
+        /** GerarSaida */
+        GerarSaida: {
+            /** Formularios */
+            formularios: components["schemas"]["RascunhoGeradoSaida"][];
+        };
         /** ListagemDeRegistrosSaida */
         ListagemDeRegistrosSaida: {
             /**
@@ -446,6 +524,11 @@ export interface components {
         LoteEntrada: {
             /** Formularios */
             formularios: components["schemas"]["FormularioEntrada"][];
+        };
+        /** PerguntaEntrada */
+        PerguntaEntrada: {
+            /** Pergunta */
+            pergunta: string;
         };
         /**
          * PosicaoSaida
@@ -477,6 +560,21 @@ export interface components {
             calculados: {
                 [key: string]: components["schemas"]["ResultadoCalculadoSaida"];
             };
+        };
+        /** RascunhoGeradoSaida */
+        RascunhoGeradoSaida: {
+            /** Nome */
+            nome: string;
+            /**
+             * Definicao
+             * @description Definição proposta; pode estar inválida (veja `erros`).
+             */
+            definicao: unknown;
+            /**
+             * Erros
+             * @description Vazio quando passou na validação; senão, para a pessoa corrigir no construtor.
+             */
+            erros: components["schemas"]["ErroDeCampoSaida"][];
         };
         /**
          * RegistroAtualizacao
@@ -519,6 +617,20 @@ export interface components {
             /** Atualizado Em */
             atualizado_em: string;
         };
+        /** RespostaSaida */
+        RespostaSaida: {
+            /** Encontrou */
+            encontrou: boolean;
+            /**
+             * Texto
+             * @description Resposta redigida pela IA; nulo quando só há os trechos para mostrar.
+             */
+            texto: string | null;
+            /** Usou Ia */
+            usou_ia: boolean;
+            /** Trechos */
+            trechos: components["schemas"]["TrechoSaida"][];
+        };
         /** ResultadoCalculadoSaida */
         ResultadoCalculadoSaida: {
             /** Valor */
@@ -548,6 +660,20 @@ export interface components {
             /** Publicada Em */
             publicada_em: string;
         };
+        /** ResumoSaida */
+        ResumoSaida: {
+            /** Titulo */
+            titulo: string;
+            /** Paragrafos */
+            paragrafos: string[];
+            /** Destaques */
+            destaques: string[];
+            /**
+             * Total
+             * @description Quantos registros foram resumidos (calculado pelo código).
+             */
+            total: number;
+        };
         /** TipoDoCatalogoSaida */
         TipoDoCatalogoSaida: {
             /** Id */
@@ -556,6 +682,23 @@ export interface components {
             rotulo: string;
             /** Propriedades */
             propriedades: string[];
+        };
+        /** TrechoSaida */
+        TrechoSaida: {
+            /**
+             * Arquivo
+             * @description Arquivo de origem, relativo à pasta de procedimentos.
+             */
+            arquivo: string;
+            /**
+             * Titulo
+             * @description Caminho dos títulos: 'Moldagem > Cura'.
+             */
+            titulo: string;
+            /** Texto */
+            texto: string;
+            /** Pontuacao */
+            pontuacao: number;
         };
         /** ValidarEntrada */
         ValidarEntrada: {
@@ -1545,6 +1688,199 @@ export interface operations {
                 };
                 content: {
                     "image/webp": unknown;
+                };
+            };
+            /** @description Token ausente ou inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    gerar_formularios_definicoes_gerar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GerarEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GerarSaida"];
+                };
+            };
+            /** @description Token ausente ou inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    resumir_registros_formularios__formulario_id__resumo_post: {
+        parameters: {
+            query?: {
+                versao_id?: number | null;
+                criado_de?: string | null;
+                criado_ate?: string | null;
+                /** @description `campo:valor`, repetível. */
+                filtro?: string[] | null;
+            };
+            header?: never;
+            path: {
+                formulario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumoSaida"];
+                };
+            };
+            /** @description Token ausente ou inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    perguntar_aos_procedimentos_assistente_perguntar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PerguntaEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespostaSaida"];
                 };
             };
             /** @description Token ausente ou inválido. */

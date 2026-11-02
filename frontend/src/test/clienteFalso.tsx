@@ -20,6 +20,7 @@ export function clienteFalso(sobrescritas: Partial<ClienteApi> = {}): ClienteApi
     "validarDefinicao",
     "previa",
     "catalogo",
+    "gerarFormularios",
     "criarRegistro",
     "atualizarRegistro",
     "obterRegistro",

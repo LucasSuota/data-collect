@@ -6,6 +6,7 @@ const CASOS: [string, Rota][] = [
   ["#/formularios/3/novo", { nome: "novoRegistro", formularioId: 3 }],
   ["#/registros/9", { nome: "registro", registroId: 9 }],
   ["#/construtor", { nome: "novoFormulario" }],
+  ["#/construtor/ia", { nome: "criarComIa" }],
   ["#/formularios/3/editar", { nome: "editarFormulario", formularioId: 3 }],
 ];
 
@@ -25,6 +26,8 @@ describe("rotas", () => {
     "#/registros/-1",
     "#/formularios//novo",
     "#/registros/1/x",
+    "#/construtor/outra",
+    "#/construtor/ia/x",
   ])("%s não existe", (hash) => {
     expect(lerRota(hash)).toEqual({ nome: "naoEncontrada" });
   });

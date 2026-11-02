@@ -10,6 +10,7 @@ export type Rota =
   | { nome: "novoRegistro"; formularioId: number }
   | { nome: "registro"; registroId: number }
   | { nome: "novoFormulario" }
+  | { nome: "criarComIa" }
   | { nome: "editarFormulario"; formularioId: number }
   | { nome: "naoEncontrada" };
 
@@ -21,6 +22,9 @@ export function lerRota(hash: string): Rota {
   const partes = caminho.split("/");
 
   if (partes[0] === "construtor" && partes.length === 1) return { nome: "novoFormulario" };
+  if (partes[0] === "construtor" && partes.length === 2 && partes[1] === "ia") {
+    return { nome: "criarComIa" };
+  }
   if (partes[0] === "registros" && partes.length === 2 && ehId(partes[1])) {
     return { nome: "registro", registroId: Number(partes[1]) };
   }
@@ -45,6 +49,8 @@ export function caminhoDe(rota: Rota): string {
       return `#/registros/${rota.registroId}`;
     case "novoFormulario":
       return "#/construtor";
+    case "criarComIa":
+      return "#/construtor/ia";
     case "editarFormulario":
       return `#/formularios/${rota.formularioId}/editar`;
     case "naoEncontrada":

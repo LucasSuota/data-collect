@@ -7,7 +7,7 @@ fica em `servico.py` e abaixo.
 
 import os
 import secrets
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager, closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -23,7 +23,8 @@ from starlette.exceptions import HTTPException as ExcecaoHttp
 from starlette.routing import BaseRoute, Match
 
 from forms import servico
-from forms.api_esquemas import ErroDeCampoSaida, ErroSaida
+from forms.api_esquemas import ErroDeCampoSaida
+from forms.api_extensoes import Extensao, descobrir_extensoes, resposta_de_erro
 from forms.api_rotas import CABECALHO_DO_TOKEN, roteador
 from forms.models import (
     DefinicaoInvalida,
@@ -76,12 +77,19 @@ class Configuracao:
         )
 
 
-def criar_app(configuracao: Configuracao, pasta_do_front: Path | None = None) -> FastAPI:
+def criar_app(
+    configuracao: Configuracao,
+    pasta_do_front: Path | None = None,
+    extensoes: Sequence[Extensao] = (),
+) -> FastAPI:
     """Monta a aplicação. Nada abre banco aqui: a conexão é aberta por requisição.
 
     Com `pasta_do_front` (o `frontend/dist`), serve o front na mesma origem da API (app
     instalado, §4.1): então não há CORS, e a página e os arquivos estáticos não pedem token (o
     navegador não manda cabeçalho ao carregar o `index.html`). Toda rota da API continua exigindo.
+
+    `extensoes` são as rotas dos módulos opcionais (`ia/`, `rag/`); sem elas o app é o mesmo, só
+    sem essas rotas. Elas entram antes do front e do token, então também exigem o token.
     """
 
     @asynccontextmanager
@@ -100,6 +108,10 @@ def criar_app(configuracao: Configuracao, pasta_do_front: Path | None = None) ->
     )
     app.state.configuracao = configuracao
     app.include_router(roteador)
+    for extensao in extensoes:
+        app.include_router(extensao.roteador)
+        for tipo, tratador in extensao.tratadores.items():
+            app.add_exception_handler(tipo, tratador)
     # As rotas da API (e a documentação) ficam registradas ANTES do front, que vira a "sobra".
     rotas_da_api = list(app.routes)
     if pasta_do_front is not None:
@@ -139,7 +151,7 @@ def _exigir_token(
         if configuracao.token and secrets.compare_digest(enviado, configuracao.token):
             return await chamar_proximo(request)
         # Mesma mensagem para ausente e errado: não ensina nada a quem tenta adivinhar.
-        return _resposta_de_erro(401, "Token ausente ou inválido.")
+        return resposta_de_erro(401, "Token ausente ou inválido.")
 
     return middleware
 
@@ -147,23 +159,16 @@ def _exigir_token(
 # --- erros: sempre {detalhe, erros} em português ---
 
 
-def _resposta_de_erro(
-    status: int, detalhe: str, erros: list[ErroDeCampoSaida] | None = None
-) -> JSONResponse:
-    corpo = ErroSaida(detalhe=detalhe, erros=erros or [])
-    return JSONResponse(status_code=status, content=corpo.model_dump(mode="json"))
-
-
 def _registrar_tratadores_de_erro(app: FastAPI) -> None:
     @app.exception_handler(DefinicaoInvalida)
     async def _definicao(_: Request, erro: DefinicaoInvalida) -> JSONResponse:
-        return _resposta_de_erro(
+        return resposta_de_erro(
             422, "Definição inválida.", [ErroDeCampoSaida.de(e) for e in erro.erros]
         )
 
     @app.exception_handler(RegistroInvalido)
     async def _registro(_: Request, erro: RegistroInvalido) -> JSONResponse:
-        return _resposta_de_erro(
+        return resposta_de_erro(
             422, "Registro inválido.", [ErroDeCampoSaida.de(e) for e in erro.erros]
         )
 
@@ -175,45 +180,45 @@ def _registrar_tratadores_de_erro(app: FastAPI) -> None:
             for formulario in erro.formularios
             for e in formulario.erros
         ]
-        return _resposta_de_erro(422, "Há formulários inválidos no lote; nada foi criado.", erros)
+        return resposta_de_erro(422, "Há formulários inválidos no lote; nada foi criado.", erros)
 
     @app.exception_handler(FotoInvalida)
     async def _foto(_: Request, erro: FotoInvalida) -> JSONResponse:
-        return _resposta_de_erro(
+        return resposta_de_erro(
             422, "Foto inválida.", [ErroDeCampoSaida(campo="arquivo", mensagem=str(erro))]
         )
 
     @app.exception_handler(ValorInvalido)
     async def _valor(_: Request, erro: ValorInvalido) -> JSONResponse:
-        return _resposta_de_erro(422, str(erro))
+        return resposta_de_erro(422, str(erro))
 
     @app.exception_handler(NaoEncontrado)
     async def _nao_encontrado(_: Request, erro: NaoEncontrado) -> JSONResponse:
-        return _resposta_de_erro(404, str(erro))
+        return resposta_de_erro(404, str(erro))
 
     @app.exception_handler(ExclusaoBloqueada)
     async def _bloqueada(_: Request, erro: ExclusaoBloqueada) -> JSONResponse:
-        return _resposta_de_erro(409, str(erro))
+        return resposta_de_erro(409, str(erro))
 
     @app.exception_handler(ErroDeDominio)
     async def _dominio(_: Request, erro: ErroDeDominio) -> JSONResponse:
-        return _resposta_de_erro(400, str(erro))
+        return resposta_de_erro(400, str(erro))
 
     @app.exception_handler(RequestValidationError)
     async def _pydantic(_: Request, erro: RequestValidationError) -> JSONResponse:
         erros = [_erro_do_pydantic(e) for e in erro.errors()]
-        return _resposta_de_erro(422, "Requisição inválida.", erros)
+        return resposta_de_erro(422, "Requisição inválida.", erros)
 
     @app.exception_handler(ExcecaoHttp)
     async def _http(_: Request, erro: ExcecaoHttp) -> JSONResponse:
-        return _resposta_de_erro(
+        return resposta_de_erro(
             erro.status_code, _DETALHES_HTTP.get(erro.status_code, "Erro na requisição.")
         )
 
     @app.exception_handler(Exception)
     async def _inesperado(_: Request, erro: Exception) -> JSONResponse:
         # Sem vazar a causa para o cliente (§12); quem depura olha o log do servidor.
-        return _resposta_de_erro(500, "Erro interno do servidor.")
+        return resposta_de_erro(500, "Erro interno do servidor.")
 
 
 _DETALHES_HTTP = {
@@ -237,6 +242,9 @@ _MENSAGENS_DO_PYDANTIC = {
     "extra_forbidden": "Este campo não existe.",
     "model_attributes_type": "Deve ser um objeto JSON.",
     "list_type": "Deve ser uma lista.",
+    "string_too_short": "O texto não pode ficar vazio.",
+    "string_too_long": "Texto longo demais.",
+    "too_long": "Itens demais.",
 }
 
 
@@ -262,6 +270,6 @@ def _limpar_anexos_orfaos(configuracao: Configuracao) -> None:
 
 
 # O `app` do uvicorn. Importar o módulo não abre banco nem cria arquivo.
-app = criar_app(Configuracao.do_ambiente())
+app = criar_app(Configuracao.do_ambiente(), extensoes=descobrir_extensoes())
 
-__all__ = ["Configuracao", "HTTPException", "app", "criar_app"]
+__all__ = ["Configuracao", "HTTPException", "app", "criar_app", "descobrir_extensoes"]

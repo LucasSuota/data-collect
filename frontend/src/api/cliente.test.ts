@@ -357,6 +357,51 @@ describe("criarCliente", () => {
   });
 });
 
+describe("gerarFormularios", () => {
+  it("manda o pedido e os rascunhos em edição e devolve os rascunhos propostos", async () => {
+    const proposta = {
+      formularios: [{ nome: "Ensaio", definicao: { campos: [] }, erros: [] }],
+    };
+    const { cliente, fetchFalso } = clienteCom(respostaDe({ corpo: proposta }));
+
+    const resultado = await cliente.gerarFormularios({
+      pedido: "um ensaio",
+      rascunhos: [{ nome: "Ensaio", definicao: { campos: [] } }],
+    });
+
+    const { url, init } = ultimaChamada(fetchFalso);
+    expect(url).toBe("http://127.0.0.1:8000/definicoes/gerar");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({
+      pedido: "um ensaio",
+      rascunhos: [{ nome: "Ensaio", definicao: { campos: [] } }],
+    });
+    expect(resultado).toEqual(proposta);
+  });
+
+  it("sem rascunhos manda a lista vazia", async () => {
+    const { cliente, fetchFalso } = clienteCom(respostaDe({ corpo: { formularios: [] } }));
+
+    await cliente.gerarFormularios({ pedido: "x" });
+
+    expect(JSON.parse(String(ultimaChamada(fetchFalso).init.body))).toEqual({
+      pedido: "x",
+      rascunhos: [],
+    });
+  });
+
+  it("IA indisponível chega como ErroDaApi 503 com a mensagem em português", async () => {
+    const { cliente } = clienteCom(
+      respostaDe({ status: 503, corpo: { detalhe: "A IA está indisponível.", erros: [] } }),
+    );
+
+    await expect(cliente.gerarFormularios({ pedido: "x" })).rejects.toMatchObject({
+      status: 503,
+      message: "A IA está indisponível.",
+    });
+  });
+});
+
 describe("configuracaoPadrao", () => {
   afterEach(() => {
     delete window.formsApi;

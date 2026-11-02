@@ -8,7 +8,7 @@ O projeto é um monorepo: backend Python, interface web e shell desktop. O conte
 
 ## Estado atual
 
-O projeto está no começo. Existe o esqueleto (`pyproject.toml`, CI, `src/forms/`, `tests/`), e a base do núcleo (`models.py`, `tipos_campo.py`, a análise de fórmulas em `formulas.py`, o esquema do banco em `repositorio.py` e `fotos.py`), mas ainda **nem o avaliador de fórmulas, a validação, o serviço, a API, o `frontend/` nem o `desktop/`**. Tudo abaixo descreve o alvo; a ordem de construção é de baixo para cima, sempre com TDD: tipos e fórmulas, validação, repositório, serviço, API e CLI, front e Electron, e por último os módulos de IA.
+O núcleo (fórmulas, validação, repositório, serviço), a API, a CLI, o `frontend/`, o `desktop/` (Electron), o empacotamento do instalável e os módulos de IA (`ia/` e `rag/`) estão implementados e testados com TDD. **Não verificado ainda:** a janela do Electron e o fluxo no navegador real foram exercitados só por testes automatizados e `curl`, e nenhuma chamada real a um LLM foi feita (os testes usam um cliente falso). A ordem de construção foi de baixo para cima: tipos e fórmulas, validação, repositório, serviço, API e CLI, front e Electron, e por último os módulos de IA.
 
 ## O que o sistema faz
 
@@ -61,7 +61,7 @@ desktop/       Electron: janela, processo filho do backend, instalador
 src/forms/     backend Python
   models.py  tipos_campo.py  formulas.py  validacao.py  fotos.py
   repositorio.py  servico.py (+ servico_*.py)  exportacao.py  cli.py  api.py (+ api_*.py)  app.py
-  rag/  ia/                                  (opcionais)
+  rag/  ia/                                  (opcionais; achados pelo nome em api_extensoes.py)
 templates/     corpo_de_prova.json  inspecao_obra.json
 empacotamento/ scripts do instalável
 tests/
@@ -92,6 +92,17 @@ O contrato é o OpenAPI gerado pelo FastAPI (`/docs`); os tipos TypeScript do fr
 | Registros | `POST /formularios/{id}/registros`, `GET`, `PUT` e `DELETE /registros/{id}` |
 | Consulta | `GET /formularios/{id}/registros` (versão, filtro por igualdade, paginação), `GET /formularios/{id}/registros/exportar` (CSV) |
 | Fotos | `POST /anexos` (multipart), `GET /anexos/{id}` |
+| IA (opcional) | `POST /definicoes/gerar` (propõe formulários, nunca salva), `POST /formularios/{id}/resumo` (resumo conferido contra os dados), `POST /assistente/perguntar` (só com os procedimentos). Sem chave ou internet respondem 503 em português, e o assistente mostra só os trechos |
+
+## IA (opcional)
+
+Três recursos, todos com a mesma regra: **a IA nunca calcula, só busca e redige**.
+
+- **Criar com IA:** a pessoa descreve o que quer, a IA propõe um ou mais formulários (ligados entre si, se o pedido pedir), o servidor valida o conjunto e devolve os erros ao LLM para corrigir (no máximo 2 vezes). A pessoa revisa e edita cada rascunho no construtor e publica todos de uma vez. Nada é salvo antes.
+- **Resumo de registros:** o código calcula os agregados; o LLM só redige. Todo número do texto é conferido contra os agregados, e o resumo inteiro é descartado se algum não bater.
+- **Assistente de procedimentos (RAG):** BM25 escrito à mão sobre os `.md` de `docs/`, mais busca semântica se houver provedor de embeddings. Responde só com os trechos recuperados e diz "não encontrei" quando não há base.
+
+Para ligar: `uv sync --extra ia` e `ANTHROPIC_API_KEY` no `.env`. Sem isso, as rotas respondem 503 e o restante do app funciona normalmente. A API da Anthropic não tem embeddings, então a busca semântica só liga com outro provedor que implemente `ClienteDeLLM`.
 
 ## App instalável
 
@@ -101,7 +112,7 @@ O PyInstaller não compila para outro sistema, então cada instalador é gerado 
 
 ## Como rodar
 
-Requer [uv](https://docs.astral.sh/uv) e Python 3.12+. Hoje só o backend tem esqueleto:
+Requer [uv](https://docs.astral.sh/uv) e Python 3.12+:
 
 ```bash
 uv sync
@@ -110,13 +121,13 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Quando a API existir, em desenvolvimento:
+Para subir a API em desenvolvimento:
 
 ```bash
 uv run uvicorn forms.api:app --host 127.0.0.1 --port 8000
 ```
 
-O front roda separado em `http://localhost:5173` (Vite) e a API libera CORS só para essa origem, nunca `*`. Este README será atualizado conforme a API, a CLI, o front e o Electron forem criados.
+O front roda separado em `http://localhost:5173` (Vite) e a API libera CORS só para essa origem, nunca `*`.
 
 ## Qualidade
 

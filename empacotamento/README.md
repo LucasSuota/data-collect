@@ -32,6 +32,7 @@ uv run python empacotamento/empacotar.py --passo backend
 - **O PyInstaller não faz compilação cruzada:** cada instalador é gerado no próprio sistema, por isso o CI roda numa matriz com Windows, macOS e Linux.
 - `--onedir`, não `--onefile`: o `onefile` cria um processo extra (o *bootloader*) que o Electron não conseguiria encerrar junto com o backend.
 - O uvicorn escolhe loops e protocolos por import dinâmico, que o PyInstaller não enxerga: `--collect-submodules uvicorn`.
+- As extensões opcionais de IA (`forms.ia.extensao`, `forms.rag.extensao`) são achadas **pelo nome** em execução, então também ficam invisíveis ao PyInstaller: `--hidden-import` para cada uma. A pasta `docs/` (procedimentos do assistente) vai junto como `docs` (`--add-data`). O SDK `anthropic` só entra no executável se o extra `ia` estiver instalado na hora do build; **isso ainda não foi verificado num build real**.
 - Os dados do usuário (banco e fotos) ficam na pasta de dados do sistema (`platformdirs`), nunca dentro do pacote; reinstalar ou atualizar o app não os apaga.
 
 ## Primeira abertura (sem assinatura nem notarização)
