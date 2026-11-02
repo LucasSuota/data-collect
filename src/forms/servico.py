@@ -5,8 +5,7 @@ controla a transação, então cada caso de uso grava tudo ou nada.
 """
 
 import sqlite3
-from collections.abc import Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -20,13 +19,18 @@ from forms.models import (
     ErrosDoFormulario,
     Formulario,
     LoteInvalido,
-    NaoEncontrado,
     ValorJson,
     Versao,
 )
 from forms.repositorio import ResumoDeFormulario, ResumoDeVersao, chave_do_nome
+from forms.servico_base import (
+    compartilhados_publicados,
+    origens_publicadas,
+    referencias_brutas,
+    transacao,
+)
 from forms.tipos_campo import ESPECIFICACOES, PROPRIEDADES_COMUNS
-from forms.validacao import CampoCompartilhado, Origens
+from forms.validacao import CampoCompartilhado
 
 # --- tipos de entrada e saída ---
 
@@ -88,22 +92,6 @@ class Catalogo:
     nomes_reservados: tuple[str, ...]
 
 
-# --- transação ---
-
-
-@contextmanager
-def _transacao(conexao: sqlite3.Connection) -> Iterator[None]:
-    """BEGIN explícito: sem ele o `sqlite3` não abre transação para DDL e, aqui, também deixaria
-    uma falha no meio de um lote com formulários já gravados."""
-    conexao.execute("BEGIN")
-    try:
-        yield
-    except BaseException:
-        conexao.rollback()
-        raise
-    conexao.commit()
-
-
 # --- leitura ---
 
 
@@ -157,7 +145,7 @@ def catalogo() -> Catalogo:
 def validar_definicao(conexao: sqlite3.Connection, definicao: ValorJson) -> ResultadoDaValidacao:
     """Sem estado: não exige formulário criado. Definição incompleta é o caso normal enquanto o
     usuário edita, então devolve os erros (todos) em vez de levantar."""
-    origens = _origens_publicadas(conexao, _referencias_brutas(definicao), {})
+    origens = origens_publicadas(conexao, referencias_brutas(definicao), {})
     erros = validacao.validar_definicao(definicao, origens)
     return ResultadoDaValidacao(valida=not erros, erros=erros)
 
@@ -170,7 +158,7 @@ def criar_formulario(
 ) -> FormularioCriado:
     """Cria o formulário e já publica a versão 1: um formulário sem versão não pode ser
     preenchido, então esse estado não existe. Definição inválida não cria nada."""
-    with _transacao(conexao):
+    with transacao(conexao):
         conjunto = _validar_conjunto(conexao, [Rascunho(nome, definicao)])
         item = conjunto.itens[0]
         if item.erros:
@@ -183,7 +171,7 @@ def publicar_versao(
 ) -> Versao:
     """Publica a próxima versão (anterior + 1). A publicada nunca é alterada."""
     formulario = repositorio.obter_formulario(conexao, formulario_id)
-    with _transacao(conexao):
+    with transacao(conexao):
         conjunto = _validar_conjunto(
             conexao, [Rascunho(formulario.nome, definicao)], versionando=formulario
         )
@@ -210,7 +198,7 @@ def criar_formularios_em_lote(
     levanta `LoteInvalido` e não cria nada. Independe da ordem de entrada."""
     if not rascunhos:
         return []
-    with _transacao(conexao):
+    with transacao(conexao):
         conjunto = _validar_conjunto(conexao, rascunhos)
         erros = _erros_do_conjunto(conjunto)
         if erros:
@@ -243,7 +231,7 @@ def _validar_conjunto(
     versionando: Formulario | None = None,
 ) -> _Conjunto:
     """`versionando` é o formulário que ganha uma nova versão; sem ele, todos são novos."""
-    itens = [_Item(r, chave_do_nome(r.nome), _referencias_brutas(r.definicao)) for r in rascunhos]
+    itens = [_Item(r, chave_do_nome(r.nome), referencias_brutas(r.definicao)) for r in rascunhos]
     por_chave = _validar_nomes(conexao, itens, versionando)
     ordem = _ordenar(itens, por_chave)
     cache: dict[int, dict[str, CampoCompartilhado]] = {}
@@ -330,7 +318,7 @@ def _analisar_item(
         else:
             publicado = repositorio.obter_formulario_por_nome(conexao, nome)
             if publicado is not None:
-                origens[nome] = _compartilhados_publicados(conexao, publicado, cache)
+                origens[nome] = compartilhados_publicados(conexao, publicado, cache)
 
     analise = validacao.analisar_definicao(item.rascunho.definicao, origens)
     item.erros.extend(analise.erros)
@@ -374,7 +362,7 @@ def _conferir_contrato(
         return
     usados_por = ", ".join(f"'{nome}'" for nome in nomes)
     ids_novos = {campo.id for campo in item.definicao.campos}
-    antigos = _compartilhados_publicados(conexao, formulario, cache)
+    antigos = compartilhados_publicados(conexao, formulario, cache)
 
     for id_do_campo, antigo in antigos.items():
         novo = item.compartilhados.get(id_do_campo)
@@ -445,62 +433,3 @@ def _gravar(
         repositorio.registrar_dependencias(conexao, formulario.id, origens)
         criados.append(FormularioCriado(formulario, versao))
     return criados
-
-
-# --- campos compartilhados de formulários já publicados ---
-
-
-def _referencias_brutas(definicao: ValorJson) -> list[tuple[str, str]]:
-    """(id do campo, nome do formulário) de cada referência, tolerando JSON malformado."""
-    campos = definicao.get("campos") if isinstance(definicao, dict) else None
-    if not isinstance(campos, list):
-        return []
-    return [
-        (campo["id"], campo["formulario"])
-        for campo in campos
-        if isinstance(campo, dict)
-        and campo.get("tipo") == "referencia"
-        and isinstance(campo.get("id"), str)
-        and isinstance(campo.get("formulario"), str)
-    ]
-
-
-def _origens_publicadas(
-    conexao: sqlite3.Connection,
-    referencias: Sequence[tuple[str, str]],
-    cache: dict[int, dict[str, CampoCompartilhado]],
-) -> Origens:
-    origens: dict[str, Mapping[str, CampoCompartilhado]] = {}
-    for _, nome in referencias:
-        formulario = repositorio.obter_formulario_por_nome(conexao, nome)
-        if formulario is not None:
-            origens[nome] = _compartilhados_publicados(conexao, formulario, cache)
-    return origens
-
-
-def _compartilhados_publicados(
-    conexao: sqlite3.Connection,
-    formulario: Formulario,
-    cache: dict[int, dict[str, CampoCompartilhado]],
-) -> dict[str, CampoCompartilhado]:
-    """Campos que a versão atual de um formulário publicado compartilha.
-
-    O tipo de um `calculado` compartilhado não é guardado: sai de analisar de novo a definição
-    publicada, o que exige as origens dela. O grafo é acíclico, então a recursão termina.
-    """
-    if formulario.id in cache:
-        return cache[formulario.id]
-    try:
-        definicao = repositorio.obter_versao_atual(conexao, formulario.id).definicao
-    except NaoEncontrado:  # formulário sem versão publicada não compartilha nada
-        cache[formulario.id] = {}
-        return {}
-    origens = _origens_publicadas(
-        conexao,
-        [(campo.id, campo.formulario) for campo in definicao.campos if campo.formulario],
-        cache,
-    )
-    analise = validacao.analisar_definicao(definicao.para_json(), origens)
-    compartilhados = validacao.compartilhados_da_definicao(definicao, analise.tipos_calculados)
-    cache[formulario.id] = compartilhados
-    return compartilhados
