@@ -60,9 +60,18 @@ def comandos(plataforma: str, raiz: Path = RAIZ, npm: str = "npm") -> list[Coman
                 str(raiz / "src"),
                 "--add-data",
                 f"{raiz / 'frontend' / 'dist'}{separador_do_add_data}frontend_dist",
+                # Os procedimentos que o assistente (RAG) consulta
+                "--add-data",
+                f"{raiz / 'docs'}{separador_do_add_data}docs",
                 # O uvicorn escolhe loops e protocolos por import dinâmico, que o PyInstaller não vê
                 "--collect-submodules",
                 "uvicorn",
+                # As extensões opcionais são achadas pelo nome em execução (api_extensoes.py),
+                # então o PyInstaller não as enxerga sozinho
+                "--hidden-import",
+                "forms.ia.extensao",
+                "--hidden-import",
+                "forms.rag.extensao",
                 str(raiz / "src" / "forms" / "app.py"),
             ),
             raiz,

@@ -48,14 +48,14 @@ esquema_do_token = APIKeyHeader(
 )
 
 # Erros comuns a (quase) todo endpoint, para o OpenAPI mostrar o formato uniforme.
-_ERROS = {
+ERROS_COMUNS = {
     401: {"model": ErroSaida, "description": "Token ausente ou inválido."},
     404: {"model": ErroSaida, "description": "Recurso inexistente."},
     422: {"model": ErroSaida, "description": "Dados inválidos, com os erros por campo."},
 }
 _ERRO_409 = {409: {"model": ErroSaida, "description": "Exclusão bloqueada por vínculo."}}
 
-roteador = APIRouter(dependencies=[Depends(esquema_do_token)], responses=_ERROS)
+roteador = APIRouter(dependencies=[Depends(esquema_do_token)], responses=ERROS_COMUNS)
 
 
 # --- dependências (injetadas por parâmetro, nunca globais) ---
@@ -285,7 +285,7 @@ def listar_registros(
         conexao,
         formulario_id,
         versao_id=versao_id,
-        filtros=_ler_filtros(filtro or []),
+        filtros=ler_filtros(filtro or []),
         criado_de=criado_de,
         criado_ate=criado_ate,
         limite=limite,
@@ -323,7 +323,7 @@ def exportar_registros(
         conexao,
         formulario_id,
         versao_id=versao_id,
-        filtros=_ler_filtros(filtro or []),
+        filtros=ler_filtros(filtro or []),
         criado_de=criado_de,
         criado_ate=criado_ate,
     )
@@ -441,7 +441,7 @@ def _detalhe(formulario: Formulario, versao: Versao) -> FormularioDetalheSaida:
     )
 
 
-def _ler_filtros(filtros: list[str]) -> dict[str, str]:
+def ler_filtros(filtros: list[str]) -> dict[str, str]:
     lidos = {}
     erros = []
     for filtro in filtros:

@@ -14,7 +14,7 @@ from typing import TextIO
 
 import platformdirs
 
-from forms.api import Configuracao, criar_app
+from forms.api import Configuracao, criar_app, descobrir_extensoes
 
 NOME_DO_APP = "ConstrutorDeFormularios"
 ENDERECO_LOCAL = "127.0.0.1"
@@ -100,7 +100,11 @@ def main(
         return 2
 
     configuracao.pasta_de_dados.mkdir(parents=True, exist_ok=True)
-    app = criar_app(configuracao, pasta_do_front=localizar_front(ambiente))
+    app = criar_app(
+        configuracao,
+        pasta_do_front=localizar_front(ambiente),
+        extensoes=descobrir_extensoes(),
+    )
     soquete = abrir_soquete_local()
     try:
         # A primeira linha da saída: o Electron a lê para saber a porta (§4.1).

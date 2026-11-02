@@ -71,6 +71,12 @@ MODELOS_DE_RESPOSTA = {
     },
     "ListagemDeRegistrosSaida": {"versao_id": True, "colunas": True, "itens": True, "total": True},
     "AnexoSaida": {"id": True, "largura": True, "altura": True, "tamanho_bytes": True},
+    # extensões opcionais (ia/ e rag/): fazem parte do contrato quando o módulo existe
+    "RascunhoGeradoSaida": {"nome": True, "definicao": True, "erros": True},
+    "GerarSaida": {"formularios": True},
+    "ResumoSaida": {"titulo": True, "paragrafos": True, "destaques": True, "total": True},
+    "TrechoSaida": {"arquivo": True, "titulo": True, "texto": True, "pontuacao": True},
+    "RespostaSaida": {"encontrou": True, "texto": True, "usou_ia": True, "trechos": True},
 }
 
 MODELOS_DE_ENTRADA = {
@@ -81,6 +87,8 @@ MODELOS_DE_ENTRADA = {
     "PreviaEntrada": {"definicao": True, "valores": False},
     "RegistroEntrada": {"versao_id": True, "dados": True},
     "RegistroAtualizacao": {"dados": True},
+    "GerarEntrada": {"pedido": True, "rascunhos": False},
+    "PerguntaEntrada": {"pergunta": True},
 }
 
 ROTAS = [
@@ -96,11 +104,14 @@ ROTAS = [
     ("get", "/formularios/{formulario_id}/versoes/{versao_id}"),
     ("get", "/registros/{registro_id}"),
     ("post", "/anexos"),
+    ("post", "/assistente/perguntar"),
+    ("post", "/definicoes/gerar"),
     ("post", "/definicoes/previa"),
     ("post", "/definicoes/validar"),
     ("post", "/formularios"),
     ("post", "/formularios/lote"),
     ("post", "/formularios/{formulario_id}/registros"),
+    ("post", "/formularios/{formulario_id}/resumo"),
     ("post", "/formularios/{formulario_id}/versoes"),
     ("put", "/registros/{registro_id}"),
 ]
@@ -308,3 +319,30 @@ def test_o_openapi_nao_muda_dependendo_de_quem_importa(tmp_path):
 
     # assert
     assert not list(Path(tmp_path).glob("*.db"))
+
+
+@pytest.mark.parametrize(
+    ("caminho", "codigos"),
+    [
+        ("/definicoes/gerar", ("502", "503")),
+        ("/formularios/{formulario_id}/resumo", ("502", "503")),
+    ],
+)
+def test_rotas_de_ia_documentam_o_502_e_o_503_com_o_erro_uniforme(openapi, caminho, codigos):
+    # arrange
+    respostas = openapi["paths"][caminho]["post"]["responses"]
+
+    # assert
+    for codigo in codigos:
+        assert respostas[codigo]["content"]["application/json"]["schema"]["$ref"].endswith(
+            "/ErroSaida"
+        )
+
+
+def test_limites_do_pedido_e_dos_rascunhos_aparecem_no_openapi_para_o_front(openapi):
+    # arrange
+    esquema = openapi["components"]["schemas"]["GerarEntrada"]["properties"]
+
+    # assert
+    assert esquema["pedido"]["maxLength"] == 4000 and esquema["pedido"]["minLength"] == 1
+    assert esquema["rascunhos"]["maxItems"] == 10

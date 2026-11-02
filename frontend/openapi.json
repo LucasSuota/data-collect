@@ -1463,6 +1463,319 @@
           }
         }
       }
+    },
+    "/definicoes/gerar": {
+      "post": {
+        "tags": [
+          "ia"
+        ],
+        "summary": "Propõe formulários a partir de um pedido em texto",
+        "description": "Nunca salva: devolve rascunhos validados pelo mesmo código da publicação. Rascunho com `erros` segue para o construtor para a pessoa corrigir. Aprovados, são publicados de uma vez por `POST /formularios/lote`.",
+        "operationId": "gerar_formularios_definicoes_gerar_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GerarEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GerarSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "A IA respondeu, mas fora do formato esperado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "IA indisponível (sem chave ou sem internet).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      }
+    },
+    "/formularios/{formulario_id}/resumo": {
+      "post": {
+        "tags": [
+          "ia"
+        ],
+        "summary": "Resume os registros de uma versão com a IA",
+        "description": "Mesma versão e mesmos filtros da listagem. O código calcula os agregados e a IA só redige; se algum número do texto não bater com eles, o resumo é descartado (502).",
+        "operationId": "resumir_registros_formularios__formulario_id__resumo_post",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          },
+          {
+            "name": "versao_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Versao Id"
+            }
+          },
+          {
+            "name": "criado_de",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Criado De"
+            }
+          },
+          {
+            "name": "criado_ate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Criado Ate"
+            }
+          },
+          {
+            "name": "filtro",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`campo:valor`, repetível.",
+              "title": "Filtro"
+            },
+            "description": "`campo:valor`, repetível."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumoSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "A IA respondeu, mas fora do formato esperado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "IA indisponível (sem chave ou sem internet).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistente/perguntar": {
+      "post": {
+        "tags": [
+          "assistente"
+        ],
+        "summary": "Responde a uma pergunta só com os procedimentos",
+        "description": "Busca nos procedimentos (BM25, mais busca semântica se houver provedor de embeddings) e a IA redige a resposta só com os trechos recuperados. Sem base nos documentos, responde que não encontrou. Sem IA, devolve só os trechos.",
+        "operationId": "perguntar_aos_procedimentos_assistente_perguntar_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PerguntaEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1947,6 +2260,49 @@
         ],
         "title": "FuncaoDoCatalogoSaida"
       },
+      "GerarEntrada": {
+        "properties": {
+          "pedido": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Pedido",
+            "description": "O que a pessoa quer, em texto livre."
+          },
+          "rascunhos": {
+            "items": {
+              "$ref": "#/components/schemas/FormularioEntrada"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Rascunhos",
+            "description": "Rascunhos em edição, para refinar (ex.: 'adicione o campo X')."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pedido"
+        ],
+        "title": "GerarEntrada"
+      },
+      "GerarSaida": {
+        "properties": {
+          "formularios": {
+            "items": {
+              "$ref": "#/components/schemas/RascunhoGeradoSaida"
+            },
+            "type": "array",
+            "title": "Formularios"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "formularios"
+        ],
+        "title": "GerarSaida"
+      },
       "ListagemDeRegistrosSaida": {
         "properties": {
           "versao_id": {
@@ -1999,6 +2355,22 @@
           "formularios"
         ],
         "title": "LoteEntrada"
+      },
+      "PerguntaEntrada": {
+        "properties": {
+          "pergunta": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Pergunta"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pergunta"
+        ],
+        "title": "PerguntaEntrada"
       },
       "PosicaoSaida": {
         "properties": {
@@ -2066,6 +2438,34 @@
           "calculados"
         ],
         "title": "PreviaSaida"
+      },
+      "RascunhoGeradoSaida": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "definicao": {
+            "title": "Definicao",
+            "description": "Definição proposta; pode estar inválida (veja `erros`)."
+          },
+          "erros": {
+            "items": {
+              "$ref": "#/components/schemas/ErroDeCampoSaida"
+            },
+            "type": "array",
+            "title": "Erros",
+            "description": "Vazio quando passou na validação; senão, para a pessoa corrigir no construtor."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nome",
+          "definicao",
+          "erros"
+        ],
+        "title": "RascunhoGeradoSaida"
       },
       "RegistroAtualizacao": {
         "properties": {
@@ -2141,6 +2541,46 @@
           "atualizado_em"
         ],
         "title": "RegistroSaida"
+      },
+      "RespostaSaida": {
+        "properties": {
+          "encontrou": {
+            "type": "boolean",
+            "title": "Encontrou"
+          },
+          "texto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Texto",
+            "description": "Resposta redigida pela IA; nulo quando só há os trechos para mostrar."
+          },
+          "usou_ia": {
+            "type": "boolean",
+            "title": "Usou Ia"
+          },
+          "trechos": {
+            "items": {
+              "$ref": "#/components/schemas/TrechoSaida"
+            },
+            "type": "array",
+            "title": "Trechos"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "encontrou",
+          "texto",
+          "usou_ia",
+          "trechos"
+        ],
+        "title": "RespostaSaida"
       },
       "ResultadoCalculadoSaida": {
         "properties": {
@@ -2250,6 +2690,42 @@
         ],
         "title": "ResumoDeVersaoSaida"
       },
+      "ResumoSaida": {
+        "properties": {
+          "titulo": {
+            "type": "string",
+            "title": "Titulo"
+          },
+          "paragrafos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paragrafos"
+          },
+          "destaques": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Destaques"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Quantos registros foram resumidos (calculado pelo código)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "titulo",
+          "paragrafos",
+          "destaques",
+          "total"
+        ],
+        "title": "ResumoSaida"
+      },
       "TipoDoCatalogoSaida": {
         "properties": {
           "id": {
@@ -2276,6 +2752,37 @@
           "propriedades"
         ],
         "title": "TipoDoCatalogoSaida"
+      },
+      "TrechoSaida": {
+        "properties": {
+          "arquivo": {
+            "type": "string",
+            "title": "Arquivo",
+            "description": "Arquivo de origem, relativo à pasta de procedimentos."
+          },
+          "titulo": {
+            "type": "string",
+            "title": "Titulo",
+            "description": "Caminho dos títulos: 'Moldagem > Cura'."
+          },
+          "texto": {
+            "type": "string",
+            "title": "Texto"
+          },
+          "pontuacao": {
+            "type": "number",
+            "title": "Pontuacao"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "arquivo",
+          "titulo",
+          "texto",
+          "pontuacao"
+        ],
+        "title": "TrechoSaida"
       },
       "ValidarEntrada": {
         "properties": {

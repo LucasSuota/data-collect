@@ -73,6 +73,26 @@ def test_uvicorn_tem_os_submodulos_coletados_por_causa_dos_imports_dinamicos():
     assert backend.argumentos[backend.argumentos.index("--collect-submodules") + 1] == "uvicorn"
 
 
+def test_os_procedimentos_do_assistente_vao_dentro_do_executavel_como_docs():
+    # act
+    (backend,) = _por_passo("linux")["backend"]
+    args = backend.argumentos
+    dados = [args[i + 1] for i, a in enumerate(args) if a == "--add-data"]
+
+    # assert: é o nome que `rag.extensao.localizar_docs` procura em sys._MEIPASS
+    assert f"{Path('/repo/docs')}:docs" in dados
+
+
+def test_as_extensoes_opcionais_sao_importadas_a_mao_porque_sao_achadas_pelo_nome():
+    # act
+    (backend,) = _por_passo()["backend"]
+    args = backend.argumentos
+    ocultos = [args[i + 1] for i, a in enumerate(args) if a == "--hidden-import"]
+
+    # assert
+    assert ocultos == ["forms.ia.extensao", "forms.rag.extensao"]
+
+
 def test_o_pyinstaller_nao_escreve_dentro_do_codigo_fonte():
     # act
     (backend,) = _por_passo()["backend"]
