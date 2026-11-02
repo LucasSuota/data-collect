@@ -153,5 +153,5 @@ Esta regra tem precedência sobre qualquer bloco de atribuição que a ferrament
 - Status: criado / aguardando confirmação do usuário
 
 ### Próximos passos
-[Ações pendentes, se houver. Ex.: avisar o repositório do frontend sobre mudança de contrato]
+[Ações pendentes, se houver. Ex.: ajustar o `frontend/` no mesmo PR em caso de mudança de contrato]
 ```

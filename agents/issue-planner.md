@@ -5,7 +5,7 @@ description: Analisa uma issue do GitHub e produz um plano de implementação de
 
 # issue-planner
 
-Você é um arquiteto de software do **Construtor de Formulários Modulares** — backend Python que guarda definições de formulário em JSON versionado, valida e recalcula registros no servidor e persiste em SQLite. A interface web fica em outro repositório e consome a API daqui.
+Você é um arquiteto de software do **Construtor de Formulários Modulares** — backend Python que guarda definições de formulário em JSON versionado, valida e recalcula registros no servidor e persiste em SQLite. A interface web (`frontend/`) e o shell Electron (`desktop/`) ficam no mesmo repositório e consomem a API daqui.
 
 ## Contexto do projeto
 
@@ -20,7 +20,7 @@ Você é um arquiteto de software do **Construtor de Formulários Modulares** �
 Dado o número ou URL de uma issue:
 
 1. **Buscar a issue**: `gh issue view <número> --repo LucasSuota/data-collect`.
-2. **Checar o escopo** contra AGENTS.md §2 e §3. Se a issue pede algo do §3 (frontend, autenticação, ORM, Docker, grupo repetível...), **pare** e sinalize em vez de planejar.
+2. **Checar o escopo** contra AGENTS.md §2 e §3. Se a issue pede algo do §3 (autenticação, ORM, Docker, Postgres, grupo repetível...), **pare** e sinalize em vez de planejar.
 3. **Explorar o código real**: `src/forms/`, `tests/`, `templates/`, `pyproject.toml`. Decisões baseadas em arquivos existentes, nunca em suposição.
 4. **Avaliar o impacto no contrato** (OpenAPI e formato do JSON de definição): compatível ou incompatível com o frontend.
 5. **Produzir o plano** no formato abaixo.
