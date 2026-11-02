@@ -20,6 +20,8 @@ from forms.models import (
     ErroDeDominio,
     Formulario,
     NaoEncontrado,
+    Pasta,
+    PastaInvalida,
     Registro,
     ValorInvalido,
     ValorJson,
@@ -130,12 +132,37 @@ def _criar_vetores_dos_trechos(conexao: sqlite3.Connection) -> None:
     conexao.execute("CREATE TABLE vetores_trechos (chave TEXT PRIMARY KEY, vetor BLOB NOT NULL)")
 
 
+def _criar_pastas(conexao: sqlite3.Connection) -> None:
+    # Árvore de pastas que só organiza formulários (§2.10). Sem ON DELETE o SQLite recusa apagar
+    # pasta com subpasta ou formulário, o que protege o bloqueio do serviço. NULL não conta como
+    # igual num índice único, então a unicidade do nome entre irmãs usa 0 no lugar da raiz
+    # (os ids começam em 1). Formulário existente fica na raiz (`pasta_id` nulo).
+    conexao.execute(
+        """
+        CREATE TABLE pastas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            nome_chave TEXT NOT NULL,
+            pasta_pai_id INTEGER REFERENCES pastas (id),
+            criado_em TEXT NOT NULL
+        )
+        """
+    )
+    conexao.execute(
+        "CREATE UNIQUE INDEX pastas_por_nome_entre_irmas"
+        " ON pastas (COALESCE(pasta_pai_id, 0), nome_chave)"
+    )
+    conexao.execute("ALTER TABLE formularios ADD COLUMN pasta_id INTEGER REFERENCES pastas (id)")
+    conexao.execute("CREATE INDEX formularios_por_pasta ON formularios (pasta_id)")
+
+
 # A migração de posição N leva o banco da versão N para a N+1. Nunca edite uma migração
 # já publicada: o banco do usuário persiste entre versões do app; acrescente uma nova.
 MIGRACOES: tuple[Migracao, ...] = (
     _criar_esquema_1,
     _adicionar_chave_unica_do_nome,
     _criar_vetores_dos_trechos,
+    _criar_pastas,
 )
 VERSAO_ATUAL_DO_ESQUEMA = len(MIGRACOES)
 
@@ -198,6 +225,7 @@ class ResumoDeFormulario:
     criado_em: str
     versao_atual_id: int | None
     versao_atual_numero: int | None
+    pasta_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -226,24 +254,30 @@ def criar_formulario(conexao: sqlite3.Connection, nome: str, agora: datetime) ->
 
 def obter_formulario(conexao: sqlite3.Connection, formulario_id: int) -> Formulario:
     linha = conexao.execute(
-        "SELECT id, nome, criado_em FROM formularios WHERE id = ?", (formulario_id,)
+        "SELECT id, nome, criado_em, pasta_id FROM formularios WHERE id = ?", (formulario_id,)
     ).fetchone()
     if linha is None:
         raise NaoEncontrado(f"Formulário {formulario_id} não encontrado.")
-    return Formulario(linha["id"], linha["nome"], linha["criado_em"])
+    return _formulario_da_linha(linha)
 
 
 def obter_formulario_por_nome(conexao: sqlite3.Connection, nome: str) -> Formulario | None:
     linha = conexao.execute(
-        "SELECT id, nome, criado_em FROM formularios WHERE nome_chave = ?", (chave_do_nome(nome),)
+        "SELECT id, nome, criado_em, pasta_id FROM formularios WHERE nome_chave = ?",
+        (chave_do_nome(nome),),
     ).fetchone()
-    return None if linha is None else Formulario(linha["id"], linha["nome"], linha["criado_em"])
+    return None if linha is None else _formulario_da_linha(linha)
+
+
+def _formulario_da_linha(linha: sqlite3.Row) -> Formulario:
+    return Formulario(linha["id"], linha["nome"], linha["criado_em"], linha["pasta_id"])
 
 
 def listar_formularios(conexao: sqlite3.Connection) -> list[ResumoDeFormulario]:
     linhas = conexao.execute(
         """
-        SELECT f.id, f.nome, f.criado_em, v.id AS versao_atual_id, v.numero AS versao_atual_numero
+        SELECT f.id, f.nome, f.criado_em, v.id AS versao_atual_id, v.numero AS versao_atual_numero,
+               f.pasta_id
         FROM formularios f
         LEFT JOIN versoes_formulario v
             ON v.formulario_id = f.id
@@ -252,6 +286,125 @@ def listar_formularios(conexao: sqlite3.Connection) -> list[ResumoDeFormulario]:
         """
     )
     return [ResumoDeFormulario(**dict(linha)) for linha in linhas]
+
+
+def mover_formulario(conexao: sqlite3.Connection, formulario_id: int, pasta_id: int | None) -> None:
+    """Só troca a pasta: versões, registros e dependências não se mexem."""
+    cursor = conexao.execute(
+        "UPDATE formularios SET pasta_id = ? WHERE id = ?", (pasta_id, formulario_id)
+    )
+    if cursor.rowcount == 0:
+        raise NaoEncontrado(f"Formulário {formulario_id} não encontrado.")
+
+
+# --- pastas ---
+
+_MENSAGEM_NOME_REPETIDO = "Já existe uma pasta com este nome neste local."
+
+
+def criar_pasta(
+    conexao: sqlite3.Connection, nome: str, pasta_pai_id: int | None, agora: datetime
+) -> Pasta:
+    nome = _nome_da_pasta(nome)
+    _conferir_nome_livre(conexao, nome, pasta_pai_id, ignorar_id=None)
+    cursor = conexao.execute(
+        "INSERT INTO pastas (nome, nome_chave, pasta_pai_id, criado_em) VALUES (?, ?, ?, ?)",
+        (nome, chave_do_nome(nome), pasta_pai_id, _iso(agora)),
+    )
+    return obter_pasta(conexao, _id_inserido(cursor))
+
+
+def obter_pasta(conexao: sqlite3.Connection, pasta_id: int) -> Pasta:
+    linha = conexao.execute(
+        "SELECT id, nome, pasta_pai_id, criado_em FROM pastas WHERE id = ?", (pasta_id,)
+    ).fetchone()
+    if linha is None:
+        raise NaoEncontrado(f"Pasta {pasta_id} não encontrada.")
+    return Pasta(**dict(linha))
+
+
+def pasta_existe(conexao: sqlite3.Connection, pasta_id: int) -> bool:
+    return conexao.execute("SELECT 1 FROM pastas WHERE id = ?", (pasta_id,)).fetchone() is not None
+
+
+def listar_pastas(conexao: sqlite3.Connection) -> list[Pasta]:
+    linhas = conexao.execute("SELECT id, nome, pasta_pai_id, criado_em FROM pastas ORDER BY id")
+    return [Pasta(**dict(linha)) for linha in linhas]
+
+
+def atualizar_pasta(
+    conexao: sqlite3.Connection, pasta_id: int, nome: str, pasta_pai_id: int | None
+) -> Pasta:
+    """Renomeia e/ou move. Quem chama já conferiu a existência do destino e o ciclo."""
+    obter_pasta(conexao, pasta_id)
+    nome = _nome_da_pasta(nome)
+    _conferir_nome_livre(conexao, nome, pasta_pai_id, ignorar_id=pasta_id)
+    conexao.execute(
+        "UPDATE pastas SET nome = ?, nome_chave = ?, pasta_pai_id = ? WHERE id = ?",
+        (nome, chave_do_nome(nome), pasta_pai_id, pasta_id),
+    )
+    return obter_pasta(conexao, pasta_id)
+
+
+def excluir_pasta(conexao: sqlite3.Connection, pasta_id: int) -> None:
+    """O banco recusa (IntegrityError) se há subpasta ou formulário; quem chama confere antes."""
+    cursor = conexao.execute("DELETE FROM pastas WHERE id = ?", (pasta_id,))
+    if cursor.rowcount == 0:
+        raise NaoEncontrado(f"Pasta {pasta_id} não encontrada.")
+
+
+def pasta_esta_na_subarvore(conexao: sqlite3.Connection, pasta_id: int, raiz_id: int) -> bool:
+    """A `pasta_id` é a `raiz_id` ou está dentro dela (em qualquer profundidade)?
+
+    Sobe pelos pais a partir de `pasta_id`: a árvore é acíclica, então a consulta termina.
+    """
+    linha = conexao.execute(
+        """
+        WITH RECURSIVE ancestrais (id) AS (
+            SELECT ?
+            UNION
+            SELECT p.pasta_pai_id FROM pastas p JOIN ancestrais a ON p.id = a.id
+            WHERE p.pasta_pai_id IS NOT NULL
+        )
+        SELECT 1 FROM ancestrais WHERE id = ?
+        """,
+        (pasta_id, raiz_id),
+    ).fetchone()
+    return linha is not None
+
+
+def contar_subpastas(conexao: sqlite3.Connection, pasta_id: int) -> int:
+    return conexao.execute(
+        "SELECT COUNT(*) FROM pastas WHERE pasta_pai_id = ?", (pasta_id,)
+    ).fetchone()[0]
+
+
+def contar_formularios_da_pasta(conexao: sqlite3.Connection, pasta_id: int) -> int:
+    return conexao.execute(
+        "SELECT COUNT(*) FROM formularios WHERE pasta_id = ?", (pasta_id,)
+    ).fetchone()[0]
+
+
+def _nome_da_pasta(nome: str) -> str:
+    nome = nome.strip()
+    if not nome:
+        raise PastaInvalida((ErroDeCampo("nome", "O nome da pasta é obrigatório."),))
+    return nome
+
+
+def _conferir_nome_livre(
+    conexao: sqlite3.Connection, nome: str, pasta_pai_id: int | None, ignorar_id: int | None
+) -> None:
+    repetida = conexao.execute(
+        """
+        SELECT 1 FROM pastas
+        WHERE nome_chave = ? AND COALESCE(pasta_pai_id, 0) = COALESCE(?, 0)
+            AND (? IS NULL OR id != ?)
+        """,
+        (chave_do_nome(nome), pasta_pai_id, ignorar_id, ignorar_id),
+    ).fetchone()
+    if repetida:
+        raise PastaInvalida((ErroDeCampo("nome", _MENSAGEM_NOME_REPETIDO),))
 
 
 def excluir_formulario(conexao: sqlite3.Connection, formulario_id: int) -> None:
