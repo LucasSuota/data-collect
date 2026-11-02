@@ -127,7 +127,7 @@ function Formulario({ carregado, navegar }: { carregado: Carregado; navegar: Pro
         <h1 className="text-2xl font-semibold">
           {registro ? `Registro ${registro.id}` : "Novo registro"} · {carregado.nomeDoFormulario}
         </h1>
-        <p className="text-sm text-slate-500">Versão {carregado.numeroDaVersao} do formulário</p>
+        <p className="text-sm text-pedra-500">Versão {carregado.numeroDaVersao} do formulário</p>
       </div>
 
       {falhaGeral ? <Falha mensagem={falhaGeral} /> : null}
@@ -151,13 +151,13 @@ function Formulario({ carregado, navegar }: { carregado: Carregado; navegar: Pro
         <button
           type="submit"
           disabled={salvando}
-          className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
+          className="rounded bg-pedra-900 px-4 py-2 text-white disabled:opacity-60"
         >
           {salvando ? "Salvando…" : "Salvar"}
         </button>
         <button
           type="button"
-          className="rounded border border-slate-300 px-4 py-2"
+          className="rounded border border-pedra-300 px-4 py-2"
           onClick={() => navegar({ nome: "registros", formularioId: carregado.formularioId })}
         >
           Cancelar

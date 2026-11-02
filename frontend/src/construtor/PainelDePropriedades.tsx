@@ -16,7 +16,7 @@ interface Props {
 }
 
 const CAMPOS_USAVEIS_EM_FORMULA: TipoDeCampo[] = ["numero", "data", "sim_nao", "calculado"];
-const CLASSE = "rounded border border-slate-300 px-2 py-1.5 aria-[invalid=true]:border-red-500";
+const CLASSE = "rounded border border-pedra-300 px-2 py-1.5 aria-[invalid=true]:border-red-500";
 
 /**
  * Edita as propriedades de um campo. Só mostra as que o catálogo diz que o tipo aceita
@@ -232,7 +232,7 @@ function Moldura({
         "aria-describedby": descricao.length > 0 ? descricao.join(" ") : undefined,
       })}
       {ajuda ? (
-        <span id={idDaAjuda} className="text-xs text-slate-500">
+        <span id={idDaAjuda} className="text-xs text-pedra-500">
           {ajuda}
         </span>
       ) : null}

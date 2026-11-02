@@ -80,9 +80,9 @@ export function CampoDeFoto({ campo, valor, erros, somenteLeitura, aoMudar }: Pr
               className="text-sm"
             />
           )}
-          {enviando ? <p className="text-sm text-slate-500">Enviando…</p> : null}
+          {enviando ? <p className="text-sm text-pedra-500">Enviando…</p> : null}
           {cheio ? (
-            <p className="text-sm text-slate-500">Limite de {campo.maximo} foto(s) atingido.</p>
+            <p className="text-sm text-pedra-500">Limite de {campo.maximo} foto(s) atingido.</p>
           ) : null}
           {falha ? (
             <p role="alert" className="text-sm text-red-700">
@@ -121,7 +121,7 @@ function Miniatura({ anexoId, rotulo }: { anexoId: number; rotulo: string }) {
     <img src={url} alt={`${rotulo}: foto ${anexoId}`} className="h-20 w-20 rounded object-cover" />
   ) : (
     <div
-      className="h-20 w-20 animate-pulse rounded bg-slate-200"
+      className="h-20 w-20 animate-pulse rounded bg-pedra-200"
       role="img"
       aria-label="Carregando foto"
     />

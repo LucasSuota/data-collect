@@ -104,7 +104,7 @@ export function PaginaCriarComIa({ navegar }: Props) {
           Usar o construtor manual
         </a>
       </div>
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-pedra-600">
         Descreva o que quer coletar. A IA só escreve a definição dos formulários; o sistema continua
         sendo quem valida e calcula, e nada é salvo até você publicar.
       </p>
@@ -117,12 +117,12 @@ export function PaginaCriarComIa({ navegar }: Props) {
           id="pedido-ia"
           rows={4}
           maxLength={PEDIDO_MAXIMO}
-          className="rounded border border-slate-300 px-2 py-1.5"
+          className="rounded border border-pedra-300 px-2 py-1.5"
           value={pedido}
           aria-describedby="contador-do-pedido"
           onChange={(e) => setPedido(e.target.value)}
         />
-        <span id="contador-do-pedido" className="text-xs text-slate-500">
+        <span id="contador-do-pedido" className="text-xs text-pedra-500">
           {pedido.length}/{PEDIDO_MAXIMO}
         </span>
       </div>
@@ -130,7 +130,7 @@ export function PaginaCriarComIa({ navegar }: Props) {
         <button
           type="button"
           disabled={gerando || pedido.trim() === ""}
-          className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
+          className="rounded bg-pedra-900 px-4 py-2 text-white disabled:opacity-60"
           onClick={() => void gerar()}
         >
           {gerando ? "Gerando…" : rascunhos.length > 0 ? "Refinar rascunhos" : "Gerar formulários"}
@@ -144,7 +144,7 @@ export function PaginaCriarComIa({ navegar }: Props) {
         <section aria-label="Rascunhos" className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Rascunhos</h2>
           {totalDeErros > 0 ? (
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-pedra-600">
               Corrija os erros no construtor antes de publicar: se algum rascunho for inválido, o
               servidor recusa o conjunto inteiro e nada é criado.
             </p>
@@ -154,14 +154,14 @@ export function PaginaCriarComIa({ navegar }: Props) {
               <li
                 key={rascunho.chave}
                 className={`flex flex-col gap-2 rounded border p-3 ${
-                  rascunho.erros.length > 0 ? "border-red-400" : "border-slate-200"
+                  rascunho.erros.length > 0 ? "border-red-400" : "border-pedra-200"
                 }`}
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"
                     aria-label={`Nome do rascunho ${indice + 1}`}
-                    className="min-w-48 flex-1 rounded border border-slate-300 px-2 py-1.5"
+                    className="min-w-48 flex-1 rounded border border-pedra-300 px-2 py-1.5"
                     value={rascunho.nome}
                     onChange={(e) =>
                       setRascunhos((atuais) =>
@@ -178,7 +178,7 @@ export function PaginaCriarComIa({ navegar }: Props) {
                   </span>
                   <button
                     type="button"
-                    className="rounded border border-slate-300 px-2 py-1 text-sm"
+                    className="rounded border border-pedra-300 px-2 py-1 text-sm"
                     aria-label={`Editar o rascunho ${rascunho.nome}`}
                     onClick={() => setEditando(rascunho.chave)}
                   >
@@ -209,7 +209,7 @@ export function PaginaCriarComIa({ navegar }: Props) {
             <button
               type="button"
               disabled={publicando}
-              className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
+              className="rounded bg-pedra-900 px-4 py-2 text-white disabled:opacity-60"
               onClick={() => void publicarTodos()}
             >
               {publicando ? "Publicando…" : "Publicar todos"}

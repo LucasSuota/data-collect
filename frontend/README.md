@@ -20,6 +20,7 @@ Só apresentação. O front **não reimplementa** o avaliador de fórmulas nem a
 | `src/construtor/`              | O construtor: paleta vinda do `/catalogo`, arrastar e soltar (`dnd-kit`), painel de propriedades guiado pelo catálogo, editor de fórmulas com erro sublinhado por `posicao` e publicação             |
 | `src/ia/`                      | "Criar com IA": pedido, rascunhos propostos com os erros de cada um, edição de cada rascunho no construtor e "Publicar todos" (`POST /formularios/lote`)                                             |
 | `src/paginas/`                 | Telas: lista de formulários, preencher/editar registro, listagem com filtros, paginação e CSV                                                                                                        |
+| `src/ui/`                      | Componentes base (`Botao`, `CampoDeTexto`, `Aviso`, `Cartao`, `Selo`, `EstadoVazio`, `Icone`) sobre os tokens de `src/index.css`; as telas usam estes, nunca valores soltos                          |
 | `src/lib/`                     | `formatarNumero` (arredondamento decimal exato, meio para cima, só para exibição) e formatação de células                                                                                            |
 | `src/test/`                    | Configuração do Vitest e o cliente falso dos testes                                                                                                                                                  |
 
@@ -51,6 +52,9 @@ O CI falha se `openapi.json` ou `src/api/esquema.d.ts` estiverem desatualizados.
 **Token e URL da API:** no app instalado vêm do _preload_ do Electron (`window.formsApi`); em desenvolvimento, de `VITE_API_URL` e `VITE_FORMS_TOKEN` (ou deixe a API com `FORMS_SKIP_TOKEN=1`).
 
 ## Decisões que moldam este código
+
+- **Design tokens num só lugar** (`@theme` em `src/index.css`): paleta, fontes, raios, sombras e movimento. Direção: papel quente e tinta (`papel`, `superficie`, escala `pedra-*`), uma só cor de sinal (`sinal-*`, laranja) reservada a foco, seleção e destino de arraste, e cores de estado (`erro`, `sucesso`, `aviso`) com contraste AA. Foco visível global e `prefers-reduced-motion` desliga animações e transições. Não há modo escuro (fora do escopo desta fase).
+- **Dependência `@fontsource/ibm-plex-sans` e `-mono`** (licença OFL): a fonte vai **dentro do pacote**, porque o app instalado funciona offline e não pode depender de CDN. Só os pesos latinos usados (400, 500, 600 e mono 400, 500), que cobrem o português.
 
 - **O servidor é a fonte da verdade:** o front não valida nem calcula. Os erros chegam por `id` de campo e aparecem no campo certo; o construtor valida pelo `/definicoes/validar` e a prévia pelo `/definicoes/previa`.
 - **Erros presos à identidade estável, não à posição:** no construtor cada campo tem uma `chave` própria; reordenar não desloca os erros (AGENTS.md §5.3). Depois de um publicar que falhou, a validação pausa até a próxima edição, para não apagar erros que só o publicar conhece (contrato entre versões).
