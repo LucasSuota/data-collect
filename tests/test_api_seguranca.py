@@ -176,8 +176,8 @@ def test_configuracao_sem_pasta_usa_a_pasta_do_banco():
     # act
     configuracao = Configuracao.do_ambiente({"FORMS_DB_PATH": "/dados/x.db"})
 
-    # assert
-    assert configuracao.pasta_de_dados == Path("/dados")
+    # assert: o `resolve()` do código completa o caminho; no Windows `/dados` vira `D:\dados`
+    assert configuracao.pasta_de_dados == Path("/dados").resolve()
 
 
 # --- formato de erro uniforme ---
