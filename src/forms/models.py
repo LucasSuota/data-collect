@@ -108,6 +108,13 @@ class FormulaInvalida(ErroDeDominio):
         self.posicao = posicao
 
 
+class ErroDeCalculo(ErroDeDominio):
+    """Falha ao executar uma fórmula válida (divisão por zero, por exemplo).
+
+    Não é um erro de quem chama: `formulas.calcular_campos` o guarda no campo como `erro`.
+    """
+
+
 class DefinicaoInvalida(ErroDeDominio):
     def __init__(self, erros: tuple[ErroDeCampo, ...]) -> None:
         super().__init__("; ".join(f"{erro.campo}: {erro.mensagem}" for erro in erros))
