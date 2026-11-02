@@ -45,7 +45,13 @@ MODELOS_DE_RESPOSTA = {
         "publicada_em": True,
     },
     "ResumoDeVersaoSaida": {"id": True, "numero": True, "publicada_em": True},
-    "FormularioDetalheSaida": {"id": True, "nome": True, "criado_em": True, "versao_atual": True},
+    "FormularioDetalheSaida": {
+        "id": True,
+        "nome": True,
+        "criado_em": True,
+        "versao_atual": True,
+        "pasta_id": False,
+    },
     "ValidarSaida": {"valida": True, "erros": True},
     "PreviaSaida": {"valida": True, "erros": True, "calculados": True},
     "ResultadoCalculadoSaida": {"valor": True, "erro": True},
@@ -83,6 +89,7 @@ MODELOS_DE_RESPOSTA = {
 
 MODELOS_DE_ENTRADA = {
     "FormularioEntrada": {"nome": True, "definicao": True, "pasta_id": False},
+    "DuplicarEntrada": {"nome": False},
     "PastaEntrada": {"nome": True, "pasta_pai_id": False},
     "PastaAtualizacao": {"nome": True, "pasta_pai_id": True},
     "MoverFormularioEntrada": {"pasta_id": True},
@@ -117,6 +124,7 @@ ROTAS = [
     ("post", "/definicoes/validar"),
     ("post", "/formularios"),
     ("post", "/formularios/lote"),
+    ("post", "/formularios/{formulario_id}/duplicar"),
     ("post", "/formularios/{formulario_id}/registros"),
     ("post", "/formularios/{formulario_id}/resumo"),
     ("post", "/formularios/{formulario_id}/versoes"),
