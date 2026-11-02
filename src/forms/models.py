@@ -130,6 +130,10 @@ class RegistroInvalido(ErroDeDominio):
         self.erros = erros
 
 
+class ValorInvalido(ErroDeDominio):
+    """Um valor isolado não serve para o tipo do campo; quem chama sabe de qual campo veio."""
+
+
 class NaoEncontrado(ErroDeDominio):
     pass
 

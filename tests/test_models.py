@@ -21,6 +21,7 @@ from forms.models import (
     RegistroInvalido,
     ResultadoCalculado,
     TipoCampo,
+    ValorInvalido,
     Versao,
 )
 
@@ -195,6 +196,7 @@ def test_formula_invalida_aceita_posicao_ausente():
         FormulaInvalida("x"),
         NaoEncontrado("x"),
         ExclusaoBloqueada("x"),
+        ValorInvalido("x"),
     ],
 )
 def test_excecoes_de_dominio_herdam_da_base(excecao: Exception):
