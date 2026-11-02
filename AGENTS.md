@@ -201,7 +201,9 @@ LangChain, LlamaIndex, bancos vetoriais (inclui pgvector e extensões como `sqli
 
 ```
 src/forms/   models.py  tipos_campo.py  formulas.py  validacao.py
-             fotos.py  repositorio.py  servico.py  cli.py  api.py  app.py
+             fotos.py  exportacao.py  repositorio.py  cli.py  api.py  app.py
+             servico.py (fachada)  servico_base.py  servico_registros.py
+             servico_anexos.py  servico_consulta.py
              rag/  chunker.py  indice.py  responder.py        (opcional)
              ia/   cliente.py  resumo.py  validacao.py  gerador.py  (opcional)
 templates/   corpo_de_prova.json  inspecao_obra.json  (exemplos)
@@ -225,9 +227,10 @@ api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py
 - **`tipos_campo.py`**: o que cada tipo aceita, valida e normaliza.
 - **`formulas.py`**: parse, grafo de dependências, detecção de ciclo e avaliação. Funções puras, sem I/O.
 - **`validacao.py`**: valida um registro contra uma definição.
-- **`fotos.py`**: processa uma imagem (valida, orienta, remove metadados, converte para WebP na faixa de tamanho, §2.8). Função pura de bytes para bytes. O I/O de arquivo (gravar e apagar o `.webp`) fica em `servico.py`, com a pasta de dados recebida por parâmetro.
+- **`fotos.py`**: processa uma imagem (valida, orienta, remove metadados, converte para WebP na faixa de tamanho, §2.8). Função pura de bytes para bytes. O I/O de arquivo (gravar e apagar o `.webp`) fica em `servico_anexos.py` (reexportado por `servico.py`), com a pasta de dados recebida por parâmetro.
 - **`repositorio.py`**: único módulo que fala SQL. Sempre com parâmetros (`?`), nunca f-string em SQL.
-- **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI.
+- **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI. Para não virar um arquivo gigante, os casos de uso de registros (`servico_registros.py`), anexos (`servico_anexos.py`) e consulta/exportação (`servico_consulta.py`) moram em módulos próprios, e as peças comuns (transação, campos compartilhados) em `servico_base.py`; `servico.py` os reexporta, então API e CLI chamam tudo por `servico.<função>`.
+- **`exportacao.py`**: formatação das células e geração do CSV (§2.3, §12). Funções puras, sem I/O; usada por `servico_consulta.py`.
 - **`api.py`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP.
 - **`cli.py`**: `argparse` fino; só chama `servico.py`.
 - **`app.py`**: entrada do backend no app instalável (§4.1): sobe a API, serve o build do front e imprime a porta. Não abre janela (isso é do Electron). Só monta as peças, sem regra de negócio.

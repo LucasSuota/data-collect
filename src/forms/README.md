@@ -2,7 +2,7 @@
 
 > Backend Python do construtor de formulários: definições em JSON versionadas, validação, fórmulas e persistência em SQLite.
 
-Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `servico.py` e `fotos.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
+Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `fotos.py`, `exportacao.py` e os módulos `servico*.py`. Os demais módulos descritos em AGENTS.md §5 ainda não foram implementados.
 
 ## models.py
 
@@ -213,35 +213,37 @@ Validar uma definição de formulário e um registro contra ela, devolvendo **to
 - `tipos_calculados` é a base da regra de contrato dos compartilhados (nova versão da origem não pode mudar o tipo inferido).
 - `compartilhados_da_definicao` entrega o que o formulário libera aos dependentes; ciclo entre *formulários* e o contrato entre versões são do serviço, que conhece os outros formulários.
 
-## servico.py
+## servico.py (e servico_*.py)
 
 ### Responsabilidade
 Os casos de uso, chamados igualmente por `api.py` e `cli.py`. Toda regra de negócio fica aqui e abaixo. Recebe a conexão e o relógio (`agora`) por parâmetro, controla a transação (cada caso de uso grava tudo ou nada) e não conhece HTTP.
 
-### O que tem aqui (formulários e versões)
-| Símbolo | Papel |
+### O que tem aqui
+| Arquivo | Papel |
 |---|---|
-| `criar_formulario(conexao, nome, definicao, agora)` | Cria o formulário e já publica a versão 1; definição inválida ou nome repetido não cria nada |
-| `publicar_versao(conexao, formulario_id, definicao, agora)` | Próxima versão; confere o contrato dos campos compartilhados e o ciclo com os dependentes |
-| `validar_conjunto`, `criar_formularios_em_lote` | Formulários ainda não publicados que se referenciam: validados juntos, criados origem primeiro, em qualquer ordem de entrada |
-| `validar_definicao(conexao, definicao)` | Sem estado; devolve `{valida, erros}` com todos os erros em vez de levantar |
-| `catalogo()` | Tipos, funções e constantes lidos das mesmas tabelas do avaliador |
-| `listar_formularios`, `obter_formulario`, `listar_versoes`, `obter_versao` | Leitura; `obter_formulario` traz a versão atual completa |
+| `servico.py` | Fachada: formulários e versões (criar, publicar, lote, validar, catálogo) e reexportação de todo o resto, então a API chama `servico.<função>` |
+| `servico_base.py` | Transação (`transacao`), campos compartilhados dos formulários publicados e o `Cache` de uma operação |
+| `servico_registros.py` | Criar, atualizar (com cascata), excluir registro, excluir formulário e prévia |
+| `servico_anexos.py` | Upload de foto em duas etapas, leitura do WebP, limpeza de órfãos e os arquivos da pasta de dados |
+| `servico_consulta.py` | Listagem com colunas da definição, filtros, paginação e exportação CSV |
 
 ### Como se conecta
-- **Depende de:** `forms.repositorio`, `forms.validacao`, `forms.formulas`, `forms.tipos_campo` e `forms.models`.
-- **É usado por:** nenhum módulo ainda.
+- **Depende de:** `repositorio`, `validacao`, `formulas`, `tipos_campo`, `fotos`, `exportacao` e `models`.
+- **É usado por:** nenhum módulo ainda (`api.py` e `cli.py` virão).
 
 ### Decisões que moldam este código
-- Publicar um formulário, publicar uma versão e criar em lote usam **o mesmo motor** (`_validar_conjunto`): um formulário é o conjunto de 1. Mesmas mensagens e posições em todos os caminhos.
-- Os rascunhos são validados em ordem topológica (origem antes do dependente); ciclo entre rascunhos é erro citando os formulários, e o resto do lote continua sendo validado.
-- O tipo de um `calculado` compartilhado não é guardado: sai de analisar de novo a definição publicada da origem (`_compartilhados_publicados`).
-- Contrato entre versões: com dependentes diretos, a nova versão não pode remover, descompartilhar nem mudar o tipo (inclusive o inferido) de um campo compartilhado (AGENTS.md §2.7).
-- Origem com erro não gera "campo não compartilhado" nos dependentes: o dependente é avisado de que deve corrigir a origem primeiro.
+- Publicar um formulário, uma versão e um lote usam **o mesmo motor** (`_validar_conjunto`): um formulário é o conjunto de 1, então mensagens e posições são idênticas.
+- O registro nasce numa versão **explícita** e é sempre validado e recalculado contra ela; editar não muda a versão (AGENTS.md §5.2).
+- Uma só função de cálculo (`formulas.calcular_campos`) serve ao salvar, à cascata e à prévia.
+- Cascata (§2.7): atualizar uma origem recalcula os dependentes transitivos **na mesma transação**, cada um contra a sua versão; erro de cálculo vira erro no campo e só falha de infraestrutura desfaz tudo. Quem não mudou não é regravado.
+- Arquivo de foto só é apagado **depois** do commit; falha antes dele preserva o arquivo. O caminho guardado é conferido para nunca sair da pasta de dados.
+- A prévia trata vazio e valor pela metade como vazio: não reclama de obrigatório (isso é do salvar).
+- O filtro só aceita igualdade em `selecao`, `sim_nao`, `texto` e `calculado` booleano; o nome do campo vem de uma allowlist derivada da definição.
 
 ### Como testar
-`uv run pytest tests/test_servico_formularios.py`
+`uv run pytest tests/test_servico_*.py tests/test_exportacao.py`
 
 ### Cuidados
-- `_transacao` usa `BEGIN` explícito; as funções do repositório não fazem commit.
-- Registros, exclusão, anexos e exportação ainda não existem neste módulo.
+- `transacao` usa `BEGIN` explícito e não aceita ser chamada com uma transação já aberta: quem chama não deve deixar uma aberta.
+- Os campos compartilhados de uma origem e o tipo inferido de um `calculado` são recalculados reanalisando a definição publicada (não são guardados); `Cache` evita repetir isso dentro de uma operação.
+- A exportação CSV é a primeira candidata a corte se o tempo apertar (AGENTS.md §11).

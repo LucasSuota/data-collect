@@ -60,7 +60,7 @@ frontend/      React + TypeScript + Vite + Tailwind
 desktop/       Electron: janela, processo filho do backend, instalador
 src/forms/     backend Python
   models.py  tipos_campo.py  formulas.py  validacao.py  fotos.py
-  repositorio.py  servico.py  cli.py  api.py  app.py
+  repositorio.py  servico.py (+ servico_*.py)  exportacao.py  cli.py  api.py  app.py
   rag/  ia/                                  (opcionais)
 templates/     corpo_de_prova.json  inspecao_obra.json
 empacotamento/ scripts do instalável
