@@ -1,4 +1,4 @@
-# Construtor de Formulários Modulares
+# data-collect
 
 Aplicativo instalável (Windows, macOS e Linux) para **montar formulários por definição JSON**, preenchê-los e guardar os registros em SQLite, tudo local. Serve para inspeção de obra, ensaios de laboratório, checklists ou qualquer cadastro. Não há usuários nem cargos.
 

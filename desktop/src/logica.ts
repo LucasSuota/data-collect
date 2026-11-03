@@ -108,7 +108,7 @@ export function mensagemDeFalhaDoBackend(falha: FalhaDoBackend): string {
 export function paginaDeErro(mensagem: string): string {
   const html = `<!doctype html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"><title>Construtor de Formulários</title>
+<head><meta charset="utf-8"><title>data-collect</title>
 <style>body{font-family:system-ui,sans-serif;margin:3rem auto;max-width:34rem;padding:0 1rem;color:#0f172a}
 h1{font-size:1.4rem}p{line-height:1.5}.causa{background:#fef2f2;border:1px solid #fca5a5;border-radius:.5rem;padding:.75rem}</style>
 </head>

@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Construtor de Formulários Modulares",
+    "title": "data-collect",
     "description": "API local. Todo erro tem o formato `{detalhe, erros: [{campo, mensagem}]}`. Envie o token no cabeçalho `X-Forms-Token`.",
     "version": "0.1.0"
   },
