@@ -8,7 +8,8 @@ import {
   valoresDoRegistro,
 } from "../components/FormRenderer/valoresDoRegistro";
 import type { Rota } from "../rotas";
-import { Carregando, Falha, mensagemDe, useCarga } from "./Estado";
+import { EsqueletoDoFormulario } from "./esqueletos";
+import { Falha, mensagemDe, useCarga } from "./Estado";
 
 export type ModoDoRegistro =
   { tipo: "novo"; formularioId: number } | { tipo: "editar"; registroId: number };
@@ -61,7 +62,7 @@ export function PaginaDeRegistro({ modo, navegar }: Props) {
     };
   }, [cliente, chave]);
 
-  if (carga.situacao === "carregando") return <Carregando />;
+  if (carga.situacao === "carregando") return <EsqueletoDoFormulario />;
   if (carga.situacao === "erro") return <Falha mensagem={carga.mensagem} />;
   return <Formulario key={chave} carregado={carga.dados} navegar={navegar} />;
 }
