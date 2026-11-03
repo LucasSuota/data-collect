@@ -59,6 +59,18 @@
   --duracao-normal: 200ms;
 
   --animate-brilho: brilho 1.6s ease-in-out infinite;
+  --animate-entrar: entrar var(--duracao-normal) var(--ease-saida);
+
+  @keyframes entrar {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 
   @keyframes brilho {
     0%,
