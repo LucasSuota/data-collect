@@ -266,3 +266,147 @@ describe("PaginaDeFormularios: mover formulários", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("A pasta de destino não existe.");
   });
 });
+
+describe("PaginaDeFormularios: busca, escopo e ordem", () => {
+  const buscar = async (texto: string) =>
+    userEvent.type(screen.getByRole("searchbox", { name: "Buscar formulários e pastas" }), texto);
+
+  it("a busca acha formulários de qualquer pasta e diz onde cada um está", async () => {
+    renderizar(null);
+    await screen.findByText("Sem pasta");
+
+    await buscar("estacas");
+
+    expect(screen.getByText("Estacas SPT")).toBeInTheDocument();
+    expect(screen.getByText("Obras / Fundação")).toBeInTheDocument();
+    expect(screen.queryByText("Sondagem")).not.toBeInTheDocument();
+    expect(screen.getByText("Encontrado: 1 formulário e 0 pastas.")).toBeInTheDocument();
+  });
+
+  it("a busca também acha pastas, sem exigir acento", async () => {
+    renderizar(null);
+    await screen.findByText("Sem pasta");
+
+    await buscar("fundacao");
+
+    const pastas = screen.getByRole("list", { name: "Pastas encontradas" });
+    expect(within(pastas).getByText("Fundação")).toBeInTheDocument();
+    expect(within(pastas).getByText("em Obras")).toBeInTheDocument();
+  });
+
+  it("sem resultado, explica e oferece limpar a busca", async () => {
+    renderizar(null);
+    await screen.findByText("Sem pasta");
+
+    await buscar("zzz");
+    expect(screen.getByText("Nada encontrado")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Limpar a busca" }));
+    expect(screen.getByText("Sem pasta")).toBeInTheDocument();
+  });
+
+  it("dentro de uma pasta, dá para limitar a busca a ela e às descendentes", async () => {
+    renderizar(1);
+    await screen.findByText("Sondagem");
+
+    const arrastar = (nome: string) =>
+      screen.queryByRole("button", { name: `Arrastar o formulário ${nome}` });
+
+    await buscar("s");
+    expect(arrastar("Sem pasta")).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText("Onde buscar"), "pasta");
+    expect(arrastar("Sem pasta")).not.toBeInTheDocument();
+    expect(screen.getByText("Sondagem")).toBeInTheDocument();
+    expect(screen.getByText("Estacas SPT")).toBeInTheDocument();
+  });
+
+  it("na raiz não há escolha de onde buscar", async () => {
+    renderizar(null);
+    await screen.findByText("Sem pasta");
+
+    expect(screen.queryByLabelText("Onde buscar")).not.toBeInTheDocument();
+  });
+
+  it("abrir uma pasta pela busca limpa o termo", async () => {
+    const { navegar } = renderizar(null);
+    await screen.findByText("Sem pasta");
+    await buscar("fund");
+
+    await userEvent.click(
+      within(screen.getByRole("list", { name: "Pastas encontradas" })).getByRole("button"),
+    );
+
+    expect(navegar).toHaveBeenCalledWith({ nome: "pasta", pastaId: 3 });
+    expect(screen.getByRole("searchbox", { name: "Buscar formulários e pastas" })).toHaveValue("");
+  });
+
+  it("Esc limpa a busca", async () => {
+    renderizar(null);
+    await screen.findByText("Sem pasta");
+    await buscar("sond{Escape}");
+
+    expect(screen.getByRole("searchbox", { name: "Buscar formulários e pastas" })).toHaveValue("");
+  });
+
+  it("ordena a lista pelo seletor", async () => {
+    renderizar(null, {
+      listarFormularios: async () => [resumo(1, "Beta"), resumo(2, "Alfa"), resumo(3, "Gama")],
+    });
+    await screen.findByText("Alfa");
+    const nomesNaTela = () =>
+      screen
+        .getAllByRole("button", { name: /^Arrastar o formulário / })
+        .map((b) => b.getAttribute("aria-label")?.replace("Arrastar o formulário ", ""));
+    expect(nomesNaTela()).toEqual(["Alfa", "Beta", "Gama"]);
+
+    await userEvent.selectOptions(screen.getByLabelText("Ordenar por"), "nome-desc");
+
+    expect(nomesNaTela()).toEqual(["Gama", "Beta", "Alfa"]);
+  });
+});
+
+describe("ArvoreDePastas: filtro de pastas", () => {
+  const filtro = () => screen.getByRole("searchbox", { name: "Filtrar pastas" });
+
+  it("filtra a árvore e mantém o caminho até a pasta encontrada", async () => {
+    renderizar(null);
+    await screen.findByText("Sem pasta");
+
+    await userEvent.type(filtro(), "fundacao");
+
+    const arvore = screen.getByRole("tree", { name: "Pastas" });
+    expect(within(arvore).getByRole("button", { name: "Abrir a pasta Fundação" })).toBeVisible();
+    expect(within(arvore).getByRole("button", { name: "Abrir a pasta Obras" })).toBeVisible();
+    expect(within(arvore).queryByRole("button", { name: "Abrir a pasta Laboratório" })).toBeNull();
+  });
+
+  it("expande ramos recolhidos enquanto filtra", async () => {
+    renderizar(null);
+    await screen.findByText("Sem pasta");
+    await userEvent.click(screen.getByRole("button", { name: "Recolher Obras" }));
+    const arvore = screen.getByRole("tree", { name: "Pastas" });
+    expect(within(arvore).queryByRole("button", { name: "Abrir a pasta Fundação" })).toBeNull();
+
+    await userEvent.type(filtro(), "fund");
+
+    expect(within(arvore).getByRole("button", { name: "Abrir a pasta Fundação" })).toBeVisible();
+  });
+
+  it("sem pasta que combine, avisa e mantém 'Todos os formulários'", async () => {
+    renderizar(null);
+    await screen.findByText("Sem pasta");
+
+    await userEvent.type(filtro(), "zzz");
+
+    expect(screen.getByText(/Nenhuma pasta com «zzz»/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir Todos os formulários" })).toBeVisible();
+  });
+
+  it("sem nenhuma pasta criada, o filtro não aparece", async () => {
+    renderizar(null, { listarPastas: async () => [], listarFormularios: async () => [] });
+    await screen.findByText(/Nenhum formulário ainda/);
+
+    expect(screen.queryByRole("searchbox", { name: "Filtrar pastas" })).not.toBeInTheDocument();
+  });
+});

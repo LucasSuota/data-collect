@@ -1,6 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { useState } from "react";
-import { Icone } from "../ui";
+import { CampoDeBusca, Icone } from "../ui";
+import { filtrarArvore } from "./filtros";
 import { ID_DA_RAIZ, idDeDestino, montarArvore, type NoDaArvore, type Pasta } from "./pastas";
 
 interface Props {
@@ -12,9 +13,15 @@ interface Props {
   abrir: (pastaId: number | null) => void;
 }
 
-/** A árvore lateral: a raiz e todas as pastas, cada uma também um destino de arraste. */
+/**
+ * A árvore lateral: a raiz e todas as pastas, cada uma também um destino de arraste. O filtro
+ * esconde o que não combina e expande os ramos, para a pasta achada não ficar recolhida.
+ */
 export function ArvoreDePastas({ pastas, atual, contagem, abrir }: Props) {
   const [recolhidas, setRecolhidas] = useState<Set<number>>(new Set());
+  const [filtro, setFiltro] = useState("");
+  const filtrando = filtro.trim() !== "";
+  const nos = filtrarArvore(montarArvore(pastas), filtro);
 
   function alternar(pastaId: number) {
     setRecolhidas((anteriores) => {
@@ -25,29 +32,44 @@ export function ArvoreDePastas({ pastas, atual, contagem, abrir }: Props) {
   }
 
   return (
-    <nav aria-label="Navegação por pastas">
+    <nav aria-label="Navegação por pastas" className="flex flex-col gap-3">
+      {pastas.length > 0 ? (
+        <CampoDeBusca
+          rotulo="Filtrar pastas"
+          placeholder="Filtrar pastas"
+          valor={filtro}
+          aoMudar={setFiltro}
+        />
+      ) : null}
       <ul role="tree" aria-label="Pastas" className="flex flex-col gap-0.5">
         <Raiz
           selecionada={atual === null}
           total={contagem.get(null) ?? 0}
           abrir={() => abrir(null)}
         />
-        {montarArvore(pastas).map((no) => (
+        {nos.map((no) => (
           <No
             key={no.pasta.id}
             no={no}
             nivel={0}
             atual={atual}
             contagem={contagem}
-            recolhidas={recolhidas}
+            recolhidas={filtrando ? SEM_RECOLHIDAS : recolhidas}
             alternar={alternar}
             abrir={abrir}
           />
         ))}
       </ul>
+      {filtrando && nos.length === 0 ? (
+        <p role="status" className="px-2 text-sm text-pedra-500">
+          Nenhuma pasta com «{filtro.trim()}».
+        </p>
+      ) : null}
     </nav>
   );
 }
+
+const SEM_RECOLHIDAS: Set<number> = new Set();
 
 const LINHA =
   "group flex min-h-8 items-center gap-1.5 rounded-controle pr-2 text-sm transition-colors duration-(--duracao-rapida)";

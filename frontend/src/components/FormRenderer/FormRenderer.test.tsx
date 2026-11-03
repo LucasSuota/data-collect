@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ErroDaApi, type Definicao } from "../../api/cliente";
 import { clienteFalso, renderizarComApi } from "../../test/clienteFalso";
 import { ApiProvider } from "../../api/contexto";
+import { ProvedorDeGavetas } from "../../registros/ProvedorDeGavetas";
 import { FormRenderer } from "./FormRenderer";
 import type { ErrosPorCampo, Valores } from "./tipos";
 
@@ -341,42 +342,104 @@ describe("FormRenderer: referência", () => {
     versao_atual_id: 1,
     versao_atual_numero: 1,
   };
-  const registro = (id: number) => ({
+  const registro = (id: number, umidade: string) => ({
     id,
     formulario_id: 7,
     versao_id: 1,
-    dados: {},
+    dados: { umidade },
     criado_em: "2026-11-02T10:00:00+00:00",
     atualizado_em: "x",
   });
+  const coluna = {
+    id: "umidade",
+    rotulo: "Umidade",
+    tipo: "numero" as const,
+    unidade: "%",
+    casas_decimais: 1,
+    resultado: null,
+    opcoes: [],
+    filtravel: false,
+  };
+  const definicaoDaOrigem = {
+    campos: [{ id: "umidade", tipo: "numero", rotulo: "Umidade", compartilhado: true }],
+  };
+  const detalheDaOrigem = {
+    ...origem,
+    versao_atual: { id: 1, numero: 1, definicao: definicaoDaOrigem },
+  };
   const definicao: Definicao = {
     campos: [
       { id: "ensaio", tipo: "referencia", rotulo: "Ensaio de origem", formulario: "ensaio" },
     ],
   };
+  const clienteDaOrigem = (extra = {}) =>
+    clienteFalso({
+      listarFormularios: async () => [origem],
+      obterFormulario: async () => detalheDaOrigem as never,
+      listarVersoes: async () => [{ id: 1, numero: 1, publicada_em: "x" }],
+      listarRegistros: async () => ({
+        versao_id: 1,
+        total: 2,
+        colunas: [coluna],
+        itens: [registro(11, "12.34"), registro(12, "9.8")],
+      }),
+      ...extra,
+    });
 
-  it("lista os registros do formulário de origem (achado pelo nome) e devolve o id escolhido", async () => {
-    const listarRegistros = vi.fn(async () => ({
-      versao_id: 1,
-      total: 2,
-      itens: [registro(11), registro(12)],
-      colunas: [],
-    }));
+  it("lista os registros da origem com os valores e devolve o id escolhido", async () => {
     const aoMudar = vi.fn();
     renderizarComApi(
       <Controlado {...semPrevia} definicao={definicao} aoMudar={aoMudar} />,
-      clienteFalso({ listarFormularios: async () => [origem], listarRegistros }),
+      clienteDaOrigem(),
     );
 
-    const select = await screen.findByLabelText("Ensaio de origem");
-    await screen.findByRole("option", { name: /Registro 11/ });
-    await userEvent.selectOptions(select, "12");
+    await userEvent.click(await screen.findByRole("button", { name: /Selecionar registro$/ }));
+    const gaveta = await screen.findByRole("dialog");
+    expect(within(gaveta).getByText("12,3")).toBeInTheDocument();
+    await userEvent.click(within(gaveta).getByRole("button", { name: "Selecionar registro 12" }));
 
-    expect(listarRegistros).toHaveBeenCalledWith(7, { limite: 200 });
     expect(aoMudar).toHaveBeenLastCalledWith({ ensaio: 12 });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("referência vazia devolve null", async () => {
+  it("a busca filtra os registros pelo valor", async () => {
+    renderizarComApi(<Controlado {...semPrevia} definicao={definicao} />, clienteDaOrigem());
+    await userEvent.click(await screen.findByRole("button", { name: /Selecionar registro$/ }));
+    const gaveta = await screen.findByRole("dialog");
+
+    await userEvent.type(within(gaveta).getByRole("searchbox"), "9,8");
+
+    expect(within(gaveta).queryByRole("button", { name: "Selecionar registro 11" })).toBeNull();
+    expect(within(gaveta).getByRole("button", { name: "Selecionar registro 12" })).toBeVisible();
+  });
+
+  it("Esc fecha a lista sem escolher nada", async () => {
+    const aoMudar = vi.fn();
+    renderizarComApi(
+      <Controlado {...semPrevia} definicao={definicao} aoMudar={aoMudar} />,
+      clienteDaOrigem(),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /Selecionar registro$/ }));
+    await screen.findByRole("dialog");
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(aoMudar).not.toHaveBeenCalled();
+  });
+
+  it("registro escolhido aparece com os valores que a origem libera", async () => {
+    renderizarComApi(
+      <Controlado {...semPrevia} definicao={definicao} inicial={{ ensaio: 11 }} />,
+      clienteDaOrigem(),
+    );
+
+    expect(await screen.findByText("12,3")).toBeInTheDocument();
+    expect(screen.getByText("Umidade")).toBeInTheDocument();
+    expect(screen.getByText("#11")).toBeInTheDocument();
+  });
+
+  it("remover a referência devolve null", async () => {
     const aoMudar = vi.fn();
     renderizarComApi(
       <Controlado
@@ -385,37 +448,28 @@ describe("FormRenderer: referência", () => {
         inicial={{ ensaio: 11 }}
         aoMudar={aoMudar}
       />,
-      clienteFalso({
-        listarFormularios: async () => [origem],
-        listarRegistros: async () => ({
-          versao_id: 1,
-          colunas: [],
-          total: 1,
-          itens: [registro(11)],
-        }),
-      }),
+      clienteDaOrigem(),
     );
 
-    await screen.findByRole("option", { name: /Registro 11/ });
-    await userEvent.selectOptions(screen.getByLabelText("Ensaio de origem"), "— nenhum —");
+    await userEvent.click(await screen.findByRole("button", { name: "Remover a referência" }));
 
     expect(aoMudar).toHaveBeenLastCalledWith({ ensaio: null });
   });
 
-  it("referência preenchida aparece selecionada mesmo antes da lista carregar", () => {
+  it("referência preenchida aparece mesmo antes da lista carregar", () => {
     renderizarComApi(
       <Controlado {...semPrevia} definicao={definicao} inicial={{ ensaio: 99 }} />,
       clienteFalso({ listarFormularios: () => new Promise(() => {}) }),
     );
 
-    expect(screen.getByRole("option", { name: "Registro 99" })).toBeInTheDocument();
+    expect(screen.getByText("#99")).toBeInTheDocument();
+    expect(screen.getByText("Carregando os valores…")).toBeInTheDocument();
   });
 
   it("avisa quando a origem ainda não tem registros", async () => {
     renderizarComApi(
       <Controlado {...semPrevia} definicao={definicao} />,
-      clienteFalso({
-        listarFormularios: async () => [origem],
+      clienteDaOrigem({
         listarRegistros: async () => ({ versao_id: 1, colunas: [], total: 0, itens: [] }),
       }),
     );
@@ -432,6 +486,121 @@ describe("FormRenderer: referência", () => {
     expect(
       await screen.findByText(/Não foi possível carregar os registros de origem/),
     ).toBeInTheDocument();
+  });
+
+  it("sem o provedor de gavetas não oferece criar nem editar a origem", async () => {
+    renderizarComApi(
+      <Controlado {...semPrevia} definicao={definicao} inicial={{ ensaio: 11 }} />,
+      clienteDaOrigem(),
+    );
+    await screen.findByText("12,3");
+
+    expect(screen.queryByRole("button", { name: /Criar ensaio/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Editar origem" })).toBeNull();
+  });
+
+  describe("com o provedor de gavetas", () => {
+    const origemEditavel = (criarRegistro: ReturnType<typeof vi.fn>, extra = {}) =>
+      clienteDaOrigem({
+        criarRegistro,
+        previa: async () => ({ valida: true, erros: [], calculados: {} }),
+        ...extra,
+      });
+
+    it("cria o registro de origem numa gaveta e já o seleciona", async () => {
+      const criarRegistro = vi.fn(async () => registro(50, "7.5"));
+      const aoMudar = vi.fn();
+      renderizarComApi(
+        <ProvedorDeGavetas>
+          <Controlado {...semPrevia} definicao={definicao} aoMudar={aoMudar} />
+        </ProvedorDeGavetas>,
+        origemEditavel(criarRegistro),
+      );
+
+      await userEvent.click(await screen.findByRole("button", { name: "Criar ensaio" }));
+      const gaveta = await screen.findByRole("dialog", { name: /Novo registro · Ensaio/ });
+      await userEvent.type(await within(gaveta).findByLabelText(/Umidade/), "7,5");
+      await userEvent.click(within(gaveta).getByRole("button", { name: "Salvar" }));
+
+      await waitFor(() => expect(aoMudar).toHaveBeenLastCalledWith({ ensaio: 50 }));
+      expect(criarRegistro).toHaveBeenCalledWith(7, 1, { umidade: "7.5" });
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("salvar na gaveta não envia o formulário que está por baixo", async () => {
+      const criarRegistro = vi.fn(async () => registro(50, "7.5"));
+      const aoEnviar = vi.fn((evento: { preventDefault: () => void }) => evento.preventDefault());
+      renderizarComApi(
+        <ProvedorDeGavetas>
+          <form onSubmit={aoEnviar}>
+            <Controlado {...semPrevia} definicao={definicao} />
+          </form>
+        </ProvedorDeGavetas>,
+        origemEditavel(criarRegistro),
+      );
+      await userEvent.click(await screen.findByRole("button", { name: "Criar ensaio" }));
+      const gaveta = await screen.findByRole("dialog");
+      await userEvent.type(await within(gaveta).findByLabelText(/Umidade/), "7,5");
+
+      await userEvent.click(within(gaveta).getByRole("button", { name: "Salvar" }));
+
+      await waitFor(() => expect(criarRegistro).toHaveBeenCalled());
+      expect(aoEnviar).not.toHaveBeenCalled();
+    });
+
+    it("cancelar a gaveta não muda a referência", async () => {
+      const aoMudar = vi.fn();
+      renderizarComApi(
+        <ProvedorDeGavetas>
+          <Controlado {...semPrevia} definicao={definicao} aoMudar={aoMudar} />
+        </ProvedorDeGavetas>,
+        origemEditavel(vi.fn()),
+      );
+      await userEvent.click(await screen.findByRole("button", { name: "Criar ensaio" }));
+      const gaveta = await screen.findByRole("dialog");
+      await within(gaveta).findByLabelText(/Umidade/);
+
+      await userEvent.click(within(gaveta).getByRole("button", { name: "Cancelar" }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(aoMudar).not.toHaveBeenCalled();
+    });
+
+    it("edita a origem selecionada e recarrega os valores", async () => {
+      const atualizarRegistro = vi.fn(async () => registro(11, "20"));
+      const aoMudar = vi.fn();
+      renderizarComApi(
+        <ProvedorDeGavetas>
+          <Controlado
+            {...semPrevia}
+            definicao={definicao}
+            inicial={{ ensaio: 11 }}
+            aoMudar={aoMudar}
+          />
+        </ProvedorDeGavetas>,
+        origemEditavel(vi.fn(), {
+          atualizarRegistro,
+          obterRegistro: async () => registro(11, "12.34"),
+          obterVersao: async () => ({
+            id: 1,
+            formulario_id: 7,
+            numero: 1,
+            definicao: definicaoDaOrigem,
+            publicada_em: "x",
+          }),
+        }),
+      );
+
+      await userEvent.click(await screen.findByRole("button", { name: "Editar origem" }));
+      const gaveta = await screen.findByRole("dialog", { name: /Registro 11 · Ensaio/ });
+      const campo = await within(gaveta).findByLabelText(/Umidade/);
+      await userEvent.clear(campo);
+      await userEvent.type(campo, "20");
+      await userEvent.click(within(gaveta).getByRole("button", { name: "Salvar" }));
+
+      await waitFor(() => expect(atualizarRegistro).toHaveBeenCalledWith(11, { umidade: "20" }));
+      await waitFor(() => expect(aoMudar).toHaveBeenLastCalledWith({ ensaio: 11 }));
+    });
   });
 });
 

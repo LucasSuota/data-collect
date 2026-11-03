@@ -39,7 +39,8 @@ function formatarCalculado(coluna: Coluna, guardado: unknown): string {
   return String(valor);
 }
 
-function dataBrasileira(iso: string): string {
+/** "2026-11-02" → "02/11/2026"; qualquer outro texto volta como veio. */
+export function dataBrasileira(iso: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso;
 }
 

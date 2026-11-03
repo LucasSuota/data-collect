@@ -8,6 +8,7 @@ const CASOS: [string, Rota][] = [
   ["#/construtor", { nome: "novoFormulario" }],
   ["#/construtor/ia", { nome: "criarComIa" }],
   ["#/formularios/3/editar", { nome: "editarFormulario", formularioId: 3 }],
+  ["#/mapa", { nome: "mapa" }],
   ["#/pastas/5", { nome: "pasta", pastaId: 5 }],
   ["#/construtor/pasta/5", { nome: "novoFormulario", pastaId: 5 }],
 ];
@@ -30,6 +31,7 @@ describe("rotas", () => {
     "#/registros/1/x",
     "#/construtor/outra",
     "#/construtor/ia/x",
+    "#/mapa/x",
     "#/pastas",
     "#/pastas/0",
     "#/pastas/abc",

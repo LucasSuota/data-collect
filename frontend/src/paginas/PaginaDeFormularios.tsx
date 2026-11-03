@@ -12,10 +12,26 @@ import { useState, type FormEvent } from "react";
 import { useApi } from "../api/contexto";
 import { ErroDaApi, type ResumoDeFormulario } from "../api/cliente";
 import type { Rota } from "../rotas";
-import { Aviso, Botao, CampoDeTexto, Cartao, EstadoVazio, Icone, Selecao } from "../ui";
+import {
+  Aviso,
+  Botao,
+  CampoDeBusca,
+  CampoDeTexto,
+  Cartao,
+  EstadoVazio,
+  Icone,
+  Selecao,
+} from "../ui";
 import { ArvoreDePastas } from "./ArvoreDePastas";
 import { EsqueletoDaLista } from "./esqueletos";
 import { Falha, mensagemDe, mensagemDetalhada, useCarga } from "./Estado";
+import {
+  ORDENS,
+  listarDaTela,
+  rotuloDoCaminho,
+  type EscopoDaBusca,
+  type OrdemDaLista,
+} from "./filtros";
 import { LinhaDeFormulario } from "./LinhaDeFormulario";
 import {
   INSTRUCOES_DE_ARRASTE,
@@ -52,6 +68,9 @@ export function PaginaDeFormularios({ navegar, pastaId = null }: Props) {
   const [aviso, setAviso] = useState<string | null>(null);
   const [copiado, setCopiado] = useState<{ id: number; nome: string } | null>(null);
   const [arrastando, setArrastando] = useState<string | null>(null);
+  const [busca, setBusca] = useState("");
+  const [escopo, setEscopo] = useState<EscopoDaBusca>("tudo");
+  const [ordem, setOrdem] = useState<OrdemDaLista>("nome-asc");
   const sensores = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
@@ -114,10 +133,20 @@ export function PaginaDeFormularios({ navegar, pastaId = null }: Props) {
     const pasta = f.pasta_id ?? null;
     contagem.set(pasta, (contagem.get(pasta) ?? 0) + 1);
   }
-  const subpastas = pastas
-    .filter((p) => p.pasta_pai_id === (atual?.id ?? null))
-    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
-  const daPasta = formularios.filter((f) => (f.pasta_id ?? null) === (atual?.id ?? null));
+  const buscando = busca.trim() !== "";
+  const { pastas: subpastas, formularios: daPasta } = listarDaTela({
+    formularios,
+    pastas,
+    atualId: atual?.id ?? null,
+    termo: busca,
+    escopo,
+    ordem,
+  });
+  // Abrir uma pasta é sair da busca: o termo digitado não deve filtrar o conteúdo da pasta nova.
+  const abrirPasta = (id: number | null) => {
+    setBusca("");
+    navegar(id === null ? { nome: "formularios" } : { nome: "pasta", pastaId: id });
+  };
   const todosOsDestinos = destinosDeMovimento(pastas);
   const arrastado = arrastando
     ? formularios.find((f) => idDeArraste(f.id) === arrastando)
@@ -146,9 +175,7 @@ export function PaginaDeFormularios({ navegar, pastaId = null }: Props) {
             pastas={pastas}
             atual={atual?.id ?? null}
             contagem={contagem}
-            abrir={(id) =>
-              navegar(id === null ? { nome: "formularios" } : { nome: "pasta", pastaId: id })
-            }
+            abrir={abrirPasta}
           />
         }
       >
@@ -178,21 +205,53 @@ export function PaginaDeFormularios({ navegar, pastaId = null }: Props) {
           </Aviso>
         ) : null}
 
+        {formularios.length > 0 || pastas.length > 0 ? (
+          <BarraDeFiltros
+            busca={busca}
+            aoBuscar={setBusca}
+            ordem={ordem}
+            aoOrdenar={setOrdem}
+            escopo={atual ? escopo : null}
+            aoEscolherEscopo={setEscopo}
+            nomeDaPasta={atual?.nome}
+            resultado={buscando ? { formularios: daPasta.length, pastas: subpastas.length } : null}
+          />
+        ) : null}
+
         {subpastas.length > 0 ? (
-          <ul aria-label="Pastas desta pasta" className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          <ul
+            aria-label={buscando ? "Pastas encontradas" : "Pastas desta pasta"}
+            className="grid grid-cols-2 gap-3 md:grid-cols-3"
+          >
             {subpastas.map((subpasta) => (
               <CartaoDePasta
                 key={subpasta.id}
                 pasta={subpasta}
                 formularios={contagem.get(subpasta.id) ?? 0}
                 subpastas={pastas.filter((p) => p.pasta_pai_id === subpasta.id).length}
-                abrir={() => navegar({ nome: "pasta", pastaId: subpasta.id })}
+                caminho={
+                  buscando && subpasta.pasta_pai_id !== null
+                    ? rotuloDoCaminho(pastas, subpasta.pasta_pai_id)
+                    : undefined
+                }
+                abrir={() => abrirPasta(subpasta.id)}
               />
             ))}
           </ul>
         ) : null}
 
-        {daPasta.length === 0 && subpastas.length === 0 ? (
+        {buscando && daPasta.length === 0 && subpastas.length === 0 ? (
+          <EstadoVazio
+            icone="busca"
+            titulo="Nada encontrado"
+            acao={<Botao onClick={() => setBusca("")}>Limpar a busca</Botao>}
+          >
+            Nenhum formulário ou pasta combina com «{busca.trim()}»
+            {atual && escopo === "pasta" ? " nesta pasta" : ""}.
+          </EstadoVazio>
+        ) : null}
+
+        {!buscando && daPasta.length === 0 && subpastas.length === 0 ? (
           <EstadoVazio
             icone={atual ? "pasta" : "registros"}
             titulo={atual ? "Esta pasta está vazia" : "Nenhum formulário ainda"}
@@ -226,6 +285,9 @@ export function PaginaDeFormularios({ navegar, pastaId = null }: Props) {
                   key={formulario.id}
                   formulario={formulario}
                   destinos={todosOsDestinos.filter((d) => d.id !== (formulario.pasta_id ?? null))}
+                  caminho={
+                    buscando ? rotuloDoCaminho(pastas, formulario.pasta_id ?? null) : undefined
+                  }
                   navegar={navegar}
                   aoAlterar={recarregar}
                   aoCopiado={(copia) => {
@@ -266,15 +328,90 @@ function Moldura({ lateral, children }: { lateral?: React.ReactNode; children: R
   );
 }
 
+/** Busca por nome (formulários e pastas), onde buscar e a ordem da lista. */
+function BarraDeFiltros({
+  busca,
+  aoBuscar,
+  ordem,
+  aoOrdenar,
+  escopo,
+  aoEscolherEscopo,
+  nomeDaPasta,
+  resultado,
+}: {
+  busca: string;
+  aoBuscar: (valor: string) => void;
+  ordem: OrdemDaLista;
+  aoOrdenar: (ordem: OrdemDaLista) => void;
+  /** `null` na raiz, onde buscar "só aqui" não faz sentido. */
+  escopo: EscopoDaBusca | null;
+  aoEscolherEscopo: (escopo: EscopoDaBusca) => void;
+  nomeDaPasta?: string;
+  /** `null` sem busca. */
+  resultado: { formularios: number; pastas: number } | null;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div role="search" className="flex flex-wrap items-center gap-2">
+        <CampoDeBusca
+          rotulo="Buscar formulários e pastas"
+          placeholder="Buscar formulários e pastas"
+          className="min-w-56 flex-1"
+          valor={busca}
+          aoMudar={aoBuscar}
+        />
+        {escopo !== null ? (
+          <Selecao
+            rotulo="Onde buscar"
+            ocultarRotulo
+            tamanho="normal"
+            value={escopo}
+            onChange={(e) => aoEscolherEscopo(e.target.value as EscopoDaBusca)}
+          >
+            <option value="tudo">Em todas as pastas</option>
+            <option value="pasta">Só em {nomeDaPasta}</option>
+          </Selecao>
+        ) : null}
+        <Selecao
+          rotulo="Ordenar por"
+          ocultarRotulo
+          tamanho="normal"
+          value={ordem}
+          onChange={(e) => aoOrdenar(e.target.value as OrdemDaLista)}
+        >
+          {ORDENS.map((o) => (
+            <option key={o.valor} value={o.valor}>
+              Ordenar: {o.rotulo}
+            </option>
+          ))}
+        </Selecao>
+      </div>
+      {resultado ? (
+        <p role="status" className="text-sm text-pedra-600">
+          {textoDoResultado(resultado)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function textoDoResultado({ formularios, pastas }: { formularios: number; pastas: number }) {
+  const plural = (n: number, singular: string, mais: string) => `${n} ${n === 1 ? singular : mais}`;
+  return `Encontrado${formularios + pastas === 1 ? "" : "s"}: ${plural(formularios, "formulário", "formulários")} e ${plural(pastas, "pasta", "pastas")}.`;
+}
+
 function CartaoDePasta({
   pasta,
   formularios,
   subpastas,
+  caminho,
   abrir,
 }: {
   pasta: Pasta;
   formularios: number;
   subpastas: number;
+  /** Onde a pasta está, quando a lista mistura níveis (resultado de busca). */
+  caminho?: string;
   abrir: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: idDeDestino(pasta.id) });
@@ -296,6 +433,9 @@ function CartaoDePasta({
         </span>
         <span className="min-w-0">
           <span className="block truncate font-medium">{pasta.nome}</span>
+          {caminho ? (
+            <span className="block truncate text-sm text-pedra-500">em {caminho}</span>
+          ) : null}
           <span className="block text-sm text-pedra-500">{resumo || "Vazia"}</span>
         </span>
       </button>
