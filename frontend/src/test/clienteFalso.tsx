@@ -14,6 +14,7 @@ export function clienteFalso(sobrescritas: Partial<ClienteApi> = {}): ClienteApi
     "criarFormulario",
     "criarFormulariosEmLote",
     "excluirFormulario",
+    "duplicarFormulario",
     "listarVersoes",
     "obterVersao",
     "publicarVersao",

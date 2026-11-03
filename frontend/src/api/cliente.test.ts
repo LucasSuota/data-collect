@@ -369,6 +369,32 @@ describe("criarCliente", () => {
   });
 });
 
+describe("duplicarFormulario", () => {
+  it("sem nome, faz POST sem corpo e devolve o formulário criado", async () => {
+    const criado = { id: 9, nome: "ensaio (cópia)" };
+    const { cliente, fetchFalso } = clienteCom(respostaDe({ status: 201, corpo: criado }));
+
+    const resultado = await cliente.duplicarFormulario(3);
+
+    const { url, init, cabecalhos } = ultimaChamada(fetchFalso);
+    expect(url).toBe("http://127.0.0.1:8000/formularios/3/duplicar");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+    expect(cabecalhos.has("Content-Type")).toBe(false);
+    expect(resultado).toEqual(criado);
+  });
+
+  it("com nome, manda `{nome}` como JSON", async () => {
+    const { cliente, fetchFalso } = clienteCom(respostaDe({ status: 201, corpo: {} }));
+
+    await cliente.duplicarFormulario(3, "Ensaio B");
+
+    const { init, cabecalhos } = ultimaChamada(fetchFalso);
+    expect(JSON.parse(String(init.body))).toEqual({ nome: "Ensaio B" });
+    expect(cabecalhos.get("Content-Type")).toBe("application/json");
+  });
+});
+
 describe("gerarFormularios", () => {
   it("manda o pedido e os rascunhos em edição e devolve os rascunhos propostos", async () => {
     const proposta = {
