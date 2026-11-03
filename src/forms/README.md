@@ -300,7 +300,7 @@ A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio 
 - **Configuração** (variáveis de ambiente, ver `.env.example`): `FORMS_DB_PATH`, `FORMS_DATA_DIR`, `FORMS_TOKEN`, `FORMS_SKIP_TOKEN`, `FORMS_CORS_ORIGINS`.
 
 ### Decisões que moldam este código
-- Erro uniforme `{detalhe, erros: [{campo, mensagem, posicao?}]}` em português, inclusive nos erros do próprio Pydantic, 404/405 e 500 (sem vazar a causa). 422 validação e definição inválida, 404 inexistente, 409 exclusão bloqueada, 401 token.
+- Erro uniforme `{detalhe, erros: [{campo, mensagem, posicao?}]}` em português, inclusive nos erros do próprio Pydantic, 404/405 e 500 (sem vazar a causa; o 500 sai por um middleware dentro do CORS, senão o navegador o esconde do front). 422 validação e definição inválida, 404 inexistente, 409 exclusão bloqueada, 401 token.
 - Token por execução no cabeçalho `X-Forms-Token`, **falha fechada**: sem token configurado e sem `FORMS_SKIP_TOKEN`, toda requisição é recusada. O middleware do token fica *dentro* do CORS, para o preflight (que não leva token) passar e o 401 também levar os cabeçalhos CORS.
 - CORS só para as origens do front (padrão: as duas do Vite); `*` é recusado na configuração.
 - Conexão aberta e fechada por requisição (dependência); o relógio também é dependência, então os testes o fixam. Importar o módulo não abre banco nem cria arquivo.

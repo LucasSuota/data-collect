@@ -137,6 +137,23 @@ def test_o_401_tambem_leva_os_cabecalhos_cors_para_o_front_conseguir_ler_o_erro(
     assert resposta.headers["access-control-allow-origin"] == ORIGEM_PERMITIDA
 
 
+def test_erro_interno_tambem_leva_cors_e_o_formato_uniforme(app):
+    # arrange: uma rota que estoura, como a de qualquer bug do servidor
+    def estourar():
+        raise RuntimeError("falha inesperada")
+
+    app.add_api_route("/falha-de-teste", estourar)
+    cliente = TestClient(app, headers={"X-Forms-Token": TOKEN}, raise_server_exceptions=False)
+
+    # act
+    resposta = cliente.get("/falha-de-teste", headers={"Origin": ORIGEM_PERMITIDA})
+
+    # assert: sem o CORS o navegador bloqueia a resposta e o front acha que o servidor caiu
+    assert resposta.status_code == 500
+    assert resposta.json() == {"detalhe": "Erro interno do servidor.", "erros": []}
+    assert resposta.headers["access-control-allow-origin"] == ORIGEM_PERMITIDA
+
+
 def test_cors_nunca_aceita_asterisco(tmp_path: Path):
     # act / assert
     with pytest.raises(ValueError, match="nunca"):

@@ -5,6 +5,7 @@ Pydantic e HTTP só existem aqui e em `api_esquemas.py`/`api_rotas.py`; toda reg
 fica em `servico.py` e abaixo.
 """
 
+import logging
 import os
 import secrets
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
@@ -120,6 +121,9 @@ def criar_app(
 
     # Ordem importa: o último adicionado fica por fora. O CORS vai por fora do token, para o
     # preflight (OPTIONS, que não leva o token) passar e o 401 também receber os cabeçalhos CORS.
+    # O tratador de erro inesperado fica por dentro de ambos, pelo mesmo motivo: o 500 precisa
+    # passar pelo CORS, senão o navegador o esconde e o front acha que o servidor caiu.
+    app.middleware("http")(_responder_erro_inesperado)
     app.middleware("http")(_exigir_token(configuracao, rotas_da_api, pasta_do_front is not None))
     app.add_middleware(
         CORSMiddleware,
@@ -157,6 +161,22 @@ def _exigir_token(
 
 
 # --- erros: sempre {detalhe, erros} em português ---
+
+_registro = logging.getLogger(__name__)
+
+
+async def _responder_erro_inesperado(request: Request, chamar_proximo: Callable) -> Response:
+    """Exceção não prevista vira o erro uniforme 500.
+
+    Não pode ser um `exception_handler(Exception)`: o Starlette o executa no
+    `ServerErrorMiddleware`, o mais externo, depois do CORS, e a resposta sairia sem os
+    cabeçalhos CORS. A causa não vai para o cliente (§12); fica no log do servidor.
+    """
+    try:
+        return await chamar_proximo(request)
+    except Exception:
+        _registro.exception("Erro inesperado em %s %s", request.method, request.url.path)
+        return resposta_de_erro(500, "Erro interno do servidor.")
 
 
 def _registrar_tratadores_de_erro(app: FastAPI) -> None:
@@ -214,11 +234,6 @@ def _registrar_tratadores_de_erro(app: FastAPI) -> None:
         return resposta_de_erro(
             erro.status_code, _DETALHES_HTTP.get(erro.status_code, "Erro na requisição.")
         )
-
-    @app.exception_handler(Exception)
-    async def _inesperado(_: Request, erro: Exception) -> JSONResponse:
-        # Sem vazar a causa para o cliente (§12); quem depura olha o log do servidor.
-        return resposta_de_erro(500, "Erro interno do servidor.")
 
 
 _DETALHES_HTTP = {
