@@ -10,6 +10,7 @@ import {
   parDoCursor,
   type Edicao,
 } from "./formulaTexto";
+import { EditorDeBlocos } from "./EditorDeBlocos";
 
 type FuncaoDoCatalogo = Esquemas["FuncaoDoCatalogoSaida"];
 
@@ -51,6 +52,8 @@ export function EditorDeFormula({
   const [cursor, setCursor] = useState(valor.length);
   const [ativa, setAtiva] = useState<number | null>(null);
   const [fechada, setFechada] = useState(false);
+  // O texto é a fonte única; os blocos são só outra forma de editá-lo.
+  const [modo, setModo] = useState<"texto" | "blocos">("texto");
 
   // Depois de uma edição feita por aqui (par de parênteses, sugestão), devolve o cursor ao lugar
   // certo: o `<textarea>` controlado o jogaria para o fim ao receber o valor novo.
@@ -120,124 +123,166 @@ export function EditorDeFormula({
 
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-sm font-medium text-pedra-700">
-        {rotulo}
-      </label>
-      <div className="relative">
-        {/* Espelho do texto, por trás: só desenha o erro, o par do cursor e o parêntese sem par. */}
-        <pre
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words rounded-controle border border-transparent px-2 py-1.5 font-mono text-sm text-transparent"
+      <div className="flex items-center justify-between gap-3">
+        {modo === "texto" ? (
+          <label htmlFor={id} className="text-sm font-medium text-pedra-700">
+            {rotulo}
+          </label>
+        ) : (
+          <span className="text-sm font-medium text-pedra-700">{rotulo}</span>
+        )}
+        <div
+          role="group"
+          aria-label="Modo de edição"
+          className="flex rounded-controle border border-pedra-300 p-0.5"
         >
-          <Espelho valor={valor} posicaoDoErro={erro?.posicao} par={par} semPar={semPar} />
-        </pre>
-        <textarea
-          ref={campo}
-          id={id}
-          rows={3}
-          spellCheck={false}
-          role="combobox"
-          aria-autocomplete="list"
-          aria-expanded={aberta}
-          aria-controls={aberta ? idDaLista : undefined}
-          aria-activedescendant={ativa === null || !aberta ? undefined : `${idDaLista}-${ativa}`}
-          value={valor}
-          aria-invalid={erro ? true : undefined}
-          aria-describedby={erro ? idDoErro : undefined}
-          className="relative w-full rounded-controle border border-pedra-300 bg-transparent px-2 py-1.5 font-mono text-sm aria-[invalid=true]:border-erro-300"
-          onChange={(e) => {
-            aoMudar(e.target.value);
-            setCursor(e.target.selectionStart);
-            setAtiva(null);
-            setFechada(false);
-          }}
-          onKeyDown={aoTeclar}
-          onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
-        />
-      </div>
-
-      {erro ? (
-        <p id={idDoErro} role="alert" className="text-sm text-erro-700">
-          {erro.mensagem}
-        </p>
-      ) : null}
-
-      {aberta ? (
-        <ul
-          id={idDaLista}
-          role="listbox"
-          aria-label="Sugestões"
-          className="overflow-hidden rounded-controle border border-pedra-200 bg-superficie text-sm shadow-elevada"
-        >
-          {sugestoes.map((sugestao, indice) => (
-            <li
-              key={sugestao.nome}
-              id={`${idDaLista}-${indice}`}
-              role="option"
-              aria-selected={indice === ativa}
-              className={`cursor-pointer px-2.5 py-1.5 ${indice === ativa ? "bg-sinal-100" : "hover:bg-pedra-100"}`}
-              // `mousedown` e não `click`: o campo não pode perder o foco (e as sugestões) antes.
-              onMouseDown={(evento) => {
-                evento.preventDefault();
-                inserir(sugestao.inserir, true);
-              }}
-            >
-              <span className="font-mono">{sugestao.nome}</span>{" "}
-              <span className="text-pedra-500">{sugestao.detalhe}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {chamada && funcaoDaDica ? (
-        <DicaDaFuncao funcao={funcaoDaDica} argumento={chamada.argumento} />
-      ) : null}
-
-      <fieldset className="text-sm" role="group" aria-label="Funções disponíveis">
-        <legend className="font-medium text-pedra-600">Funções disponíveis</legend>
-        <ul className="mt-1 flex flex-col gap-1">
-          {funcoes.map((funcao) => (
-            <li key={funcao.nome} className="flex flex-wrap items-baseline gap-2">
-              <button
-                type="button"
-                aria-label={`Inserir ${funcao.assinatura}`}
-                className="rounded-controle bg-pedra-100 px-1.5 font-mono hover:bg-pedra-200"
-                onClick={() => inserir(`${funcao.nome}(`, false)}
-              >
-                {funcao.assinatura}
-              </button>
-              <span className="text-pedra-600">{funcao.descricao}</span>
-            </li>
-          ))}
-        </ul>
-      </fieldset>
-
-      <fieldset className="text-sm" role="group" aria-label="Campos e constantes">
-        <legend className="font-medium text-pedra-600">Campos e constantes</legend>
-        <div className="mt-1 flex flex-wrap gap-1">
-          {campos.map((c) => (
+          {(["texto", "blocos"] as const).map((opcao) => (
             <button
-              key={c.id}
+              key={opcao}
               type="button"
-              title={c.rotulo}
-              className="rounded-controle bg-pedra-100 px-1.5 font-mono hover:bg-pedra-200"
-              onClick={() => inserir(c.id, false)}
+              aria-pressed={modo === opcao}
+              className={`rounded-sm px-2.5 py-0.5 text-[0.8125rem] transition-colors duration-(--duracao-rapida) ${
+                modo === opcao
+                  ? "bg-pedra-900 text-superficie"
+                  : "text-pedra-600 hover:bg-pedra-100"
+              }`}
+              onClick={() => setModo(opcao)}
             >
-              {c.id}
-            </button>
-          ))}
-          {constantes.map((constante) => (
-            <button
-              key={constante}
-              type="button"
-              className="rounded-controle bg-pedra-100 px-1.5 font-mono hover:bg-pedra-200"
-              onClick={() => inserir(constante, false)}
-            >
-              {constante}
+              {opcao === "texto" ? "Texto" : "Blocos"}
             </button>
           ))}
         </div>
-      </fieldset>
+      </div>
+      {modo === "blocos" ? (
+        <EditorDeBlocos
+          valor={valor}
+          aoMudar={aoMudar}
+          funcoes={funcoes}
+          constantes={constantes}
+          campos={campos}
+          erro={erro}
+        />
+      ) : (
+        <>
+          <div className="relative">
+            {/* Espelho do texto, por trás: só desenha o erro, o par do cursor e o parêntese sem par. */}
+            <pre
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words rounded-controle border border-transparent px-2 py-1.5 font-mono text-sm text-transparent"
+            >
+              <Espelho valor={valor} posicaoDoErro={erro?.posicao} par={par} semPar={semPar} />
+            </pre>
+            <textarea
+              ref={campo}
+              id={id}
+              rows={3}
+              spellCheck={false}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={aberta}
+              aria-controls={aberta ? idDaLista : undefined}
+              aria-activedescendant={
+                ativa === null || !aberta ? undefined : `${idDaLista}-${ativa}`
+              }
+              value={valor}
+              aria-invalid={erro ? true : undefined}
+              aria-describedby={erro ? idDoErro : undefined}
+              className="relative w-full rounded-controle border border-pedra-300 bg-transparent px-2 py-1.5 font-mono text-sm aria-[invalid=true]:border-erro-300"
+              onChange={(e) => {
+                aoMudar(e.target.value);
+                setCursor(e.target.selectionStart);
+                setAtiva(null);
+                setFechada(false);
+              }}
+              onKeyDown={aoTeclar}
+              onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
+            />
+          </div>
+
+          {erro ? (
+            <p id={idDoErro} role="alert" className="text-sm text-erro-700">
+              {erro.mensagem}
+            </p>
+          ) : null}
+
+          {aberta ? (
+            <ul
+              id={idDaLista}
+              role="listbox"
+              aria-label="Sugestões"
+              className="overflow-hidden rounded-controle border border-pedra-200 bg-superficie text-sm shadow-elevada"
+            >
+              {sugestoes.map((sugestao, indice) => (
+                <li
+                  key={sugestao.nome}
+                  id={`${idDaLista}-${indice}`}
+                  role="option"
+                  aria-selected={indice === ativa}
+                  className={`cursor-pointer px-2.5 py-1.5 ${indice === ativa ? "bg-sinal-100" : "hover:bg-pedra-100"}`}
+                  // `mousedown` e não `click`: o campo não pode perder o foco (e as sugestões) antes.
+                  onMouseDown={(evento) => {
+                    evento.preventDefault();
+                    inserir(sugestao.inserir, true);
+                  }}
+                >
+                  <span className="font-mono">{sugestao.nome}</span>{" "}
+                  <span className="text-pedra-500">{sugestao.detalhe}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {chamada && funcaoDaDica ? (
+            <DicaDaFuncao funcao={funcaoDaDica} argumento={chamada.argumento} />
+          ) : null}
+
+          <fieldset className="text-sm" role="group" aria-label="Funções disponíveis">
+            <legend className="font-medium text-pedra-600">Funções disponíveis</legend>
+            <ul className="mt-1 flex flex-col gap-1">
+              {funcoes.map((funcao) => (
+                <li key={funcao.nome} className="flex flex-wrap items-baseline gap-2">
+                  <button
+                    type="button"
+                    aria-label={`Inserir ${funcao.assinatura}`}
+                    className="rounded-controle bg-pedra-100 px-1.5 font-mono hover:bg-pedra-200"
+                    onClick={() => inserir(`${funcao.nome}(`, false)}
+                  >
+                    {funcao.assinatura}
+                  </button>
+                  <span className="text-pedra-600">{funcao.descricao}</span>
+                </li>
+              ))}
+            </ul>
+          </fieldset>
+
+          <fieldset className="text-sm" role="group" aria-label="Campos e constantes">
+            <legend className="font-medium text-pedra-600">Campos e constantes</legend>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {campos.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  title={c.rotulo}
+                  className="rounded-controle bg-pedra-100 px-1.5 font-mono hover:bg-pedra-200"
+                  onClick={() => inserir(c.id, false)}
+                >
+                  {c.id}
+                </button>
+              ))}
+              {constantes.map((constante) => (
+                <button
+                  key={constante}
+                  type="button"
+                  className="rounded-controle bg-pedra-100 px-1.5 font-mono hover:bg-pedra-200"
+                  onClick={() => inserir(constante, false)}
+                >
+                  {constante}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        </>
+      )}
     </div>
   );
 }
