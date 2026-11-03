@@ -36,3 +36,9 @@ Registro honesto dos erros que a IA cometeu durante a construção: lógica erra
 - **Como foi detectado:** a saída trazia o erro do `sed` e o `ls` seguinte não mostrava `extensao.py`.
 - **Correção:** o arquivo foi criado com a ferramenta de escrita, sem placeholder, e o ajuste do `api.py` foi feito com a ferramenta de edição.
 
+### 2026-11-02 — conexão do SQLite usada em outra thread, escondida pelo TestClient
+- **Pedido:** implementar a API (`obter_conexao` como dependência do FastAPI) com testes.
+- **O que a IA fez de errado:** abriu o `sqlite3.connect` com o padrão (`check_same_thread=True`). O FastAPI executa a dependência (geradora, síncrona) numa thread do pool e usa e fecha a conexão em outras; o `sqlite3` levanta `ProgrammingError`. A suíte inteira passava porque o `TestClient` roda tudo numa thread só, e os `curl` manuais também passaram, porque o resultado depende de qual thread do pool pega a requisição.
+- **Como foi detectado:** só ao rodar o app de verdade (Electron), pela saída do backend: dezenas de `ProgrammingError`, também no servidor de desenvolvimento. A primeira versão do teste de regressão passou sem a correção por outro motivo: depois do `join`, o id da thread foi reaproveitado e o `sqlite3` não percebeu a troca.
+- **Correção:** `check_same_thread=False` (cada conexão serve a uma única requisição, em sequência) e um teste que mantém a thread que abriu viva enquanto outra usa e fecha a conexão; ele falha sem a correção. Lição: teste da API com `TestClient` não prova nada sobre threads, e é preciso rodar o app real.
+

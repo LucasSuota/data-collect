@@ -523,6 +523,44 @@ def test_atualizar_do_esquema_2_para_o_3_cria_a_tabela_de_vetores_sem_perder_dad
     conexao.close()
 
 
+def test_conexao_pode_ser_usada_e_fechada_em_outra_thread(tmp_path: Path):
+    # arrange: o FastAPI abre a conexão (dependência) numa thread do pool e a usa e fecha em
+    # outras; o `sqlite3` recusa isso por padrão. O TestClient roda tudo numa thread só e esconde.
+    # A thread que abre fica viva até o fim: depois do `join` o id dela seria reaproveitado e o
+    # `sqlite3` não perceberia a troca.
+    import threading
+
+    caminho = tmp_path / "dados.db"
+    abertas: list[sqlite3.Connection] = []
+    erros: list[BaseException] = []
+    aberta, terminou = threading.Event(), threading.Event()
+
+    def abrir() -> None:
+        abertas.append(abrir_conexao(caminho))
+        aberta.set()
+        terminou.wait(timeout=10)
+
+    def usar_e_fechar() -> None:
+        try:
+            abertas[0].execute("SELECT COUNT(*) FROM formularios").fetchone()
+            abertas[0].close()
+        except BaseException as erro:  # noqa: BLE001 - o teste só quer ver se levantou
+            erros.append(erro)
+
+    # act
+    primeira = threading.Thread(target=abrir)
+    primeira.start()
+    aberta.wait(timeout=10)
+    segunda = threading.Thread(target=usar_e_fechar)
+    segunda.start()
+    segunda.join()
+    terminou.set()
+    primeira.join()
+
+    # assert
+    assert erros == []
+
+
 # --- atualização real: esquema 3 (já em disco) -> esquema 4 ---
 
 
