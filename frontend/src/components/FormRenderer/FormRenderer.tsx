@@ -225,9 +225,9 @@ function CampoCalculado({
       <output
         id={id}
         aria-labelledby={`${id}-rotulo`}
-        className={`rounded border px-2 py-1.5 ${
+        className={`rounded-controle border px-3 py-2 text-sm ${
           resultado?.erro
-            ? "border-red-300 bg-red-50 text-red-800"
+            ? "border-erro-300 bg-erro-50 text-erro-700"
             : "border-pedra-200 bg-pedra-50 text-pedra-800"
         }`}
       >

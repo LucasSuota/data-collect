@@ -78,7 +78,7 @@ export function CampoDeReferencia({ campo, valor, erros, somenteLeitura, aoMudar
             ))}
           </select>
           {estado.situacao === "falhou" ? (
-            <p className="text-sm text-red-700">
+            <p className="text-sm text-erro-700">
               Não foi possível carregar os registros de origem.
             </p>
           ) : null}

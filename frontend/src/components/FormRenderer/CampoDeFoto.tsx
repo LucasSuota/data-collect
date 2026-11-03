@@ -59,7 +59,7 @@ export function CampoDeFoto({ campo, valor, erros, somenteLeitura, aoMudar }: Pr
                   <button
                     type="button"
                     aria-label={`Remover foto ${id}`}
-                    className="absolute -right-2 -top-2 rounded-full bg-red-600 px-1.5 text-xs text-white"
+                    className="absolute -right-2 -top-2 grid size-5 place-items-center rounded-full bg-erro-700 text-xs text-superficie shadow-cartao"
                     onClick={() => aoMudar(ids.filter((outro) => outro !== id))}
                   >
                     ×
@@ -85,7 +85,7 @@ export function CampoDeFoto({ campo, valor, erros, somenteLeitura, aoMudar }: Pr
             <p className="text-sm text-pedra-500">Limite de {campo.maximo} foto(s) atingido.</p>
           ) : null}
           {falha ? (
-            <p role="alert" className="text-sm text-red-700">
+            <p role="alert" className="text-sm text-erro-700">
               {falha}
             </p>
           ) : null}
