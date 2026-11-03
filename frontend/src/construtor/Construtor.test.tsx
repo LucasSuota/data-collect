@@ -365,6 +365,36 @@ describe("Construtor: validação e erros no campo certo", () => {
   });
 });
 
+describe("Construtor: novo formulário dentro de uma pasta", () => {
+  it("cria já na pasta e volta para ela, não para a raiz", async () => {
+    const criarFormulario = vi.fn<
+      (entrada: { nome: string; definicao: unknown; pasta_id?: number | null }) => Promise<never>
+    >(() => Promise.resolve({} as never));
+    const { navegar } = renderizar({ tipo: "novo", pastaId: 8 }, { criarFormulario });
+    await userEvent.type(await screen.findByLabelText("Nome do formulário"), "Sondagem");
+    await adicionar("Texto");
+
+    await userEvent.click(screen.getByRole("button", { name: "Publicar formulário" }));
+
+    await waitFor(() => expect(navegar).toHaveBeenCalledWith({ nome: "pasta", pastaId: 8 }));
+    expect(criarFormulario.mock.calls[0]?.[0]).toMatchObject({ nome: "Sondagem", pasta_id: 8 });
+  });
+
+  it("sem pasta, não manda pasta_id", async () => {
+    const criarFormulario = vi.fn<
+      (entrada: { nome: string; definicao: unknown; pasta_id?: number | null }) => Promise<never>
+    >(() => Promise.resolve({} as never));
+    renderizar({ tipo: "novo" }, { criarFormulario });
+    await userEvent.type(await screen.findByLabelText("Nome do formulário"), "Sondagem");
+    await adicionar("Texto");
+
+    await userEvent.click(screen.getByRole("button", { name: "Publicar formulário" }));
+
+    await waitFor(() => expect(criarFormulario).toHaveBeenCalled());
+    expect(criarFormulario.mock.calls[0]?.[0]).not.toHaveProperty("pasta_id");
+  });
+});
+
 describe("Construtor: publicar", () => {
   it("novo formulário: cria com o nome e a definição e volta à lista", async () => {
     const criarFormulario = vi.fn<

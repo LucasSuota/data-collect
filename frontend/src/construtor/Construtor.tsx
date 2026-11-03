@@ -43,7 +43,7 @@ import {
 type Catalogo = Esquemas["CatalogoSaida"];
 
 export type ModoDoConstrutor =
-  | { tipo: "novo" }
+  | { tipo: "novo"; pastaId?: number }
   | { tipo: "editar"; formularioId: number }
   /**
    * Edita um rascunho proposto pela IA, que ainda não existe no servidor: não publica nem valida
@@ -215,9 +215,17 @@ function Editor({
       if (formulario) {
         await cliente.publicarVersao(formulario.id, definicao);
       } else {
-        await cliente.criarFormulario({ nome, definicao });
+        const pastaId = modo.tipo === "novo" ? modo.pastaId : undefined;
+        await cliente.criarFormulario(
+          pastaId === undefined ? { nome, definicao } : { nome, definicao, pasta_id: pastaId },
+        );
       }
-      navegar({ nome: "formularios" });
+      // Quem criou dentro de uma pasta volta para ela.
+      navegar(
+        modo.tipo === "novo" && modo.pastaId !== undefined
+          ? { nome: "pasta", pastaId: modo.pastaId }
+          : { nome: "formularios" },
+      );
     } catch (erro) {
       if (erro instanceof ErroDaApi && erro.status === 422) {
         camposComErroDePublicacao.current = campos;

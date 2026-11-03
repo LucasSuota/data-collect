@@ -9,12 +9,14 @@ export type Rota =
   | { nome: "registros"; formularioId: number }
   | { nome: "novoRegistro"; formularioId: number }
   | { nome: "registro"; registroId: number }
-  | { nome: "novoFormulario" }
+  | { nome: "novoFormulario"; pastaId?: number }
+  | { nome: "pasta"; pastaId: number }
   | { nome: "criarComIa" }
   | { nome: "editarFormulario"; formularioId: number }
   | { nome: "naoEncontrada" };
 
 const INTEIRO = /^[1-9]\d*$/;
+const NAO_ENCONTRADA: Rota = { nome: "naoEncontrada" };
 
 export function lerRota(hash: string): Rota {
   const caminho = hash.replace(/^#\/?/, "");
@@ -22,6 +24,14 @@ export function lerRota(hash: string): Rota {
   const partes = caminho.split("/");
 
   if (partes[0] === "construtor" && partes.length === 1) return { nome: "novoFormulario" };
+  if (partes[0] === "construtor" && partes.length === 3 && partes[1] === "pasta") {
+    return ehId(partes[2])
+      ? { nome: "novoFormulario", pastaId: Number(partes[2]) }
+      : NAO_ENCONTRADA;
+  }
+  if (partes[0] === "pastas" && partes.length === 2 && ehId(partes[1])) {
+    return { nome: "pasta", pastaId: Number(partes[1]) };
+  }
   if (partes[0] === "construtor" && partes.length === 2 && partes[1] === "ia") {
     return { nome: "criarComIa" };
   }
@@ -48,7 +58,9 @@ export function caminhoDe(rota: Rota): string {
     case "registro":
       return `#/registros/${rota.registroId}`;
     case "novoFormulario":
-      return "#/construtor";
+      return rota.pastaId === undefined ? "#/construtor" : `#/construtor/pasta/${rota.pastaId}`;
+    case "pasta":
+      return `#/pastas/${rota.pastaId}`;
     case "criarComIa":
       return "#/construtor/ia";
     case "editarFormulario":

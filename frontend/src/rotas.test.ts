@@ -8,6 +8,8 @@ const CASOS: [string, Rota][] = [
   ["#/construtor", { nome: "novoFormulario" }],
   ["#/construtor/ia", { nome: "criarComIa" }],
   ["#/formularios/3/editar", { nome: "editarFormulario", formularioId: 3 }],
+  ["#/pastas/5", { nome: "pasta", pastaId: 5 }],
+  ["#/construtor/pasta/5", { nome: "novoFormulario", pastaId: 5 }],
 ];
 
 describe("rotas", () => {
@@ -28,6 +30,12 @@ describe("rotas", () => {
     "#/registros/1/x",
     "#/construtor/outra",
     "#/construtor/ia/x",
+    "#/pastas",
+    "#/pastas/0",
+    "#/pastas/abc",
+    "#/pastas/5/x",
+    "#/construtor/pasta",
+    "#/construtor/pasta/abc",
   ])("%s não existe", (hash) => {
     expect(lerRota(hash)).toEqual({ nome: "naoEncontrada" });
   });

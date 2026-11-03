@@ -6,4 +6,5 @@ export { Cartao } from "./Cartao";
 export { EstadoVazio } from "./EstadoVazio";
 export { Esqueleto } from "./Esqueleto";
 export { Icone, type NomeDoIcone } from "./Icone";
+export { Selecao } from "./Selecao";
 export { Selo } from "./Selo";
