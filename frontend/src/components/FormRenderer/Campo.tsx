@@ -23,11 +23,11 @@ export function Campo({ id, rotulo, unidade, obrigatorio, erros = [], children }
   const idDosErros = `erros-${id}`;
   return (
     <div className="flex flex-col gap-1" data-campo={id}>
-      <label htmlFor={idDoControle} className="text-sm font-medium text-slate-700">
+      <label htmlFor={idDoControle} className="text-sm font-medium text-pedra-800">
         {rotulo}
-        {unidade ? <span className="ml-1 font-normal text-slate-500">({unidade})</span> : null}
+        {unidade ? <span className="ml-1 font-normal text-pedra-500">({unidade})</span> : null}
         {obrigatorio ? (
-          <span className="ml-1 text-red-600" aria-hidden="true">
+          <span className="ml-1 text-erro-700" aria-hidden="true">
             *
           </span>
         ) : null}
@@ -39,7 +39,7 @@ export function Campo({ id, rotulo, unidade, obrigatorio, erros = [], children }
         "aria-required": Boolean(obrigatorio),
       })}
       {erros.length > 0 ? (
-        <ul id={idDosErros} role="alert" className="text-sm text-red-700">
+        <ul id={idDosErros} role="alert" className="text-sm text-erro-700">
           {erros.map((mensagem) => (
             <li key={mensagem}>{mensagem}</li>
           ))}
@@ -50,5 +50,7 @@ export function Campo({ id, rotulo, unidade, obrigatorio, erros = [], children }
 }
 
 export const CLASSE_DO_CONTROLE =
-  "rounded border border-slate-300 bg-white px-2 py-1.5 text-slate-900 " +
-  "aria-[invalid=true]:border-red-500 disabled:bg-slate-100";
+  "min-h-9 rounded-controle border border-pedra-300 bg-superficie px-3 text-sm text-pedra-900 " +
+  "placeholder:text-pedra-400 transition-colors duration-(--duracao-rapida) hover:border-pedra-400 " +
+  "aria-[invalid=true]:border-erro-300 aria-[invalid=true]:bg-erro-50 " +
+  "disabled:border-pedra-200 disabled:bg-pedra-100 disabled:text-pedra-600 disabled:hover:border-pedra-200";

@@ -20,7 +20,9 @@ MODELOS_DE_RESPOSTA = {
         "criado_em": True,
         "versao_atual_id": True,
         "versao_atual_numero": True,
+        "pasta_id": False,
     },
+    "PastaSaida": {"id": True, "nome": True, "pasta_pai_id": True, "criado_em": True},
     "CampoSaida": {
         "id": True,
         "tipo": True,
@@ -43,7 +45,13 @@ MODELOS_DE_RESPOSTA = {
         "publicada_em": True,
     },
     "ResumoDeVersaoSaida": {"id": True, "numero": True, "publicada_em": True},
-    "FormularioDetalheSaida": {"id": True, "nome": True, "criado_em": True, "versao_atual": True},
+    "FormularioDetalheSaida": {
+        "id": True,
+        "nome": True,
+        "criado_em": True,
+        "versao_atual": True,
+        "pasta_id": False,
+    },
     "ValidarSaida": {"valida": True, "erros": True},
     "PreviaSaida": {"valida": True, "erros": True, "calculados": True},
     "ResultadoCalculadoSaida": {"valor": True, "erro": True},
@@ -80,7 +88,11 @@ MODELOS_DE_RESPOSTA = {
 }
 
 MODELOS_DE_ENTRADA = {
-    "FormularioEntrada": {"nome": True, "definicao": True},
+    "FormularioEntrada": {"nome": True, "definicao": True, "pasta_id": False},
+    "DuplicarEntrada": {"nome": False},
+    "PastaEntrada": {"nome": True, "pasta_pai_id": False},
+    "PastaAtualizacao": {"nome": True, "pasta_pai_id": True},
+    "MoverFormularioEntrada": {"pasta_id": True},
     "LoteEntrada": {"formularios": True},
     "VersaoEntrada": {"definicao": True},
     "ValidarEntrada": {"definicao": True},
@@ -93,6 +105,7 @@ MODELOS_DE_ENTRADA = {
 
 ROTAS = [
     ("delete", "/formularios/{formulario_id}"),
+    ("delete", "/pastas/{pasta_id}"),
     ("delete", "/registros/{registro_id}"),
     ("get", "/anexos/{anexo_id}"),
     ("get", "/catalogo"),
@@ -102,6 +115,7 @@ ROTAS = [
     ("get", "/formularios/{formulario_id}/registros/exportar"),
     ("get", "/formularios/{formulario_id}/versoes"),
     ("get", "/formularios/{formulario_id}/versoes/{versao_id}"),
+    ("get", "/pastas"),
     ("get", "/registros/{registro_id}"),
     ("post", "/anexos"),
     ("post", "/assistente/perguntar"),
@@ -110,15 +124,20 @@ ROTAS = [
     ("post", "/definicoes/validar"),
     ("post", "/formularios"),
     ("post", "/formularios/lote"),
+    ("post", "/formularios/{formulario_id}/duplicar"),
     ("post", "/formularios/{formulario_id}/registros"),
     ("post", "/formularios/{formulario_id}/resumo"),
     ("post", "/formularios/{formulario_id}/versoes"),
+    ("post", "/pastas"),
+    ("put", "/formularios/{formulario_id}/pasta"),
+    ("put", "/pastas/{pasta_id}"),
     ("put", "/registros/{registro_id}"),
 ]
 
 # Respostas que não são JSON de modelo: 204 sem corpo, CSV e imagem.
 SEM_MODELO = {
     ("delete", "/formularios/{formulario_id}"),
+    ("delete", "/pastas/{pasta_id}"),
     ("delete", "/registros/{registro_id}"),
     ("get", "/anexos/{anexo_id}"),
     ("get", "/formularios/{formulario_id}/registros/exportar"),
@@ -200,7 +219,11 @@ def test_todo_endpoint_documenta_o_erro_uniforme_para_401_404_e_422(openapi, met
 
 @pytest.mark.parametrize(
     ("metodo", "caminho"),
-    [("delete", "/formularios/{formulario_id}"), ("delete", "/registros/{registro_id}")],
+    [
+        ("delete", "/formularios/{formulario_id}"),
+        ("delete", "/pastas/{pasta_id}"),
+        ("delete", "/registros/{registro_id}"),
+    ],
 )
 def test_exclusoes_documentam_o_409(openapi, metodo, caminho):
     # act / assert

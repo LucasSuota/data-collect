@@ -7,7 +7,7 @@ controla a transação, então cada caso de uso grava tudo ou nada.
 import json
 import sqlite3
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -39,6 +39,14 @@ from forms.servico_consulta import (
     ListagemDeRegistros,
     exportar_csv,
     listar_registros,
+)
+from forms.servico_pastas import (
+    atualizar_pasta,
+    conferir_destino,
+    criar_pasta,
+    excluir_pasta,
+    listar_pastas,
+    mover_formulario,
 )
 from forms.servico_registros import (
     ResultadoDaPrevia,
@@ -194,16 +202,53 @@ def validar_definicao(conexao: sqlite3.Connection, definicao: ValorJson) -> Resu
 
 
 def criar_formulario(
-    conexao: sqlite3.Connection, nome: str, definicao: ValorJson, agora: datetime
+    conexao: sqlite3.Connection,
+    nome: str,
+    definicao: ValorJson,
+    agora: datetime,
+    pasta_id: int | None = None,
 ) -> FormularioCriado:
     """Cria o formulário e já publica a versão 1: um formulário sem versão não pode ser
-    preenchido, então esse estado não existe. Definição inválida não cria nada."""
+    preenchido, então esse estado não existe. Definição inválida não cria nada.
+    `pasta_id` (opcional) já põe o formulário numa pasta; nulo é a raiz (§2.10)."""
     with transacao(conexao):
+        conferir_destino(conexao, pasta_id, "pasta_id")
         conjunto = _validar_conjunto(conexao, [Rascunho(nome, definicao)])
         item = conjunto.itens[0]
         if item.erros:
             raise DefinicaoInvalida(tuple(item.erros))
-        return _gravar(conexao, conjunto, agora, versionando=None)[0]
+        criado = _gravar(conexao, conjunto, agora, versionando=None)[0]
+        if pasta_id is not None:
+            repositorio.mover_formulario(conexao, criado.formulario.id, pasta_id)
+            return FormularioCriado(replace(criado.formulario, pasta_id=pasta_id), criado.versao)
+        return criado
+
+
+def duplicar_formulario(
+    conexao: sqlite3.Connection, formulario_id: int, nome: str | None, agora: datetime
+) -> FormularioCriado:
+    """Cria um formulário novo com a v1 igual à definição da versão atual do original (§2.10).
+
+    A cópia nasce na mesma pasta, sem registros e sem o histórico de versões; passa pela mesma
+    publicação de `criar_formulario`, então valida e registra as dependências (a cópia depende das
+    mesmas origens do original, e quem dependia do original não passa a depender dela).
+    Sem `nome`, o padrão é `<nome> (cópia)`; um `nome` informado e repetido é erro no campo.
+    """
+    original = repositorio.obter_formulario(conexao, formulario_id)
+    definicao = repositorio.obter_versao_atual(conexao, formulario_id).definicao
+    if nome is None:
+        nome = _nome_livre_da_copia(conexao, original.nome)
+    return criar_formulario(conexao, nome, definicao.para_json(), agora, original.pasta_id)
+
+
+def _nome_livre_da_copia(conexao: sqlite3.Connection, nome: str) -> str:
+    """`<nome> (cópia)`, depois `(cópia 2)`, `(cópia 3)`… até achar um que não exista."""
+    candidato = f"{nome} (cópia)"
+    numero = 1
+    while repositorio.obter_formulario_por_nome(conexao, candidato) is not None:
+        numero += 1
+        candidato = f"{nome} (cópia {numero})"
+    return candidato
 
 
 def publicar_versao(
@@ -526,12 +571,16 @@ __all__ = [
     "ResultadoDaPrevia",
     "ResultadoDaValidacao",
     "abrir_banco",
+    "atualizar_pasta",
     "atualizar_registro",
     "catalogo",
     "criar_formulario",
     "criar_formularios_em_lote",
+    "criar_pasta",
     "criar_registro",
+    "duplicar_formulario",
     "excluir_formulario",
+    "excluir_pasta",
     "excluir_registro",
     "exportar_csv",
     "guardar_anexo",
@@ -540,9 +589,11 @@ __all__ = [
     "ler_anexo",
     "limpar_anexos_orfaos",
     "listar_formularios",
+    "listar_pastas",
     "listar_registros",
     "listar_versoes",
     "localizar_formulario",
+    "mover_formulario",
     "obter_formulario",
     "obter_registro",
     "obter_versao",

@@ -12,6 +12,12 @@ Registro honesto dos erros que a IA cometeu durante a construção: lógica erra
 
 ## Entradas
 
+### 2026-11-02 — conexão SQLite da API quebrava com requisições em paralelo, e nenhum teste via
+- **Pedido:** construir a API (`obter_conexao` como dependência com `yield`, endpoints síncronos) com testes de API.
+- **O que a IA fez de errado:** abriu a conexão com `sqlite3.connect(caminho)` num gerador de dependência síncrono. O FastAPI roda a dependência e o endpoint no pool de threads, possivelmente em threads diferentes, e o `sqlite3` recusa o uso entre threads. Todos os testes usavam o `TestClient` de uma requisição por vez, em que as duas etapas caem na mesma thread, então a suíte inteira passava.
+- **Como foi detectado:** o autor clicou em **Editar** no front e viu "Não foi possível conectar à API". O construtor faz 3 requisições em paralelo; o log do servidor mostrou `sqlite3.ProgrammingError: SQLite objects created in a thread can only be used in that same thread`.
+- **Correção:** `check_same_thread=False` em `abrir_conexao`, comentado (cada requisição tem a sua conexão, usada por uma etapa de cada vez). Teste de regressão novo (`tests/test_api_concorrencia.py`) com 60 requisições simultâneas no mesmo loop de eventos (`httpx.ASGITransport`), visto falhar (500) antes e passar depois. Lição: teste de API sequencial não cobre concorrência; o que o front faz em paralelo precisa de teste em paralelo.
+
 ### 2026-11-02 — arquivo de teste existente sobrescrito
 - **Pedido:** acrescentar testes da nova rota `#/construtor/ia` ao front.
 - **O que a IA fez de errado:** criou `frontend/src/rotas.test.ts` com `Write`/`write_text` sem checar se o arquivo já existia, e apagou os testes de rota que estavam lá (ida e volta de todas as rotas, a raiz e os caminhos inexistentes).

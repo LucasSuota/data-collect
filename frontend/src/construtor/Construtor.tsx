@@ -1,5 +1,6 @@
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   useDraggable,
@@ -7,6 +8,8 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -15,13 +18,24 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useApi } from "../api/contexto";
 import { ErroDaApi, type Esquemas, type FormularioDetalhe, type TipoDeCampo } from "../api/cliente";
 import type { Rascunho } from "../ia/rascunhos";
-import { Carregando, Falha, mensagemDe, useCarga } from "../paginas/Estado";
+import { EsqueletoDoConstrutor } from "../paginas/esqueletos";
+import { Falha, mensagemDe, useCarga } from "../paginas/Estado";
 import type { Rota } from "../rotas";
+import { useMovimentoReduzido } from "../lib/movimentoReduzido";
+import { CLASSE_DO_CONTROLE } from "../components/FormRenderer/Campo";
+import { Botao, Icone } from "../ui";
+import {
+  INSTRUCOES_DO_CONSTRUTOR,
+  anunciosDoConstrutor,
+  chaveDoCampoNovo,
+  posicaoDoDestino,
+} from "./arraste";
 import { PainelDePropriedades } from "./PainelDePropriedades";
+import { camposDeFormulaDasReferencias, useCamposDeOrigem } from "./useCamposDeOrigem";
 import {
   AREA_DA_LISTA,
   adicionarCampo,
@@ -42,7 +56,7 @@ import {
 type Catalogo = Esquemas["CatalogoSaida"];
 
 export type ModoDoConstrutor =
-  | { tipo: "novo" }
+  | { tipo: "novo"; pastaId?: number }
   | { tipo: "editar"; formularioId: number }
   /**
    * Edita um rascunho proposto pela IA, que ainda não existe no servidor: não publica nem valida
@@ -67,6 +81,8 @@ interface Props {
 interface Carregado {
   catalogo: Catalogo;
   nomesDosFormularios: string[];
+  /** Os formulários que podem ser origem de uma referência (o próprio fica de fora). */
+  origensPossiveis: { id: number; nome: string }[];
   formulario: FormularioDetalhe | null;
 }
 
@@ -91,6 +107,9 @@ export function Construtor({ modo, navegar, atrasoDaValidacaoMs = 500 }: Props) 
     ]);
     return {
       catalogo,
+      origensPossiveis: formularios
+        .filter((f) => f.id !== formulario?.id)
+        .map((f) => ({ id: f.id, nome: f.nome })),
       nomesDosFormularios: [
         ...new Set([
           ...formularios
@@ -103,7 +122,7 @@ export function Construtor({ modo, navegar, atrasoDaValidacaoMs = 500 }: Props) 
     };
   }, [cliente, chave]);
 
-  if (carga.situacao === "carregando") return <Carregando />;
+  if (carga.situacao === "carregando") return <EsqueletoDoConstrutor />;
   if (carga.situacao === "erro") return <Falha mensagem={carga.mensagem} />;
   return (
     <Editor
@@ -143,6 +162,12 @@ function Editor({
     return rascunho ? deRascunho(rascunho.rascunho.definicao, gerarChave) : [];
   });
   const [selecionada, setSelecionada] = useState<string | null>(null);
+  // O que está no ar (para o overlay e o indicador) e a chave do campo que acabou de entrar
+  // (para a animação de entrada).
+  const [arrastado, setArrastado] = useState<Arrastado | null>(null);
+  const [sobre, setSobre] = useState<string | null>(null);
+  const [recemAdicionada, setRecemAdicionada] = useState<string | null>(null);
+  const movimentoReduzido = useMovimentoReduzido();
   // Os erros que a IA deixou no rascunho já aparecem nos campos certos (mesma regra do publicar).
   const [erros, setErros] = useState<ErrosMapeados>(() =>
     mapearErros(
@@ -190,11 +215,34 @@ function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente, campos, atrasoDaValidacaoMs]);
 
+  function aoPegar(evento: DragStartEvent) {
+    setArrastado((evento.active.data.current as Arrastado | undefined) ?? null);
+    setSobre(null);
+  }
+
+  function aoPassarPor(evento: DragOverEvent) {
+    setSobre(evento.over ? String(evento.over.id) : null);
+  }
+
+  function limparArraste() {
+    setArrastado(null);
+    setSobre(null);
+  }
+
   function aoSoltar(evento: DragEndEvent) {
-    const arrastado = evento.active.data.current as Arrastado | undefined;
-    if (!arrastado) return;
+    limparArraste();
+    const solto = evento.active.data.current as Arrastado | undefined;
+    if (!solto) return;
     const alvo = evento.over ? String(evento.over.id) : null;
-    setCampos((atuais) => aplicarArraste(atuais, arrastado, alvo, rotulosDosTipos, gerarChave));
+    const depois = aplicarArraste(campos, solto, alvo, rotulosDosTipos, gerarChave);
+    setCampos(depois);
+    // Um tipo da paleta solto vira um campo novo: ele entra com animação e já fica selecionado,
+    // como no "Adicionar campo".
+    const nova = solto.origem === "paleta" ? chaveDoCampoNovo(campos, depois) : null;
+    if (nova) {
+      setRecemAdicionada(nova);
+      setSelecionada(nova);
+    }
   }
 
   function adicionar(tipo: TipoDeCampo) {
@@ -202,6 +250,7 @@ function Editor({
     const novos = adicionarCampo(campos, tipo, rotulo, gerarChave);
     setCampos(novos);
     setSelecionada(novos[novos.length - 1]?.chave ?? null);
+    setRecemAdicionada(novos[novos.length - 1]?.chave ?? null);
   }
 
   async function publicar() {
@@ -214,9 +263,17 @@ function Editor({
       if (formulario) {
         await cliente.publicarVersao(formulario.id, definicao);
       } else {
-        await cliente.criarFormulario({ nome, definicao });
+        const pastaId = modo.tipo === "novo" ? modo.pastaId : undefined;
+        await cliente.criarFormulario(
+          pastaId === undefined ? { nome, definicao } : { nome, definicao, pasta_id: pastaId },
+        );
       }
-      navegar({ nome: "formularios" });
+      // Quem criou dentro de uma pasta volta para ela.
+      navegar(
+        modo.tipo === "novo" && modo.pastaId !== undefined
+          ? { nome: "pasta", pastaId: modo.pastaId }
+          : { nome: "formularios" },
+      );
     } catch (erro) {
       if (erro instanceof ErroDaApi && erro.status === 422) {
         camposComErroDePublicacao.current = campos;
@@ -237,10 +294,20 @@ function Editor({
 
   const campoSelecionado = campos.find((campo) => campo.chave === selecionada) ?? null;
 
+  // Os campos que cada origem compartilha viram `<referência>__<campo>` nas fórmulas (§2.7).
+  const referencias = campos
+    .filter((campo) => campo.tipo === "referencia" && campo.formulario.trim() !== "")
+    .map((campo) => ({ id: campo.id, rotulo: campo.rotulo, formulario: campo.formulario.trim() }));
+  const origens = useCamposDeOrigem(
+    carregado.origensPossiveis,
+    referencias.map((referencia) => referencia.formulario),
+  );
+  const camposDasReferencias = camposDeFormulaDasReferencias(referencias, origens);
+
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
-        <h1 className="mr-auto text-2xl font-semibold">
+        <h1 className="mr-auto text-2xl font-semibold tracking-tight">
           {editando
             ? `Editar · ${formulario.nome}`
             : rascunho
@@ -248,22 +315,22 @@ function Editor({
               : "Novo formulário"}
         </h1>
         {editando ? (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-pedra-500">
             Publicar cria a versão {formulario.versao_atual.numero + 1}; os registros antigos
             continuam na versão deles.
           </p>
         ) : (
-          <label className="flex flex-col text-sm font-medium">
+          <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
             Nome do formulário
             <input
               type="text"
-              className="rounded border border-slate-300 px-2 py-1.5"
+              className={CLASSE_DO_CONTROLE}
               value={nome}
               aria-invalid={erroDoNome.length > 0}
               onChange={(e) => setNome(e.target.value)}
             />
             {erroDoNome.map((mensagem) => (
-              <span key={mensagem} role="alert" className="font-normal text-red-700">
+              <span key={mensagem} role="alert" className="font-normal text-erro-700">
                 {mensagem}
               </span>
             ))}
@@ -271,49 +338,31 @@ function Editor({
         )}
         {rascunho ? (
           <>
-            <button
-              type="button"
-              className="rounded border border-slate-300 px-4 py-2"
-              onClick={rascunho.aoCancelar}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="rounded bg-slate-900 px-4 py-2 text-white"
+            <Botao onClick={rascunho.aoCancelar}>Cancelar</Botao>
+            <Botao
+              variante="primario"
               onClick={() => rascunho.aoConcluir(nome, paraDefinicao(campos, aceitas))}
             >
               Concluir edição
-            </button>
+            </Botao>
           </>
         ) : (
           <>
             {!editando ? (
-              <button
-                type="button"
-                className="rounded border border-slate-300 px-4 py-2"
-                onClick={() => navegar({ nome: "criarComIa" })}
-              >
-                Criar com IA
-              </button>
+              <Botao onClick={() => navegar({ nome: "criarComIa" })}>Criar com IA</Botao>
             ) : null}
-            <button
-              type="button"
-              disabled={publicando}
-              className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
-              onClick={() => void publicar()}
-            >
+            <Botao variante="primario" carregando={publicando} onClick={() => void publicar()}>
               {publicando
                 ? "Publicando…"
                 : editando
                   ? "Publicar nova versão"
                   : "Publicar formulário"}
-            </button>
+            </Botao>
           </>
         )}
       </div>
       {rascunho ? (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-pedra-500">
           A validação completa acontece ao publicar todos os rascunhos juntos, porque eles podem
           depender uns dos outros.
         </p>
@@ -322,12 +371,29 @@ function Editor({
       {falha ? <Falha mensagem={falha} /> : null}
       {erros.globais.length > 0 ? <Falha mensagem={erros.globais.join(" · ")} /> : null}
 
-      <DndContext sensors={sensores} onDragEnd={aoSoltar}>
+      <DndContext
+        sensors={sensores}
+        onDragStart={aoPegar}
+        onDragOver={aoPassarPor}
+        onDragEnd={aoSoltar}
+        onDragCancel={limparArraste}
+        accessibility={{
+          announcements: anunciosDoConstrutor({
+            campos: () => campos,
+            rotuloDoTipo: (tipo) => rotulosDosTipos[tipo] ?? tipo,
+          }),
+          screenReaderInstructions: { draggable: INSTRUCOES_DO_CONSTRUTOR },
+        }}
+      >
         <div className="grid gap-4 md:grid-cols-[13rem_1fr_22rem]">
           <Paleta catalogo={catalogo} adicionar={adicionar} />
           <ListaDeCampos
             campos={campos}
             selecionada={selecionada}
+            recemAdicionada={recemAdicionada}
+            // O indicador só faz sentido ao trazer um tipo da paleta; reordenar já anima os vizinhos.
+            indicador={arrastado?.origem === "paleta" ? posicaoDoDestino(campos, sobre) : null}
+            arrastandoDaPaleta={arrastado?.origem === "paleta"}
             errosPorCampo={erros.porCampo}
             selecionar={setSelecionada}
             mover={(chave, posicao) => setCampos((atuais) => moverCampo(atuais, chave, posicao))}
@@ -342,17 +408,31 @@ function Editor({
               todosOsCampos={campos}
               catalogo={catalogo}
               formulariosDeOrigem={carregado.nomesDosFormularios}
+              camposDasReferencias={camposDasReferencias}
               erros={erros.porCampo[campoSelecionado.chave] ?? []}
               aoMudar={(mudancas) =>
                 setCampos((atuais) => atualizarCampo(atuais, campoSelecionado.chave, mudancas))
               }
             />
           ) : (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-pedra-500">
               Selecione um campo para editar as propriedades.
             </p>
           )}
         </div>
+        <DragOverlay dropAnimation={movimentoReduzido ? null : undefined}>
+          {arrastado ? (
+            <div className="flex items-center gap-2 rounded-cartao border border-sinal-500 bg-superficie px-3 py-2 text-sm font-medium shadow-elevada">
+              <Icone
+                nome={arrastado.origem === "paleta" ? "mais" : "alca"}
+                className="text-sinal-600"
+              />
+              {arrastado.origem === "paleta"
+                ? (rotulosDosTipos[arrastado.tipo] ?? arrastado.tipo)
+                : campos.find((c) => c.chave === arrastado.chave)?.rotulo || "(sem rótulo)"}
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
     </section>
   );
@@ -391,23 +471,26 @@ function ItemDaPaleta({
   rotulo: string;
   adicionar: (tipo: TipoDeCampo) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  // Sem `transform`: quem se move com o ponteiro é o `DragOverlay`; este item fica no lugar,
+  // apagado, como "fantasma" da origem.
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `paleta-${tipo}`,
     data: { origem: "paleta", tipo } satisfies Arrastado,
   });
   return (
     <li
       ref={setNodeRef}
-      style={{ transform: CSS.Translate.toString(transform) }}
-      className="flex items-center gap-1 rounded border border-slate-200 bg-white"
+      className={`flex items-center gap-1 rounded-controle border bg-superficie transition-opacity duration-(--duracao-rapida) ${
+        isDragging ? "border-dashed border-sinal-300 opacity-45" : "border-pedra-200"
+      }`}
     >
       <span
         {...attributes}
         {...listeners}
         aria-label={`Arrastar o tipo ${rotulo}`}
-        className="cursor-grab px-2 text-slate-400"
+        className="grid size-8 shrink-0 cursor-grab touch-none place-items-center rounded-controle text-pedra-400 hover:text-pedra-700 active:cursor-grabbing"
       >
-        ⠿
+        <Icone nome="alca" />
       </span>
       <button
         type="button"
@@ -424,6 +507,9 @@ function ItemDaPaleta({
 function ListaDeCampos({
   campos,
   selecionada,
+  recemAdicionada,
+  indicador,
+  arrastandoDaPaleta,
   errosPorCampo,
   selecionar,
   mover,
@@ -431,6 +517,10 @@ function ListaDeCampos({
 }: {
   campos: CampoEmEdicao[];
   selecionada: string | null;
+  recemAdicionada: string | null;
+  /** A posição (0 a n) em que o tipo arrastado entraria; `null` quando não há destino. */
+  indicador: number | null;
+  arrastandoDaPaleta: boolean;
   errosPorCampo: ErrosMapeados["porCampo"];
   selecionar: (chave: string) => void;
   mover: (chave: string, posicao: number) => void;
@@ -442,29 +532,35 @@ function ListaDeCampos({
       <h2 className="text-lg font-semibold">Campos</h2>
       <div
         ref={setNodeRef}
-        className={`min-h-32 rounded border-2 border-dashed p-2 ${isOver ? "border-slate-500" : "border-slate-200"}`}
+        className={`min-h-32 rounded-cartao border-2 border-dashed p-2 transition-colors duration-(--duracao-rapida) ${
+          isOver || arrastandoDaPaleta ? "border-sinal-300 bg-sinal-100/40" : "border-pedra-200"
+        }`}
       >
-        {campos.length === 0 ? (
-          <p className="p-4 text-center text-sm text-slate-500">
+        {campos.length === 0 && indicador === null ? (
+          <p className="p-4 text-center text-sm text-pedra-500">
             Arraste um tipo para cá ou use “Adicionar campo”.
           </p>
         ) : null}
         <SortableContext items={campos.map((c) => c.chave)} strategy={verticalListSortingStrategy}>
           <ol className="flex flex-col gap-2">
             {campos.map((campo, indice) => (
-              <ItemDoCampo
-                key={campo.chave}
-                campo={campo}
-                selecionado={campo.chave === selecionada}
-                quantidadeDeErros={errosPorCampo[campo.chave]?.length ?? 0}
-                primeiro={indice === 0}
-                ultimo={indice === campos.length - 1}
-                selecionar={() => selecionar(campo.chave)}
-                moverPara={(posicao) => mover(campo.chave, posicao)}
-                posicao={indice}
-                remover={() => remover(campo.chave)}
-              />
+              <Fragment key={campo.chave}>
+                {indicador === indice ? <IndicadorDeDestino /> : null}
+                <ItemDoCampo
+                  entrando={campo.chave === recemAdicionada}
+                  campo={campo}
+                  selecionado={campo.chave === selecionada}
+                  quantidadeDeErros={errosPorCampo[campo.chave]?.length ?? 0}
+                  primeiro={indice === 0}
+                  ultimo={indice === campos.length - 1}
+                  selecionar={() => selecionar(campo.chave)}
+                  moverPara={(posicao) => mover(campo.chave, posicao)}
+                  posicao={indice}
+                  remover={() => remover(campo.chave)}
+                />
+              </Fragment>
             ))}
+            {indicador === campos.length ? <IndicadorDeDestino /> : null}
           </ol>
         </SortableContext>
       </div>
@@ -472,7 +568,17 @@ function ListaDeCampos({
   );
 }
 
+/** A linha que mostra onde o tipo arrastado vai entrar. */
+function IndicadorDeDestino() {
+  return (
+    <li aria-hidden="true" className="relative h-0.5 rounded-full bg-sinal-500">
+      <span className="absolute -left-1 -top-[3px] size-2 rounded-full bg-sinal-500" />
+    </li>
+  );
+}
+
 function ItemDoCampo({
+  entrando,
   campo,
   selecionado,
   quantidadeDeErros,
@@ -483,6 +589,7 @@ function ItemDoCampo({
   moverPara,
   remover,
 }: {
+  entrando: boolean;
   campo: CampoEmEdicao;
   selecionado: boolean;
   quantidadeDeErros: number;
@@ -493,7 +600,7 @@ function ItemDoCampo({
   moverPara: (posicao: number) => void;
   remover: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: campo.chave,
     data: { origem: "campo", chave: campo.chave } satisfies Arrastado,
   });
@@ -501,17 +608,19 @@ function ItemDoCampo({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex items-center gap-2 rounded border bg-white p-2 ${
-        selecionado ? "border-slate-900" : "border-slate-200"
-      } ${quantidadeDeErros > 0 ? "border-red-400" : ""}`}
+      className={`flex items-center gap-2 rounded-controle border bg-superficie p-2 ${
+        entrando ? "animate-entrar" : ""
+      } ${isDragging ? "border-dashed border-sinal-300 opacity-45" : ""} ${
+        selecionado ? "border-pedra-900" : "border-pedra-200"
+      } ${quantidadeDeErros > 0 ? "border-erro-300" : ""}`}
     >
       <span
         {...attributes}
         {...listeners}
         aria-label={`Arrastar o campo ${campo.rotulo}`}
-        className="cursor-grab px-1 text-slate-400"
+        className="grid size-8 shrink-0 cursor-grab touch-none place-items-center rounded-controle text-pedra-400 hover:text-pedra-700 active:cursor-grabbing"
       >
-        ⠿
+        <Icone nome="alca" />
       </span>
       <button
         type="button"
@@ -521,11 +630,11 @@ function ItemDoCampo({
         onClick={selecionar}
       >
         <span className="font-medium">{campo.rotulo || "(sem rótulo)"}</span>{" "}
-        <span className="font-mono text-xs text-slate-500">
+        <span className="font-mono text-xs text-pedra-500">
           {campo.id || "(sem id)"} · {campo.tipo}
         </span>
         {quantidadeDeErros > 0 ? (
-          <span className="ml-2 text-sm text-red-700">{quantidadeDeErros} erro(s)</span>
+          <span className="ml-2 text-sm text-erro-700">{quantidadeDeErros} erro(s)</span>
         ) : null}
       </button>
       <button
@@ -548,7 +657,7 @@ function ItemDoCampo({
       </button>
       <button
         type="button"
-        className="px-1 text-red-700"
+        className="px-1 text-erro-700"
         aria-label={`Remover o campo ${campo.rotulo}`}
         onClick={remover}
       >

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Esquemas, TipoDeCampo } from "../api/cliente";
+import { CLASSE_DO_CONTROLE } from "../components/FormRenderer/Campo";
 import { EditorDeFormula } from "./EditorDeFormula";
 import type { CampoEmEdicao, ErroNoCampo } from "./estado";
 
@@ -11,12 +12,14 @@ interface Props {
   catalogo: Catalogo;
   /** Nomes dos formulários que podem ser origem de uma referência. */
   formulariosDeOrigem: string[];
+  /** `<referência>__<campo>` dos campos compartilhados pelas origens, para as fórmulas. */
+  camposDasReferencias: { id: string; rotulo: string }[];
   erros: ErroNoCampo[];
   aoMudar: (mudancas: Partial<CampoEmEdicao>) => void;
 }
 
 const CAMPOS_USAVEIS_EM_FORMULA: TipoDeCampo[] = ["numero", "data", "sim_nao", "calculado"];
-const CLASSE = "rounded border border-slate-300 px-2 py-1.5 aria-[invalid=true]:border-red-500";
+const CLASSE = CLASSE_DO_CONTROLE;
 
 /**
  * Edita as propriedades de um campo. Só mostra as que o catálogo diz que o tipo aceita
@@ -27,6 +30,7 @@ export function PainelDePropriedades({
   todosOsCampos,
   catalogo,
   formulariosDeOrigem,
+  camposDasReferencias,
   erros,
   aoMudar,
 }: Props) {
@@ -40,7 +44,7 @@ export function PainelDePropriedades({
       <h2 className="text-lg font-semibold">Propriedades</h2>
 
       {errosDe("").map((erro) => (
-        <p key={erro.mensagem} role="alert" className="text-sm text-red-700">
+        <p key={erro.mensagem} role="alert" className="text-sm text-erro-700">
           {erro.mensagem}
         </p>
       ))}
@@ -171,7 +175,8 @@ export function PainelDePropriedades({
               (outro) =>
                 outro.chave !== campo.chave && CAMPOS_USAVEIS_EM_FORMULA.includes(outro.tipo),
             )
-            .map((outro) => ({ id: outro.id, rotulo: outro.rotulo }))}
+            .map((outro) => ({ id: outro.id, rotulo: outro.rotulo }))
+            .concat(camposDasReferencias)}
           erro={
             erroDaFormula
               ? { mensagem: erroDaFormula.mensagem, posicao: erroDaFormula.posicao }
@@ -187,7 +192,7 @@ export function PainelDePropriedades({
         />
       ) : null}
       {errosDe("compartilhado").map((erro) => (
-        <p key={erro.mensagem} role="alert" className="text-sm text-red-700">
+        <p key={erro.mensagem} role="alert" className="text-sm text-erro-700">
           {erro.mensagem}
         </p>
       ))}
@@ -232,12 +237,12 @@ function Moldura({
         "aria-describedby": descricao.length > 0 ? descricao.join(" ") : undefined,
       })}
       {ajuda ? (
-        <span id={idDaAjuda} className="text-xs text-slate-500">
+        <span id={idDaAjuda} className="text-xs text-pedra-500">
           {ajuda}
         </span>
       ) : null}
       {erros.length > 0 ? (
-        <ul id={idDosErros} role="alert" className="text-sm text-red-700">
+        <ul id={idDosErros} role="alert" className="text-sm text-erro-700">
           {erros.map((erro) => (
             <li key={erro.mensagem}>{erro.mensagem}</li>
           ))}

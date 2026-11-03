@@ -365,6 +365,36 @@ describe("Construtor: validação e erros no campo certo", () => {
   });
 });
 
+describe("Construtor: novo formulário dentro de uma pasta", () => {
+  it("cria já na pasta e volta para ela, não para a raiz", async () => {
+    const criarFormulario = vi.fn<
+      (entrada: { nome: string; definicao: unknown; pasta_id?: number | null }) => Promise<never>
+    >(() => Promise.resolve({} as never));
+    const { navegar } = renderizar({ tipo: "novo", pastaId: 8 }, { criarFormulario });
+    await userEvent.type(await screen.findByLabelText("Nome do formulário"), "Sondagem");
+    await adicionar("Texto");
+
+    await userEvent.click(screen.getByRole("button", { name: "Publicar formulário" }));
+
+    await waitFor(() => expect(navegar).toHaveBeenCalledWith({ nome: "pasta", pastaId: 8 }));
+    expect(criarFormulario.mock.calls[0]?.[0]).toMatchObject({ nome: "Sondagem", pasta_id: 8 });
+  });
+
+  it("sem pasta, não manda pasta_id", async () => {
+    const criarFormulario = vi.fn<
+      (entrada: { nome: string; definicao: unknown; pasta_id?: number | null }) => Promise<never>
+    >(() => Promise.resolve({} as never));
+    renderizar({ tipo: "novo" }, { criarFormulario });
+    await userEvent.type(await screen.findByLabelText("Nome do formulário"), "Sondagem");
+    await adicionar("Texto");
+
+    await userEvent.click(screen.getByRole("button", { name: "Publicar formulário" }));
+
+    await waitFor(() => expect(criarFormulario).toHaveBeenCalled());
+    expect(criarFormulario.mock.calls[0]?.[0]).not.toHaveProperty("pasta_id");
+  });
+});
+
 describe("Construtor: publicar", () => {
   it("novo formulário: cria com o nome e a definição e volta à lista", async () => {
     const criarFormulario = vi.fn<
@@ -553,6 +583,64 @@ describe("Construtor: criar com IA", () => {
 
     await screen.findByRole("button", { name: "Publicar nova versão" });
     expect(screen.queryByRole("button", { name: "Criar com IA" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Construtor: fórmula usando campos compartilhados da origem", () => {
+  const proctor = {
+    id: 7,
+    nome: "Proctor",
+    criado_em: "x",
+    versao_atual: {
+      id: 71,
+      formulario_id: 7,
+      numero: 1,
+      publicada_em: "x",
+      definicao: {
+        campos: [
+          { id: "ensaio", tipo: "referencia" as const, rotulo: "Ensaio", formulario: "Ensaio" },
+          { id: "massa", tipo: "numero" as const, rotulo: "Massa" },
+          { id: "seca", tipo: "calculado" as const, rotulo: "Massa seca", formula: "massa * 2" },
+        ],
+      },
+    },
+  };
+  const ensaio = {
+    id: 1,
+    nome: "Ensaio",
+    criado_em: "x",
+    versao_atual: {
+      id: 11,
+      formulario_id: 1,
+      numero: 1,
+      publicada_em: "x",
+      definicao: {
+        campos: [
+          { id: "umidade", tipo: "numero" as const, rotulo: "Umidade", compartilhado: true },
+          { id: "operador", tipo: "texto" as const, rotulo: "Operador", compartilhado: true },
+        ],
+      },
+    },
+  };
+
+  it("oferece `<referência>__<campo>` para os campos que a origem compartilha e uma fórmula pode usar", async () => {
+    renderizar(
+      { tipo: "editar", formularioId: 7 },
+      { obterFormulario: async (id: number) => (id === 7 ? proctor : ensaio) },
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Selecionar o campo Massa seca" }),
+    );
+
+    const ajuda = await screen.findByRole("group", { name: "Campos e constantes" });
+
+    expect(
+      await within(ajuda).findByRole("button", { name: /ensaio__umidade/ }),
+    ).toBeInTheDocument();
+    // texto não pode entrar em fórmula, então a origem não o oferece
+    expect(
+      within(ajuda).queryByRole("button", { name: /ensaio__operador/ }),
+    ).not.toBeInTheDocument();
   });
 });
 

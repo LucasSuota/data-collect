@@ -128,6 +128,30 @@ O produto final é um **aplicativo instalável** de uso local: janela Electron c
 - Alvos: **Windows, macOS e Linux**.
 - Fora do escopo: assinatura de código e notarização (por isso o macOS e o Windows mostram um aviso na primeira abertura), loja de apps e atualização automática (próximos passos).
 
+### 2.10. Pastas e duplicação de formulários
+
+Organização da lista de formulários. Não muda definição, versão nem registro.
+
+- **Pastas:** uma árvore (pasta com subpastas, profundidade livre) que **só organiza formulários**. Um formulário está em no máximo uma pasta; sem pasta, ele fica na raiz. Pasta não afeta referências entre formulários (§2.7, que usam o **nome** do formulário, e o nome continua único no sistema inteiro), versões nem registros.
+  - `POST /pastas` recebe `{nome, pasta_pai_id?}`; `GET /pastas` devolve a lista **plana** `{id, nome, pasta_pai_id, criado_em}` (o front monta a árvore); `PUT /pastas/{id}` recebe `{nome, pasta_pai_id}` e **substitui** os dois (renomear e mover, sem `PATCH`).
+  - `PUT /formularios/{id}/pasta` recebe `{pasta_id}` (`null` = raiz) e move o formulário. `GET /formularios` passa a trazer `pasta_id`, e `POST /formularios` aceita `pasta_id` opcional.
+  - O nome da pasta é **único entre pastas irmãs** (mesma pasta pai), sem diferenciar maiúsculas/minúsculas nem espaços nas pontas; repetido → 422 no campo `nome`. Mover uma pasta para dentro dela mesma ou de uma descendente → 422 no campo `pasta_pai_id`. Pasta de destino inexistente → 422 no campo; pasta da URL inexistente → 404.
+  - `DELETE /pastas/{id}` só se a pasta não tem subpastas **nem** formulários; senão 409 (nada é apagado em cascata).
+- **Duplicar:** `POST /formularios/{id}/duplicar` recebe `{nome?}` e responde **201** com o formulário novo (mesmo formato de `GET /formularios/{id}`).
+  - A cópia nasce com a **versão 1 igual à definição da versão atual** do original, na **mesma pasta**, **sem registros**. É um formulário independente: nenhum vínculo com o original além do conteúdo inicial. Passa pela mesma publicação de §2.2 (validação e registro das dependências).
+  - Sem `nome`, o padrão é `<nome> (cópia)`; se já existir, `<nome> (cópia 2)`, `(cópia 3)` e assim por diante. `nome` informado e repetido → 422 no campo `nome` (§2.2).
+  - Quem depende do original **não** passa a depender da cópia; a cópia depende das mesmas origens que o original (§2.7).
+
+### 2.11. Experiência do front
+
+Qualidade de interface do `frontend/`. É só apresentação (§2.4): nada aqui reimplementa fórmula nem validação.
+
+- **Identidade visual própria**, sem o aspecto genérico de template: tokens de design (cor, tipografia, espaçamento, raio, sombra) definidos num só lugar e componentes base reaproveitados pelas telas. Foco visível, contraste adequado e respeito a `prefers-reduced-motion`.
+- **Skeletons** no lugar do "Carregando…": o esqueleto tem a forma da tela que vai aparecer, para a página não "pular" quando o dado chega.
+- **Arrastar e soltar** do construtor com feedback claro: item arrastado com `DragOverlay`, indicador do ponto de destino e animações curtas, também por teclado.
+- **Editor de fórmulas** mais próximo do Excel: autocomplete de campos e funções, assinatura da função ao digitá-la, parênteses pareados e destacados, e uma forma de montar a fórmula por **blocos arrastáveis** (campos, funções, operadores e parênteses). O editor só **monta o texto** da fórmula; quem valida é `POST /definicoes/validar` e quem calcula é o servidor (§2.2, §7). A gramática continua sendo a do §7 (parênteses já são aceitos pelo avaliador).
+- Biblioteca nova só com justificativa na issue (§9.12). O `dnd-kit` já está no projeto.
+
 ---
 
 ## 3. Escopo — o que NÃO será feito
@@ -205,7 +229,7 @@ src/forms/   models.py  tipos_campo.py  formulas.py  validacao.py
              fotos.py  exportacao.py  repositorio.py  cli.py  app.py
              api.py  api_esquemas.py  api_rotas.py  api_extensoes.py  exportar_openapi.py
              servico.py (fachada)  servico_base.py  servico_registros.py
-             servico_anexos.py  servico_consulta.py
+             servico_anexos.py  servico_consulta.py  servico_pastas.py
              rag/  chunker.py  indice.py  semantico.py  responder.py  extensao.py  (opcional)
              ia/   cliente.py  resumo.py  validacao.py  gerador.py  extensao.py     (opcional)
 templates/   corpo_de_prova.json  inspecao_obra.json  (exemplos)
@@ -231,7 +255,7 @@ api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py
 - **`validacao.py`**: valida um registro contra uma definição.
 - **`fotos.py`**: processa uma imagem (valida, orienta, remove metadados, converte para WebP na faixa de tamanho, §2.8). Função pura de bytes para bytes. O I/O de arquivo (gravar e apagar o `.webp`) fica em `servico_anexos.py` (reexportado por `servico.py`), com a pasta de dados recebida por parâmetro.
 - **`repositorio.py`**: único módulo que fala SQL. Sempre com parâmetros (`?`), nunca f-string em SQL.
-- **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI. Para não virar um arquivo gigante, os casos de uso de registros (`servico_registros.py`), anexos (`servico_anexos.py`) e consulta/exportação (`servico_consulta.py`) moram em módulos próprios, e as peças comuns (transação, campos compartilhados) em `servico_base.py`; `servico.py` os reexporta, então API e CLI chamam tudo por `servico.<função>`.
+- **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI. Para não virar um arquivo gigante, os casos de uso de registros (`servico_registros.py`), anexos (`servico_anexos.py`) e consulta/exportação (`servico_consulta.py`) e pastas (`servico_pastas.py`) moram em módulos próprios, e as peças comuns (transação, campos compartilhados) em `servico_base.py`; `servico.py` os reexporta, então API e CLI chamam tudo por `servico.<função>`.
 - **`exportacao.py`**: formatação das células e geração do CSV (§2.3, §12). Funções puras, sem I/O; usada por `servico_consulta.py`.
 - **`api.py`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP. Fica dividida em `api.py` (app, token por execução, CORS, tratadores de erro), `api_esquemas.py` (modelos Pydantic de entrada e saída) e `api_rotas.py` (endpoints); `api_extensoes.py` descobre e monta as rotas dos módulos opcionais; `exportar_openapi.py` gera o `openapi.json` do front.
 - **`cli.py`**: `argparse` fino; só chama `servico.py`.
@@ -242,7 +266,8 @@ api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py
 ### 5.2. Modelo de dados (SQLite)
 
 ```
-formularios          id, nome (único), criado_em
+formularios          id, nome (único), pasta_id (nulo = raiz), criado_em
+pastas               id, nome, pasta_pai_id (nulo = raiz), criado_em
 versoes_formulario   id, formulario_id, numero, definicao (JSON), publicada_em
 registros            id, formulario_id, versao_id, dados (JSON), criado_em, atualizado_em
 dependencias_formulario  formulario_id, depende_de_id

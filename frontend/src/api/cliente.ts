@@ -4,6 +4,7 @@ import type { components } from "./esquema";
 export type Esquemas = components["schemas"];
 export type ErroDeCampo = Esquemas["ErroDeCampoSaida"];
 export type ResumoDeFormulario = Esquemas["ResumoDeFormularioSaida"];
+export type Pasta = Esquemas["PastaSaida"];
 export type FormularioDetalhe = Esquemas["FormularioDetalheSaida"];
 export type Versao = Esquemas["VersaoSaida"];
 export type ResumoDeVersao = Esquemas["ResumoDeVersaoSaida"];
@@ -133,17 +134,38 @@ export function criarCliente(configuracao: Configuracao) {
     // formulários e versões
     listarFormularios: () => json<ResumoDeFormulario[]>("GET", "/formularios"),
     obterFormulario: (id: number) => json<FormularioDetalhe>("GET", `/formularios/${id}`),
-    criarFormulario: (entrada: { nome: string; definicao: unknown }) =>
+    criarFormulario: (entrada: { nome: string; definicao: unknown; pasta_id?: number | null }) =>
       json<FormularioDetalhe>("POST", "/formularios", { corpo: entrada }),
     criarFormulariosEmLote: (formularios: { nome: string; definicao: unknown }[]) =>
       json<ResumoDeFormulario[]>("POST", "/formularios/lote", { corpo: { formularios } }),
     excluirFormulario: (id: number) => semCorpo("DELETE", `/formularios/${id}`),
+    /** Cria uma cópia (v1 igual à versão atual, sem registros). Sem `nome`, o servidor escolhe. */
+    duplicarFormulario: (id: number, nome?: string) =>
+      json<FormularioDetalhe>(
+        "POST",
+        `/formularios/${id}/duplicar`,
+        nome === undefined ? undefined : { corpo: { nome } },
+      ),
     listarVersoes: (formularioId: number) =>
       json<ResumoDeVersao[]>("GET", `/formularios/${formularioId}/versoes`),
     obterVersao: (formularioId: number, versaoId: number) =>
       json<Versao>("GET", `/formularios/${formularioId}/versoes/${versaoId}`),
     publicarVersao: (formularioId: number, definicao: unknown) =>
       json<Versao>("POST", `/formularios/${formularioId}/versoes`, { corpo: { definicao } }),
+
+    // pastas (§2.10): só organizam formulários
+    listarPastas: () => json<Pasta[]>("GET", "/pastas"),
+    criarPasta: (nome: string, pastaPaiId: number | null) =>
+      json<Pasta>("POST", "/pastas", { corpo: { nome, pasta_pai_id: pastaPaiId } }),
+    /** Renomeia e/ou move: o `PUT` substitui os dois campos. */
+    atualizarPasta: (pastaId: number, nome: string, pastaPaiId: number | null) =>
+      json<Pasta>("PUT", `/pastas/${pastaId}`, { corpo: { nome, pasta_pai_id: pastaPaiId } }),
+    excluirPasta: (pastaId: number) => semCorpo("DELETE", `/pastas/${pastaId}`),
+    /** `pastaId` nulo leva o formulário à raiz. */
+    moverFormulario: (formularioId: number, pastaId: number | null) =>
+      json<ResumoDeFormulario>("PUT", `/formularios/${formularioId}/pasta`, {
+        corpo: { pasta_id: pastaId },
+      }),
 
     // definições
     validarDefinicao: (definicao: unknown) =>

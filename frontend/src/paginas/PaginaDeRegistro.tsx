@@ -8,7 +8,9 @@ import {
   valoresDoRegistro,
 } from "../components/FormRenderer/valoresDoRegistro";
 import type { Rota } from "../rotas";
-import { Carregando, Falha, mensagemDe, useCarga } from "./Estado";
+import { Botao, Cartao, Icone } from "../ui";
+import { EsqueletoDoFormulario } from "./esqueletos";
+import { Falha, mensagemDe, useCarga } from "./Estado";
 
 export type ModoDoRegistro =
   { tipo: "novo"; formularioId: number } | { tipo: "editar"; registroId: number };
@@ -61,7 +63,7 @@ export function PaginaDeRegistro({ modo, navegar }: Props) {
     };
   }, [cliente, chave]);
 
-  if (carga.situacao === "carregando") return <Carregando />;
+  if (carga.situacao === "carregando") return <EsqueletoDoFormulario />;
   if (carga.situacao === "erro") return <Falha mensagem={carga.mensagem} />;
   return <Formulario key={chave} carregado={carga.dados} navegar={navegar} />;
 }
@@ -122,12 +124,14 @@ function Formulario({ carregado, navegar }: { carregado: Carregado; navegar: Pro
   }
 
   return (
-    <form onSubmit={(e) => void salvar(e)} className="flex max-w-xl flex-col gap-4" noValidate>
+    <form onSubmit={(e) => void salvar(e)} className="flex max-w-2xl flex-col gap-5" noValidate>
       <div>
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-2xl font-semibold tracking-tight">
           {registro ? `Registro ${registro.id}` : "Novo registro"} · {carregado.nomeDoFormulario}
         </h1>
-        <p className="text-sm text-slate-500">Versão {carregado.numeroDaVersao} do formulário</p>
+        <p className="mt-0.5 text-sm text-pedra-600">
+          Versão {carregado.numeroDaVersao} do formulário
+        </p>
       </div>
 
       {falhaGeral ? <Falha mensagem={falhaGeral} /> : null}
@@ -139,46 +143,37 @@ function Formulario({ carregado, navegar }: { carregado: Carregado; navegar: Pro
         />
       ) : null}
 
-      <FormRenderer
-        definicao={definicao}
-        valores={valores}
-        aoMudar={setValores}
-        erros={erros}
-        calculadosSalvos={registro ? calculadosDoRegistro(definicao, registro.dados) : undefined}
-      />
+      <Cartao className="p-6">
+        <FormRenderer
+          definicao={definicao}
+          valores={valores}
+          aoMudar={setValores}
+          erros={erros}
+          calculadosSalvos={registro ? calculadosDoRegistro(definicao, registro.dados) : undefined}
+        />
+      </Cartao>
 
       <div className="flex flex-wrap gap-2">
-        <button
-          type="submit"
-          disabled={salvando}
-          className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
-        >
+        <Botao type="submit" variante="primario" carregando={salvando}>
           {salvando ? "Salvando…" : "Salvar"}
-        </button>
-        <button
-          type="button"
-          className="rounded border border-slate-300 px-4 py-2"
-          onClick={() => navegar({ nome: "registros", formularioId: carregado.formularioId })}
-        >
+        </Botao>
+        <Botao onClick={() => navegar({ nome: "registros", formularioId: carregado.formularioId })}>
           Cancelar
-        </button>
+        </Botao>
         {registro ? (
           confirmandoExclusao ? (
-            <button
-              type="button"
-              className="ml-auto rounded bg-red-600 px-4 py-2 text-white"
-              onClick={() => void excluir()}
-            >
+            <Botao variante="perigoSolido" className="ml-auto" onClick={() => void excluir()}>
               Confirmar exclusão
-            </button>
+            </Botao>
           ) : (
-            <button
-              type="button"
-              className="ml-auto rounded border border-red-300 px-4 py-2 text-red-700"
+            <Botao
+              variante="perigo"
+              className="ml-auto"
               onClick={() => setConfirmandoExclusao(true)}
             >
+              <Icone nome="lixeira" />
               Excluir registro
-            </button>
+            </Botao>
           )
         ) : null}
       </div>

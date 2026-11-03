@@ -194,6 +194,213 @@ describe("EditorDeFormula", () => {
     });
   });
 
+  describe("autocompletar pelo teclado (combobox)", () => {
+    it("o campo é um combobox ligado à lista de sugestões", async () => {
+      render(<Controlado />);
+
+      const campo = screen.getByRole("combobox", { name: "Fórmula" });
+      expect(campo).toHaveAttribute("aria-expanded", "false");
+      await userEvent.type(campo, "so");
+
+      expect(campo).toHaveAttribute("aria-expanded", "true");
+      expect(campo).toHaveAttribute("aria-controls", screen.getByRole("listbox").id);
+    });
+
+    it("seta para baixo escolhe a primeira sugestão e Enter a insere", async () => {
+      render(<Controlado />);
+      const campo = screen.getByRole("combobox", { name: "Fórmula" });
+
+      await userEvent.type(campo, "so");
+      await userEvent.keyboard("{ArrowDown}");
+      expect(screen.getByRole("option", { name: /soma/ })).toHaveAttribute("aria-selected", "true");
+      expect(campo).toHaveAttribute("aria-activedescendant", screen.getByRole("option").id);
+      await userEvent.keyboard("{Enter}");
+
+      expect(campo).toHaveValue("soma(");
+    });
+
+    it("seta para cima a partir do nada vai para a última, e as setas dão a volta", async () => {
+      render(<Controlado />);
+      const campo = screen.getByRole("combobox", { name: "Fórmula" });
+
+      await userEvent.type(campo, "d");
+      // Sugestões para "d": dias (função). Só uma, então cima e baixo ficam nela.
+      await userEvent.keyboard("{ArrowUp}");
+      expect(screen.getByRole("option", { name: /dias/ })).toHaveAttribute("aria-selected", "true");
+      await userEvent.keyboard("{ArrowDown}");
+
+      expect(screen.getByRole("option", { name: /dias/ })).toHaveAttribute("aria-selected", "true");
+    });
+
+    it("Tab também aceita a sugestão escolhida", async () => {
+      render(<Controlado />);
+      const campo = screen.getByRole("combobox", { name: "Fórmula" });
+
+      await userEvent.type(campo, "fck");
+      await userEvent.keyboard("{ArrowDown}{Tab}");
+
+      expect(campo).toHaveValue("fck_mpa");
+    });
+
+    it("Enter sem sugestão escolhida não insere nada (segue a quebra de linha)", async () => {
+      render(<Controlado />);
+      const campo = screen.getByRole("combobox", { name: "Fórmula" });
+
+      await userEvent.type(campo, "so{Enter}");
+
+      expect(campo).toHaveValue("so\n");
+    });
+
+    it("Esc fecha a lista, e digitar de novo a reabre", async () => {
+      render(<Controlado />);
+      const campo = screen.getByRole("combobox", { name: "Fórmula" });
+
+      await userEvent.type(campo, "so");
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+      await userEvent.type(campo, "m");
+
+      expect(screen.getByRole("listbox")).toBeInTheDocument();
+    });
+  });
+
+  describe("dica da função", () => {
+    it("mostra a assinatura, a descrição e o exemplo da função em que o cursor está", () => {
+      render(<Controlado inicial="1 + se(" />);
+
+      const dica = screen.getByRole("note", { name: "Ajuda da função se" });
+      expect(dica).toHaveTextContent("se(cond, a, b)");
+      expect(dica).toHaveTextContent("Escolhe um valor.");
+      expect(dica).toHaveTextContent("se(a > 1, 1, 2)");
+    });
+
+    it("destaca o argumento que está sendo digitado", () => {
+      render(<Controlado inicial="se(a > 1, " />);
+
+      const dica = screen.getByRole("note", { name: "Ajuda da função se" });
+      expect(
+        within(dica).getByText("a", { selector: "[aria-current='true']" }),
+      ).toBeInTheDocument();
+    });
+
+    it("em função variádica, os argumentos extras destacam o `...`", () => {
+      render(<Controlado inicial="soma(1, 2, 3, 4, " />);
+
+      const dica = screen.getByRole("note", { name: "Ajuda da função soma" });
+      expect(
+        within(dica).getByText("...", { selector: "[aria-current='true']" }),
+      ).toBeInTheDocument();
+    });
+
+    it("fora de uma função, ou numa função desconhecida, não mostra dica", () => {
+      const { rerender } = render(<Controlado inicial="1 + (2" />);
+      expect(screen.queryByRole("note")).not.toBeInTheDocument();
+
+      rerender(<Controlado inicial="desconhecida(" />);
+      expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("parênteses", () => {
+    it("ao digitar `(` insere o par e deixa o cursor no meio", async () => {
+      render(<Controlado />);
+      const campo = screen.getByRole("combobox", { name: "Fórmula" });
+
+      await userEvent.type(campo, "2 * (3 + 4");
+
+      expect(campo).toHaveValue("2 * (3 + 4)");
+    });
+
+    it("digitar `)` quando o próximo já é `)` só avança, sem duplicar", async () => {
+      render(<Controlado />);
+      const campo = screen.getByRole("combobox", { name: "Fórmula" });
+
+      await userEvent.type(campo, "(3 + 4)");
+
+      expect(campo).toHaveValue("(3 + 4)");
+    });
+
+    it("apagar entre `(` e `)` vazios remove o par", async () => {
+      render(<Controlado />);
+      const campo = screen.getByRole("combobox", { name: "Fórmula" });
+
+      await userEvent.type(campo, "a + (");
+      await userEvent.keyboard("{Backspace}");
+
+      expect(campo).toHaveValue("a + ");
+    });
+
+    it("destaca o par do parêntese ao lado do cursor", () => {
+      render(<Controlado inicial="soma(a, (b + c))" />);
+
+      // O cursor começa no fim, logo depois do último `)`.
+      const pares = screen.getAllByTestId("par-do-cursor");
+      expect(pares.map((p) => p.textContent)).toEqual(["(", ")"]);
+    });
+
+    it("sinaliza o parêntese sem par antes mesmo de validar", () => {
+      render(<Controlado inicial="(a + b" />);
+
+      expect(screen.getByTestId("parentese-sem-par")).toHaveTextContent("(");
+    });
+
+    it("sinaliza o `)` que sobrou", () => {
+      render(<Controlado inicial="a + b)" />);
+
+      expect(screen.getByTestId("parentese-sem-par")).toHaveTextContent(")");
+    });
+
+    it("parênteses casados não são sinalizados como erro", () => {
+      render(<Controlado inicial="(a + b) * 2" />);
+
+      expect(screen.queryByTestId("parentese-sem-par")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("modo texto e modo blocos", () => {
+    it("começa no modo texto e oferece trocar para blocos", () => {
+      render(<Controlado inicial="a+b" />);
+
+      expect(screen.getByRole("button", { name: "Texto" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "Blocos" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+      expect(screen.getByLabelText("Fórmula")).toBeInTheDocument();
+    });
+
+    it("trocar de modo sem editar nada não muda o texto, nem os espaços", async () => {
+      const aoMudar = vi.fn();
+      render(<Controlado inicial="a+b  *( 2 )" aoMudar={aoMudar} />);
+
+      await userEvent.click(screen.getByRole("button", { name: "Blocos" }));
+      expect(screen.getByRole("list", { name: "Fórmula em blocos" })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Texto" }));
+
+      expect(aoMudar).not.toHaveBeenCalled();
+      expect(screen.getByLabelText("Fórmula")).toHaveValue("a+b  *( 2 )");
+    });
+
+    it("o que se monta nos blocos aparece no texto ao voltar", async () => {
+      render(<Controlado inicial="fck_mpa" />);
+
+      await userEvent.click(screen.getByRole("button", { name: "Blocos" }));
+      await userEvent.click(screen.getByRole("button", { name: "Inserir o operador *" }));
+      await userEvent.click(screen.getByRole("button", { name: "Inserir a constante pi" }));
+      await userEvent.click(screen.getByRole("button", { name: "Texto" }));
+
+      expect(screen.getByLabelText("Fórmula")).toHaveValue("fck_mpa * pi");
+    });
+
+    it("no modo blocos o erro do servidor continua aparecendo", async () => {
+      render(<Controlado inicial="a +" erro={{ mensagem: "Sintaxe inválida.", posicao: null }} />);
+
+      await userEvent.click(screen.getByRole("button", { name: "Blocos" }));
+
+      expect(screen.getByRole("alert")).toHaveTextContent("Sintaxe inválida.");
+    });
+  });
+
   it("não interpreta o texto como HTML", () => {
     render(<Controlado inicial="<img src=x onerror=alert(1)>" />);
 

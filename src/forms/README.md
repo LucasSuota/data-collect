@@ -22,6 +22,8 @@ Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e n
 | `FormulaInvalida` | Fórmula rejeitada, com `posicao` opcional |
 | `DefinicaoInvalida`, `RegistroInvalido` | Carregam `erros: tuple[ErroDeCampo, ...]` |
 | `CicloDeDependencia` | Subclasse de `DefinicaoInvalida`; cita os campos em `campos` |
+| `Pasta` | Pasta da árvore que organiza formulários (§2.10); `Formulario.pasta_id` nulo = raiz |
+| `PastaInvalida` | Nome vazio ou repetido, destino inexistente ou ciclo; carrega `erros` como `RegistroInvalido` |
 | `ValorInvalido` | Um valor isolado não serve para o tipo do campo (levantada por `tipos_campo.py`) |
 | `FotoInvalida` | Imagem recusada; a mensagem já traz o motivo em PT-BR (levantada por `fotos.py`) |
 | `ErroDeCalculo` | Falha ao executar uma fórmula válida; `calcular_campos` a guarda no campo |
@@ -122,8 +124,9 @@ Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. N�
 ### O que tem aqui
 | Símbolo | Papel |
 |---|---|
-| `abrir_conexao`, `migrar`, `MIGRACOES` | Conexão com `foreign_keys` ligado e esquema migrado por `PRAGMA user_version`; cada migração é transacional |
+| `abrir_conexao`, `migrar`, `MIGRACOES` | Conexão com `foreign_keys` ligado e esquema migrado por `PRAGMA user_version`; cada migração é transacional. Aberta com `check_same_thread=False`: a API abre a conexão numa dependência e a usa no endpoint, que o FastAPI pode rodar em threads diferentes (uma conexão por requisição, nunca compartilhada) |
 | `criar_formulario`, `obter_formulario(_por_nome)`, `listar_formularios`, `excluir_formulario` | Nome único sem diferenciar caixa, espaços nas pontas nem a forma dos acentos (`chave_do_nome`); nome repetido levanta `DefinicaoInvalida` no campo `nome` |
+| `criar_`/`obter_`/`atualizar_`/`excluir_pasta`, `listar_pastas`, `mover_formulario` | Árvore de pastas (§2.10). Nome único entre irmãs pelo mesmo `chave_do_nome` (índice com `COALESCE(pasta_pai_id, 0)`, porque NULL não conta como igual); `pasta_esta_na_subarvore` (CTE recursiva) serve à detecção de ciclo; o banco recusa apagar pasta com subpasta ou formulário |
 | `inserir_versao`, `obter_versao(_atual)`, `listar_versoes` | Versões imutáveis: não há `update` nem `delete` de versão. O número é o anterior + 1, calculado no próprio `INSERT` |
 | `inserir_`/`atualizar_`/`obter_`/`excluir_registro`, `listar_registros` | Dados em JSON; listagem por versão, do mais recente ao mais antigo, com `total`, `FiltroDeIgualdade` e janela de datas |
 | `registrar_dependencias`, `listar_dependencias`, `formularios_dependentes` | Dependência entre formulários, direta ou transitiva |
@@ -225,6 +228,7 @@ Os casos de uso, chamados igualmente por `api.py` e `cli.py`. Toda regra de neg�
 | `servico.py` | Fachada: formulários e versões (criar, publicar, lote, validar, catálogo, importar template) e reexportação de todo o resto, então a API chama `servico.<função>` |
 | `servico_base.py` | Transação (`transacao`), campos compartilhados dos formulários publicados e o `Cache` de uma operação |
 | `servico_registros.py` | Criar, atualizar (com cascata), excluir registro, excluir formulário e prévia |
+| `servico_pastas.py` | Pastas e subpastas (criar, listar, renomear/mover, excluir) e mover formulário para uma pasta (§2.10) |
 | `servico_anexos.py` | Upload de foto em duas etapas, leitura do WebP, limpeza de órfãos e os arquivos da pasta de dados |
 | `servico_consulta.py` | Listagem com colunas da definição, filtros, paginação e exportação CSV |
 
@@ -239,6 +243,8 @@ Os casos de uso, chamados igualmente por `api.py` e `cli.py`. Toda regra de neg�
 - Cascata (§2.7): atualizar uma origem recalcula os dependentes transitivos **na mesma transação**, cada um contra a sua versão; erro de cálculo vira erro no campo e só falha de infraestrutura desfaz tudo. Quem não mudou não é regravado.
 - Arquivo de foto só é apagado **depois** do commit; falha antes dele preserva o arquivo. O caminho guardado é conferido para nunca sair da pasta de dados.
 - A prévia trata vazio e valor pela metade como vazio: não reclama de obrigatório (isso é do salvar).
+- Duplicar (`duplicar_formulario`) não tem caminho próprio de gravação: monta o nome (`<nome> (cópia)`, `(cópia 2)`…) e chama `criar_formulario` com a definição da versão atual, então a cópia é validada e registra as dependências como qualquer formulário novo. Sem registros, sem histórico de versões, na pasta do original.
+- Pasta só organiza: mover formulário troca `pasta_id` e não toca em versão, registro nem dependência. Mover pasta para dentro dela mesma ou de uma descendente é recusado; excluir só pasta vazia (409), sem cascata.
 - O filtro só aceita igualdade em `selecao`, `sim_nao`, `texto` e `calculado` booleano; o nome do campo vem de uma allowlist derivada da definição.
 
 ### Como testar
@@ -290,7 +296,7 @@ A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio 
 |---|---|
 | `api.py` | `criar_app(Configuracao)`, o `app` do uvicorn, o token por execução, o CORS e os tratadores de erro |
 | `api_esquemas.py` | Modelos Pydantic de entrada e saída; seus nomes e campos são o contrato com o front |
-| `api_rotas.py` | Os endpoints (formulários, versões, lote, validar, prévia, catálogo, registros, CSV, anexos) e as dependências (conexão por requisição, relógio, pasta de dados) |
+| `api_rotas.py` | Os endpoints (formulários, versões, lote, pastas, validar, prévia, catálogo, registros, CSV, anexos) e as dependências (conexão por requisição, relógio, pasta de dados) |
 | `api_extensoes.py` | `Extensao`, `descobrir_extensoes()` e `resposta_de_erro()`: como os módulos opcionais (`ia/`, `rag/`) acrescentam rotas sem o núcleo importá-los |
 | `exportar_openapi.py` | `forms-openapi`: grava o `openapi.json` do front; `--conferir` falha se estiver desatualizado |
 
@@ -300,7 +306,7 @@ A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio 
 - **Configuração** (variáveis de ambiente, ver `.env.example`): `FORMS_DB_PATH`, `FORMS_DATA_DIR`, `FORMS_TOKEN`, `FORMS_SKIP_TOKEN`, `FORMS_CORS_ORIGINS`.
 
 ### Decisões que moldam este código
-- Erro uniforme `{detalhe, erros: [{campo, mensagem, posicao?}]}` em português, inclusive nos erros do próprio Pydantic, 404/405 e 500 (sem vazar a causa). 422 validação e definição inválida, 404 inexistente, 409 exclusão bloqueada, 401 token.
+- Erro uniforme `{detalhe, erros: [{campo, mensagem, posicao?}]}` em português, inclusive nos erros do próprio Pydantic, 404/405 e 500 (sem vazar a causa; o 500 sai por um middleware dentro do CORS, senão o navegador o esconde do front). 422 validação e definição inválida, 404 inexistente, 409 exclusão bloqueada, 401 token.
 - Token por execução no cabeçalho `X-Forms-Token`, **falha fechada**: sem token configurado e sem `FORMS_SKIP_TOKEN`, toda requisição é recusada. O middleware do token fica *dentro* do CORS, para o preflight (que não leva token) passar e o 401 também levar os cabeçalhos CORS.
 - CORS só para as origens do front (padrão: as duas do Vite); `*` é recusado na configuração.
 - Conexão aberta e fechada por requisição (dependência); o relógio também é dependência, então os testes o fixam. Importar o módulo não abre banco nem cria arquivo.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ErroDaApi } from "../api/cliente";
+import { Aviso } from "../ui";
 
 export type Carga<T> =
   | { situacao: "carregando" }
@@ -41,18 +42,17 @@ export function mensagemDe(erro: unknown): string {
   return erro instanceof ErroDaApi ? erro.message : "Ocorreu um erro inesperado.";
 }
 
-export function Carregando() {
-  return (
-    <p role="status" className="text-slate-500">
-      Carregando…
-    </p>
-  );
+/**
+ * A mensagem para mostrar fora de um campo: no 422 junta as mensagens por campo (são elas que
+ * dizem o que está errado); nos demais erros, a mensagem do servidor.
+ */
+export function mensagemDetalhada(erro: unknown): string {
+  if (erro instanceof ErroDaApi && erro.erros.length > 0) {
+    return erro.erros.map((e) => e.mensagem).join(" ");
+  }
+  return mensagemDe(erro);
 }
 
 export function Falha({ mensagem }: { mensagem: string }) {
-  return (
-    <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-800">
-      {mensagem}
-    </p>
-  );
+  return <Aviso tom="erro">{mensagem}</Aviso>;
 }

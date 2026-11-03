@@ -129,13 +129,14 @@ def test_banco_novo_tem_as_tabelas_do_modelo_de_dados(conexao: sqlite3.Connectio
         "referencias_registro",
         "anexos",
         "vetores_trechos",
+        "pastas",
     }
 
 
 @pytest.mark.parametrize(
     ("tabela", "colunas"),
     [
-        ("formularios", ["id", "nome", "criado_em", "nome_chave"]),
+        ("formularios", ["id", "nome", "criado_em", "nome_chave", "pasta_id"]),
         ("versoes_formulario", ["id", "formulario_id", "numero", "definicao", "publicada_em"]),
         (
             "registros",
@@ -558,3 +559,82 @@ def test_conexao_pode_ser_usada_e_fechada_em_outra_thread(tmp_path: Path):
 
     # assert
     assert erros == []
+
+
+# --- atualização real: esquema 3 (já em disco) -> esquema 4 ---
+
+
+def _banco_na_versao_3_com_dados(caminho: Path) -> None:
+    bruto = sqlite3.connect(caminho)
+    migrar(bruto, MIGRACOES[:3])
+    bruto.execute("INSERT INTO formularios (nome, nome_chave, criado_em) VALUES ('a', 'a', 'x')")
+    bruto.execute(
+        "INSERT INTO versoes_formulario (formulario_id, numero, definicao, publicada_em)"
+        " VALUES (1, 1, '{\"campos\": []}', 'x')"
+    )
+    bruto.execute(
+        "INSERT INTO registros (formulario_id, versao_id, dados, criado_em, atualizado_em)"
+        " VALUES (1, 1, '{\"n\": \"1\"}', 'x', 'x')"
+    )
+    bruto.commit()
+    assert bruto.execute("PRAGMA user_version").fetchone()[0] == 3
+    bruto.close()
+
+
+def test_atualizar_do_esquema_3_para_o_4_cria_pastas_e_deixa_os_formularios_na_raiz(tmp_path: Path):
+    # arrange: banco real da v3, com um formulário, uma versão e um registro
+    caminho = tmp_path / "dados.db"
+    _banco_na_versao_3_com_dados(caminho)
+
+    # act
+    conexao = abrir_conexao(caminho)
+
+    # assert: nada se perdeu e o formulário antigo fica na raiz (pasta_id nulo)
+    assert _versao_do_esquema(conexao) == VERSAO_ATUAL_DO_ESQUEMA >= 4
+    assert _colunas(conexao, "pastas") == ["id", "nome", "nome_chave", "pasta_pai_id", "criado_em"]
+    assert "pasta_id" in _colunas(conexao, "formularios")
+    formulario = conexao.execute("SELECT nome, pasta_id FROM formularios").fetchone()
+    assert (formulario["nome"], formulario["pasta_id"]) == ("a", None)
+    assert conexao.execute("SELECT dados FROM registros").fetchone()["dados"] == '{"n": "1"}'
+    conexao.close()
+
+
+def test_depois_de_atualizar_o_nome_da_pasta_e_unico_ate_na_raiz(tmp_path: Path):
+    # arrange: NULL não conta como igual num índice único; a raiz precisa valer mesmo assim
+    caminho = tmp_path / "dados.db"
+    _banco_na_versao_3_com_dados(caminho)
+    conexao = abrir_conexao(caminho)
+    conexao.execute(
+        "INSERT INTO pastas (nome, nome_chave, pasta_pai_id, criado_em)"
+        " VALUES ('A', 'a', NULL, 'x')"
+    )
+
+    # act / assert
+    with pytest.raises(sqlite3.IntegrityError):
+        conexao.execute(
+            "INSERT INTO pastas (nome, nome_chave, pasta_pai_id, criado_em)"
+            " VALUES ('a', 'a', NULL, 'x')"
+        )
+    conexao.close()
+
+
+def test_apos_atualizar_o_banco_recusa_apagar_pasta_com_subpasta_ou_formulario(tmp_path: Path):
+    # arrange
+    caminho = tmp_path / "dados.db"
+    _banco_na_versao_3_com_dados(caminho)
+    conexao = abrir_conexao(caminho)
+    conexao.execute(
+        "INSERT INTO pastas (nome, nome_chave, pasta_pai_id, criado_em)"
+        " VALUES ('p', 'p', NULL, 'x')"
+    )
+    conexao.execute(
+        "INSERT INTO pastas (nome, nome_chave, pasta_pai_id, criado_em) VALUES ('q', 'q', 1, 'x')"
+    )
+    conexao.execute("UPDATE formularios SET pasta_id = 2")
+
+    # act / assert: o banco protege mesmo se o serviço esquecer de conferir
+    with pytest.raises(sqlite3.IntegrityError):
+        conexao.execute("DELETE FROM pastas WHERE id = 1")
+    with pytest.raises(sqlite3.IntegrityError):
+        conexao.execute("DELETE FROM pastas WHERE id = 2")
+    conexao.close()

@@ -1,8 +1,13 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ErroDaApi } from "../api/cliente";
-import { clienteFalso, renderizarComApi } from "../test/clienteFalso";
+import { clienteFalso as clienteBase, renderizarComApi } from "../test/clienteFalso";
+import type { ClienteApi } from "../api/cliente";
 import { PaginaDeFormularios } from "./PaginaDeFormularios";
+
+/** A tela sempre pede as pastas junto com os formulários; sem pastas, a lista é plana como antes. */
+const clienteFalso = (sobrescritas: Partial<ClienteApi> = {}) =>
+  clienteBase({ listarPastas: async () => [], ...sobrescritas });
 
 const resumo = (id: number, nome: string, numero = 1) => ({
   id,
@@ -107,5 +112,117 @@ describe("PaginaDeFormularios", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("é usado por 'Proctor'");
     expect(screen.getByText("Obra")).toBeInTheDocument(); // continua na lista
+  });
+
+  describe("duplicar", () => {
+    const criada = {
+      id: 2,
+      nome: "Obra (cópia)",
+      criado_em: "2026-11-02T10:00:00+00:00",
+      versao_atual: {
+        id: 20,
+        formulario_id: 2,
+        numero: 1,
+        definicao: { campos: [] },
+        publicada_em: "2026-11-02T10:00:00+00:00",
+      },
+    };
+
+    it("sem digitar nome, deixa o servidor escolher e recarrega a lista com a cópia", async () => {
+      const listarFormularios = vi
+        .fn()
+        .mockResolvedValueOnce([resumo(1, "Obra")])
+        .mockResolvedValueOnce([resumo(1, "Obra"), resumo(2, "Obra (cópia)")]);
+      const duplicarFormulario = vi.fn(async () => criada);
+      renderizarComApi(
+        <PaginaDeFormularios navegar={vi.fn()} />,
+        clienteFalso({ listarFormularios, duplicarFormulario }),
+      );
+      await screen.findByText("Obra");
+
+      await userEvent.click(screen.getByRole("button", { name: "Duplicar o formulário Obra" }));
+      await userEvent.click(screen.getByRole("button", { name: "Criar cópia" }));
+
+      expect(duplicarFormulario).toHaveBeenCalledWith(1, undefined);
+      expect(await screen.findByText("Obra (cópia)")).toBeInTheDocument();
+      expect(await screen.findByText(/Os registros não foram copiados/)).toBeInTheDocument();
+    });
+
+    it("com nome digitado, manda o nome sem as pontas em branco", async () => {
+      const duplicarFormulario = vi.fn(async () => criada);
+      renderizarComApi(
+        <PaginaDeFormularios navegar={vi.fn()} />,
+        clienteFalso({
+          listarFormularios: async () => [resumo(1, "Obra")],
+          duplicarFormulario,
+        }),
+      );
+      await screen.findByText("Obra");
+
+      await userEvent.click(screen.getByRole("button", { name: "Duplicar o formulário Obra" }));
+      await userEvent.type(screen.getByLabelText("Nome da cópia"), "  Obra B  ");
+      await userEvent.click(screen.getByRole("button", { name: "Criar cópia" }));
+
+      expect(duplicarFormulario).toHaveBeenCalledWith(1, "Obra B");
+    });
+
+    it("mostra o erro de nome repetido no campo e mantém o diálogo aberto", async () => {
+      const duplicarFormulario = vi.fn(async () => {
+        throw new ErroDaApi(422, "Definição inválida.", [
+          { campo: "nome", mensagem: "Já existe um formulário com este nome." },
+        ]);
+      });
+      renderizarComApi(
+        <PaginaDeFormularios navegar={vi.fn()} />,
+        clienteFalso({
+          listarFormularios: async () => [resumo(1, "Obra")],
+          duplicarFormulario,
+        }),
+      );
+      await screen.findByText("Obra");
+
+      await userEvent.click(screen.getByRole("button", { name: "Duplicar o formulário Obra" }));
+      await userEvent.type(screen.getByLabelText("Nome da cópia"), "Obra");
+      await userEvent.click(screen.getByRole("button", { name: "Criar cópia" }));
+
+      expect(await screen.findByText("Já existe um formulário com este nome.")).toBeVisible();
+      expect(screen.getByLabelText("Nome da cópia")).toHaveAttribute("aria-invalid", "true");
+    });
+
+    it("cancelar fecha o diálogo sem chamar a API", async () => {
+      const duplicarFormulario = vi.fn();
+      renderizarComApi(
+        <PaginaDeFormularios navegar={vi.fn()} />,
+        clienteFalso({
+          listarFormularios: async () => [resumo(1, "Obra")],
+          duplicarFormulario,
+        }),
+      );
+      await screen.findByText("Obra");
+
+      await userEvent.click(screen.getByRole("button", { name: "Duplicar o formulário Obra" }));
+      await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+      expect(screen.queryByLabelText("Nome da cópia")).not.toBeInTheDocument();
+      expect(duplicarFormulario).not.toHaveBeenCalled();
+    });
+
+    it("oferece abrir a cópia no construtor", async () => {
+      const navegar = vi.fn();
+      renderizarComApi(
+        <PaginaDeFormularios navegar={navegar} />,
+        clienteFalso({
+          listarFormularios: async () => [resumo(1, "Obra")],
+          duplicarFormulario: async () => criada,
+        }),
+      );
+      await screen.findByText("Obra");
+
+      await userEvent.click(screen.getByRole("button", { name: "Duplicar o formulário Obra" }));
+      await userEvent.click(screen.getByRole("button", { name: "Criar cópia" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Editar a cópia" }));
+
+      expect(navegar).toHaveBeenCalledWith({ nome: "editarFormulario", formularioId: 2 });
+    });
   });
 });

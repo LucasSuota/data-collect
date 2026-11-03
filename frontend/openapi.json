@@ -337,6 +337,169 @@
         }
       }
     },
+    "/formularios/{formulario_id}/duplicar": {
+      "post": {
+        "tags": [
+          "formulários"
+        ],
+        "summary": "Duplica o formulário",
+        "description": "Cria um formulário novo com a **versão 1 igual à definição da versão atual** do original, na mesma pasta e **sem registros**. O corpo é opcional: sem `nome`, o padrão é \"<nome> (cópia)\", depois \"(cópia 2)\"… Um `nome` repetido é 422 no campo `nome`.",
+        "operationId": "duplicar_formulario_formularios__formulario_id__duplicar_post",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DuplicarEntrada"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Entrada"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormularioDetalheSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/formularios/{formulario_id}/pasta": {
+      "put": {
+        "tags": [
+          "pastas"
+        ],
+        "summary": "Move o formulário para uma pasta (ou para a raiz)",
+        "description": "`pasta_id` nulo leva o formulário à raiz. Só troca a pasta: versões, registros e referências não mudam. Pasta de destino inexistente é 422 no campo `pasta_id`.",
+        "operationId": "mover_formulario_formularios__formulario_id__pasta_put",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoverFormularioEntrada"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumoDeFormularioSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/formularios/{formulario_id}/versoes": {
       "post": {
         "tags": [
@@ -549,6 +712,278 @@
           },
           "422": {
             "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pastas": {
+      "get": {
+        "tags": [
+          "pastas"
+        ],
+        "summary": "Lista as pastas, em lista plana (o front monta a árvore)",
+        "operationId": "listar_pastas_pastas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PastaSaida"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Pastas Pastas Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "pastas"
+        ],
+        "summary": "Cria uma pasta (na raiz ou dentro de outra)",
+        "description": "O nome é único entre pastas irmãs, sem diferenciar maiúsculas/minúsculas nem espaços nas pontas; repetido é 422 no campo `nome`.",
+        "operationId": "criar_pasta_pastas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PastaEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastaSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ]
+      }
+    },
+    "/pastas/{pasta_id}": {
+      "put": {
+        "tags": [
+          "pastas"
+        ],
+        "summary": "Renomeia e/ou move a pasta",
+        "description": "Substitui `nome` e `pasta_pai_id`. Mover para dentro dela mesma ou de uma subpasta é 422 no campo `pasta_pai_id`.",
+        "operationId": "atualizar_pasta_pastas__pasta_id__put",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pasta_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pasta Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PastaAtualizacao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastaSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "pastas"
+        ],
+        "summary": "Exclui uma pasta vazia",
+        "description": "409 se a pasta tem subpastas ou formulários; nada é apagado em cascata.",
+        "operationId": "excluir_pasta_pastas__pasta_id__delete",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pasta_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pasta Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Exclusão bloqueada por vínculo.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2132,6 +2567,25 @@
         ],
         "title": "DefinicaoSaida"
       },
+      "DuplicarEntrada": {
+        "properties": {
+          "nome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nome",
+            "description": "Nome da cópia. Sem ele, o padrão é \"<nome> (cópia)\", \"(cópia 2)\"…"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DuplicarEntrada"
+      },
       "ErroDeCampoSaida": {
         "properties": {
           "campo": {
@@ -2200,6 +2654,18 @@
           },
           "versao_atual": {
             "$ref": "#/components/schemas/VersaoSaida"
+          },
+          "pasta_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pasta Id",
+            "description": "Pasta do formulário; nulo é a raiz."
           }
         },
         "additionalProperties": false,
@@ -2221,6 +2687,18 @@
           "definicao": {
             "title": "Definicao",
             "description": "Definição em JSON: `{\"campos\": [...]}`."
+          },
+          "pasta_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pasta Id",
+            "description": "Pasta onde o formulário nasce; nulo (padrão) é a raiz."
           }
         },
         "additionalProperties": false,
@@ -2355,6 +2833,117 @@
           "formularios"
         ],
         "title": "LoteEntrada"
+      },
+      "MoverFormularioEntrada": {
+        "properties": {
+          "pasta_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pasta Id",
+            "description": "Pasta de destino; nulo leva o formulário à raiz."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pasta_id"
+        ],
+        "title": "MoverFormularioEntrada"
+      },
+      "PastaAtualizacao": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "pasta_pai_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pasta Pai Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nome",
+          "pasta_pai_id"
+        ],
+        "title": "PastaAtualizacao",
+        "description": "`PUT` substitui os dois campos (não há `PATCH`): omitir `pasta_pai_id` é erro, para não\nmandar a pasta para a raiz sem querer. Nulo explícito é a raiz."
+      },
+      "PastaEntrada": {
+        "properties": {
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "pasta_pai_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pasta Pai Id",
+            "description": "Pasta onde a nova pasta nasce; nulo (padrão) é a raiz."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nome"
+        ],
+        "title": "PastaEntrada"
+      },
+      "PastaSaida": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nome": {
+            "type": "string",
+            "title": "Nome"
+          },
+          "pasta_pai_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pasta Pai Id"
+          },
+          "criado_em": {
+            "type": "string",
+            "title": "Criado Em"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "nome",
+          "pasta_pai_id",
+          "criado_em"
+        ],
+        "title": "PastaSaida"
       },
       "PerguntaEntrada": {
         "properties": {
@@ -2653,6 +3242,18 @@
               }
             ],
             "title": "Versao Atual Numero"
+          },
+          "pasta_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pasta Id",
+            "description": "Pasta do formulário; nulo é a raiz."
           }
         },
         "additionalProperties": false,

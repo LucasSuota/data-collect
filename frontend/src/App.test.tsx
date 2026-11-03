@@ -6,7 +6,9 @@ import { clienteFalso } from "./test/clienteFalso";
 function renderizar(hash: string) {
   window.location.hash = hash;
   return render(
-    <ApiProvider cliente={clienteFalso({ listarFormularios: async () => [] })}>
+    <ApiProvider
+      cliente={clienteFalso({ listarFormularios: async () => [], listarPastas: async () => [] })}
+    >
       <App />
     </ApiProvider>,
   );
@@ -21,7 +23,9 @@ describe("App", () => {
     renderizar("#/");
 
     expect(screen.getByRole("link", { name: "Construtor de Formulários" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Formulários" })).toBeInTheDocument();
+    // Espera a lista carregar: durante o esqueleto o título existe, mas é trocado em seguida.
+    expect(await screen.findByText("Nenhum formulário ainda")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Formulários" })).toBeInTheDocument();
   });
 
   it("uma rota desconhecida mostra a página não encontrada com o caminho de volta", () => {

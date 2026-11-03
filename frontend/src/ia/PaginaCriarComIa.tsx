@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useApi } from "../api/contexto";
 import { ErroDaApi } from "../api/cliente";
+import { CLASSE_DO_CONTROLE } from "../components/FormRenderer/Campo";
 import { Construtor } from "../construtor/Construtor";
+import { Botao, Icone } from "../ui";
 import { Falha, mensagemDe } from "../paginas/Estado";
 import type { Rota } from "../rotas";
 import { atribuirErrosDoLote, deGerados, type Rascunho } from "./rascunhos";
@@ -99,12 +101,15 @@ export function PaginaCriarComIa({ navegar }: Props) {
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">Criar formulários com IA</h1>
-        <a href="#/construtor" className="text-sm underline">
+        <h1 className="text-2xl font-semibold tracking-tight">Criar formulários com IA</h1>
+        <a
+          href="#/construtor"
+          className="text-sm underline decoration-sinal-500 underline-offset-2"
+        >
           Usar o construtor manual
         </a>
       </div>
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-pedra-600">
         Descreva o que quer coletar. A IA só escreve a definição dos formulários; o sistema continua
         sendo quem valida e calcula, e nada é salvo até você publicar.
       </p>
@@ -117,24 +122,24 @@ export function PaginaCriarComIa({ navegar }: Props) {
           id="pedido-ia"
           rows={4}
           maxLength={PEDIDO_MAXIMO}
-          className="rounded border border-slate-300 px-2 py-1.5"
+          className={CLASSE_DO_CONTROLE + " py-2"}
           value={pedido}
           aria-describedby="contador-do-pedido"
           onChange={(e) => setPedido(e.target.value)}
         />
-        <span id="contador-do-pedido" className="text-xs text-slate-500">
+        <span id="contador-do-pedido" className="text-xs text-pedra-500">
           {pedido.length}/{PEDIDO_MAXIMO}
         </span>
       </div>
       <div>
-        <button
-          type="button"
-          disabled={gerando || pedido.trim() === ""}
-          className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
+        <Botao
+          variante="primario"
+          disabled={pedido.trim() === ""}
+          carregando={gerando}
           onClick={() => void gerar()}
         >
           {gerando ? "Gerando…" : rascunhos.length > 0 ? "Refinar rascunhos" : "Gerar formulários"}
-        </button>
+        </Botao>
       </div>
 
       {falha ? <Falha mensagem={falha} /> : null}
@@ -144,7 +149,7 @@ export function PaginaCriarComIa({ navegar }: Props) {
         <section aria-label="Rascunhos" className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Rascunhos</h2>
           {totalDeErros > 0 ? (
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-pedra-600">
               Corrija os erros no construtor antes de publicar: se algum rascunho for inválido, o
               servidor recusa o conjunto inteiro e nada é criado.
             </p>
@@ -153,15 +158,15 @@ export function PaginaCriarComIa({ navegar }: Props) {
             {rascunhos.map((rascunho, indice) => (
               <li
                 key={rascunho.chave}
-                className={`flex flex-col gap-2 rounded border p-3 ${
-                  rascunho.erros.length > 0 ? "border-red-400" : "border-slate-200"
+                className={`flex flex-col gap-2 rounded-cartao border bg-superficie p-3 shadow-cartao ${
+                  rascunho.erros.length > 0 ? "border-erro-300" : "border-pedra-200"
                 }`}
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"
                     aria-label={`Nome do rascunho ${indice + 1}`}
-                    className="min-w-48 flex-1 rounded border border-slate-300 px-2 py-1.5"
+                    className={CLASSE_DO_CONTROLE + " min-w-48 flex-1"}
                     value={rascunho.nome}
                     onChange={(e) =>
                       setRascunhos((atuais) =>
@@ -172,31 +177,32 @@ export function PaginaCriarComIa({ navegar }: Props) {
                     }
                   />
                   <span
-                    className={`text-sm ${rascunho.erros.length > 0 ? "text-red-700" : "text-green-700"}`}
+                    className={`text-sm ${rascunho.erros.length > 0 ? "text-erro-700" : "text-sucesso-700"}`}
                   >
                     {rascunho.erros.length > 0 ? `${rascunho.erros.length} erro(s)` : "Sem erros"}
                   </span>
-                  <button
-                    type="button"
-                    className="rounded border border-slate-300 px-2 py-1 text-sm"
+                  <Botao
+                    tamanho="pequeno"
                     aria-label={`Editar o rascunho ${rascunho.nome}`}
                     onClick={() => setEditando(rascunho.chave)}
                   >
+                    <Icone nome="editar" />
                     Editar
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded border border-red-300 px-2 py-1 text-sm text-red-700"
+                  </Botao>
+                  <Botao
+                    variante="perigo"
+                    tamanho="pequeno"
                     aria-label={`Remover o rascunho ${rascunho.nome}`}
                     onClick={() =>
                       setRascunhos((atuais) => atuais.filter((r) => r.chave !== rascunho.chave))
                     }
                   >
+                    <Icone nome="lixeira" />
                     Remover
-                  </button>
+                  </Botao>
                 </div>
                 {rascunho.erros.length > 0 ? (
-                  <ul className="list-disc pl-5 text-sm text-red-700">
+                  <ul className="list-disc pl-5 text-sm text-erro-700">
                     {rascunho.erros.map((erro, posicao) => (
                       <li key={posicao}>{`${erro.campo}: ${erro.mensagem}`}</li>
                     ))}
@@ -206,14 +212,9 @@ export function PaginaCriarComIa({ navegar }: Props) {
             ))}
           </ul>
           <div>
-            <button
-              type="button"
-              disabled={publicando}
-              className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
-              onClick={() => void publicarTodos()}
-            >
+            <Botao variante="primario" carregando={publicando} onClick={() => void publicarTodos()}>
               {publicando ? "Publicando…" : "Publicar todos"}
-            </button>
+            </Botao>
           </div>
         </section>
       ) : null}
