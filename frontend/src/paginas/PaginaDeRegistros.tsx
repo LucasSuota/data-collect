@@ -66,14 +66,14 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
         <h1 className="mr-auto text-2xl font-semibold">Registros · {titulo}</h1>
         <button
           type="button"
-          className="rounded bg-slate-900 px-3 py-1.5 text-white"
+          className="rounded bg-pedra-900 px-3 py-1.5 text-white"
           onClick={() => navegar({ nome: "novoRegistro", formularioId })}
         >
           Novo registro
         </button>
         <button
           type="button"
-          className="rounded border border-slate-300 px-3 py-1.5"
+          className="rounded border border-pedra-300 px-3 py-1.5"
           onClick={() => void exportar()}
         >
           Exportar CSV
@@ -86,7 +86,7 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
         <label className="flex flex-col text-sm">
           Versão
           <select
-            className="rounded border border-slate-300 px-2 py-1.5"
+            className="rounded border border-pedra-300 px-2 py-1.5"
             value={versaoId ?? ""}
             onChange={(e) => trocarDeVersao(e.target.value)}
           >
@@ -104,7 +104,7 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
           Criado de
           <input
             type="date"
-            className="rounded border border-slate-300 px-2 py-1.5"
+            className="rounded border border-pedra-300 px-2 py-1.5"
             value={criadoDe}
             onChange={(e) => {
               setCriadoDe(e.target.value);
@@ -116,7 +116,7 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
           Criado até
           <input
             type="date"
-            className="rounded border border-slate-300 px-2 py-1.5"
+            className="rounded border border-pedra-300 px-2 py-1.5"
             value={criadoAte}
             onChange={(e) => {
               setCriadoAte(e.target.value);
@@ -171,15 +171,15 @@ function Tabela({
   abrir: (registroId: number) => void;
 }) {
   if (total === 0) {
-    return <p className="text-slate-600">Nenhum registro encontrado.</p>;
+    return <p className="text-pedra-600">Nenhum registro encontrado.</p>;
   }
   const inicio = pagina * POR_PAGINA + 1;
   const fim = pagina * POR_PAGINA + itens.length;
   return (
     <>
-      <div className="overflow-x-auto rounded border border-slate-200">
+      <div className="overflow-x-auto rounded border border-pedra-200">
         <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50">
+          <thead className="bg-pedra-50">
             <tr>
               <th className="p-2">#</th>
               {colunas.map((coluna) => (
@@ -193,7 +193,7 @@ function Tabela({
           </thead>
           <tbody>
             {itens.map((registro) => (
-              <tr key={registro.id} className="border-t border-slate-100">
+              <tr key={registro.id} className="border-t border-pedra-100">
                 <td className="p-2">{registro.id}</td>
                 {colunas.map((coluna) => (
                   <td key={coluna.id} className="p-2">
@@ -221,7 +221,7 @@ function Tabela({
         </span>
         <button
           type="button"
-          className="rounded border border-slate-300 px-2 py-1 disabled:opacity-50"
+          className="rounded border border-pedra-300 px-2 py-1 disabled:opacity-50"
           disabled={pagina === 0}
           onClick={() => aoMudarDePagina(pagina - 1)}
         >
@@ -229,7 +229,7 @@ function Tabela({
         </button>
         <button
           type="button"
-          className="rounded border border-slate-300 px-2 py-1 disabled:opacity-50"
+          className="rounded border border-pedra-300 px-2 py-1 disabled:opacity-50"
           disabled={fim >= total}
           onClick={() => aoMudarDePagina(pagina + 1)}
         >
@@ -270,7 +270,7 @@ function FiltroPorCampo({
         <label className="flex flex-col text-sm">
           Filtrar por
           <select
-            className="rounded border border-slate-300 px-2 py-1.5"
+            className="rounded border border-pedra-300 px-2 py-1.5"
             value={campoId}
             onChange={(e) => {
               setCampoId(e.target.value);
@@ -288,7 +288,7 @@ function FiltroPorCampo({
         {coluna ? <EntradaDoFiltro coluna={coluna} valor={valor} aoMudar={setValor} /> : null}
         <button
           type="button"
-          className="rounded border border-slate-300 px-3 py-1.5 disabled:opacity-50"
+          className="rounded border border-pedra-300 px-3 py-1.5 disabled:opacity-50"
           disabled={!coluna || valor === ""}
           onClick={aplicar}
         >
@@ -302,7 +302,7 @@ function FiltroPorCampo({
             Object.entries(filtros).filter(([chave]) => chave !== id),
           );
           return (
-            <li key={id} className="rounded-full bg-slate-100 px-3 py-1 text-sm">
+            <li key={id} className="rounded-full bg-pedra-100 px-3 py-1 text-sm">
               {rotulo}: {rotuloDoValor(texto)}
               <button
                 type="button"
@@ -329,7 +329,7 @@ function EntradaDoFiltro({
   valor: string;
   aoMudar: (valor: string) => void;
 }) {
-  const classe = "rounded border border-slate-300 px-2 py-1.5";
+  const classe = "rounded border border-pedra-300 px-2 py-1.5";
   const booleano = coluna.tipo === "sim_nao" || coluna.resultado === "booleano";
   if (booleano) {
     return (

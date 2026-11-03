@@ -23,9 +23,9 @@ export function Campo({ id, rotulo, unidade, obrigatorio, erros = [], children }
   const idDosErros = `erros-${id}`;
   return (
     <div className="flex flex-col gap-1" data-campo={id}>
-      <label htmlFor={idDoControle} className="text-sm font-medium text-slate-700">
+      <label htmlFor={idDoControle} className="text-sm font-medium text-pedra-700">
         {rotulo}
-        {unidade ? <span className="ml-1 font-normal text-slate-500">({unidade})</span> : null}
+        {unidade ? <span className="ml-1 font-normal text-pedra-500">({unidade})</span> : null}
         {obrigatorio ? (
           <span className="ml-1 text-red-600" aria-hidden="true">
             *
@@ -50,5 +50,5 @@ export function Campo({ id, rotulo, unidade, obrigatorio, erros = [], children }
 }
 
 export const CLASSE_DO_CONTROLE =
-  "rounded border border-slate-300 bg-white px-2 py-1.5 text-slate-900 " +
-  "aria-[invalid=true]:border-red-500 disabled:bg-slate-100";
+  "rounded border border-pedra-300 bg-white px-2 py-1.5 text-pedra-900 " +
+  "aria-[invalid=true]:border-red-500 disabled:bg-pedra-100";

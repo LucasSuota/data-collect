@@ -248,7 +248,7 @@ function Editor({
               : "Novo formulário"}
         </h1>
         {editando ? (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-pedra-500">
             Publicar cria a versão {formulario.versao_atual.numero + 1}; os registros antigos
             continuam na versão deles.
           </p>
@@ -257,7 +257,7 @@ function Editor({
             Nome do formulário
             <input
               type="text"
-              className="rounded border border-slate-300 px-2 py-1.5"
+              className="rounded border border-pedra-300 px-2 py-1.5"
               value={nome}
               aria-invalid={erroDoNome.length > 0}
               onChange={(e) => setNome(e.target.value)}
@@ -273,14 +273,14 @@ function Editor({
           <>
             <button
               type="button"
-              className="rounded border border-slate-300 px-4 py-2"
+              className="rounded border border-pedra-300 px-4 py-2"
               onClick={rascunho.aoCancelar}
             >
               Cancelar
             </button>
             <button
               type="button"
-              className="rounded bg-slate-900 px-4 py-2 text-white"
+              className="rounded bg-pedra-900 px-4 py-2 text-white"
               onClick={() => rascunho.aoConcluir(nome, paraDefinicao(campos, aceitas))}
             >
               Concluir edição
@@ -291,7 +291,7 @@ function Editor({
             {!editando ? (
               <button
                 type="button"
-                className="rounded border border-slate-300 px-4 py-2"
+                className="rounded border border-pedra-300 px-4 py-2"
                 onClick={() => navegar({ nome: "criarComIa" })}
               >
                 Criar com IA
@@ -300,7 +300,7 @@ function Editor({
             <button
               type="button"
               disabled={publicando}
-              className="rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
+              className="rounded bg-pedra-900 px-4 py-2 text-white disabled:opacity-60"
               onClick={() => void publicar()}
             >
               {publicando
@@ -313,7 +313,7 @@ function Editor({
         )}
       </div>
       {rascunho ? (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-pedra-500">
           A validação completa acontece ao publicar todos os rascunhos juntos, porque eles podem
           depender uns dos outros.
         </p>
@@ -348,7 +348,7 @@ function Editor({
               }
             />
           ) : (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-pedra-500">
               Selecione um campo para editar as propriedades.
             </p>
           )}
@@ -399,13 +399,13 @@ function ItemDaPaleta({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
-      className="flex items-center gap-1 rounded border border-slate-200 bg-white"
+      className="flex items-center gap-1 rounded border border-pedra-200 bg-white"
     >
       <span
         {...attributes}
         {...listeners}
         aria-label={`Arrastar o tipo ${rotulo}`}
-        className="cursor-grab px-2 text-slate-400"
+        className="cursor-grab px-2 text-pedra-400"
       >
         ⠿
       </span>
@@ -442,10 +442,10 @@ function ListaDeCampos({
       <h2 className="text-lg font-semibold">Campos</h2>
       <div
         ref={setNodeRef}
-        className={`min-h-32 rounded border-2 border-dashed p-2 ${isOver ? "border-slate-500" : "border-slate-200"}`}
+        className={`min-h-32 rounded border-2 border-dashed p-2 ${isOver ? "border-pedra-500" : "border-pedra-200"}`}
       >
         {campos.length === 0 ? (
-          <p className="p-4 text-center text-sm text-slate-500">
+          <p className="p-4 text-center text-sm text-pedra-500">
             Arraste um tipo para cá ou use “Adicionar campo”.
           </p>
         ) : null}
@@ -502,14 +502,14 @@ function ItemDoCampo({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`flex items-center gap-2 rounded border bg-white p-2 ${
-        selecionado ? "border-slate-900" : "border-slate-200"
+        selecionado ? "border-pedra-900" : "border-pedra-200"
       } ${quantidadeDeErros > 0 ? "border-red-400" : ""}`}
     >
       <span
         {...attributes}
         {...listeners}
         aria-label={`Arrastar o campo ${campo.rotulo}`}
-        className="cursor-grab px-1 text-slate-400"
+        className="cursor-grab px-1 text-pedra-400"
       >
         ⠿
       </span>
@@ -521,7 +521,7 @@ function ItemDoCampo({
         onClick={selecionar}
       >
         <span className="font-medium">{campo.rotulo || "(sem rótulo)"}</span>{" "}
-        <span className="font-mono text-xs text-slate-500">
+        <span className="font-mono text-xs text-pedra-500">
           {campo.id || "(sem id)"} · {campo.tipo}
         </span>
         {quantidadeDeErros > 0 ? (

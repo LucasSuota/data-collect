@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useApi } from "../api/contexto";
 import { ErroDaApi, type ResumoDeFormulario } from "../api/cliente";
 import type { Rota } from "../rotas";
+import { Aviso, Botao, CampoDeTexto, Cartao, EstadoVazio, Icone, Selo } from "../ui";
 import { Carregando, Falha, mensagemDe, useCarga } from "./Estado";
 
 interface Props {
@@ -65,151 +66,156 @@ export function PaginaDeFormularios({ navegar }: Props) {
   }
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Formulários</h1>
-        <button
-          type="button"
-          className="rounded bg-slate-900 px-3 py-1.5 text-white"
-          onClick={() => navegar({ nome: "novoFormulario" })}
-        >
+    <section className="flex flex-col gap-5">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Formulários</h1>
+          <p className="mt-0.5 text-sm text-pedra-600">
+            Escolha um formulário para preencher, consultar ou editar.
+          </p>
+        </div>
+        <Botao variante="primario" onClick={() => navegar({ nome: "novoFormulario" })}>
+          <Icone nome="mais" />
           Novo formulário
-        </button>
+        </Botao>
       </div>
 
       {aviso ? <Falha mensagem={aviso} /> : null}
       {copiado ? (
-        <p
-          role="status"
-          className="flex flex-wrap items-center gap-3 rounded border border-emerald-300 bg-emerald-50 p-3 text-emerald-900"
+        <Aviso
+          tom="sucesso"
+          acoes={
+            <Botao
+              tamanho="pequeno"
+              onClick={() => navegar({ nome: "editarFormulario", formularioId: copiado.id })}
+            >
+              Editar a cópia
+            </Botao>
+          }
         >
-          <span>
-            «{copiado.nome}» foi criado. Os registros não foram copiados, só a definição atual.
-          </span>
-          <button
-            type="button"
-            className="rounded border border-emerald-400 px-2 py-1 text-sm"
-            onClick={() => navegar({ nome: "editarFormulario", formularioId: copiado.id })}
-          >
-            Editar a cópia
-          </button>
-        </p>
+          «{copiado.nome}» foi criado. Os registros não foram copiados, só a definição atual.
+        </Aviso>
       ) : null}
       {carga.situacao === "carregando" ? <Carregando /> : null}
       {carga.situacao === "erro" ? <Falha mensagem={carga.mensagem} /> : null}
 
       {carga.situacao === "pronto" && carga.dados.length === 0 ? (
-        <p className="text-slate-600">Nenhum formulário ainda. Crie o primeiro no construtor.</p>
+        <EstadoVazio
+          icone="registros"
+          titulo="Nenhum formulário ainda"
+          acao={
+            <Botao variante="primario" onClick={() => navegar({ nome: "novoFormulario" })}>
+              <Icone nome="mais" />
+              Criar o primeiro no construtor
+            </Botao>
+          }
+        >
+          Um formulário é montado no construtor e depois preenchido quantas vezes for preciso.
+        </EstadoVazio>
       ) : null}
 
       {carga.situacao === "pronto" && carga.dados.length > 0 ? (
-        <ul className="divide-y divide-slate-200 rounded border border-slate-200">
-          {carga.dados.map((formulario) => (
-            <li key={formulario.id} className="flex flex-wrap items-center gap-3 p-3">
-              <div className="mr-auto">
-                <p className="font-medium">{formulario.nome}</p>
-                <p className="text-sm text-slate-500">versão {formulario.versao_atual_numero}</p>
-              </div>
-              <button
-                type="button"
-                className="rounded bg-slate-900 px-2 py-1 text-sm text-white"
-                aria-label={`Novo registro em ${formulario.nome}`}
-                onClick={() => navegar({ nome: "novoRegistro", formularioId: formulario.id })}
-              >
-                Novo registro
-              </button>
-              <button
-                type="button"
-                className="rounded border border-slate-300 px-2 py-1 text-sm"
-                aria-label={`Ver registros de ${formulario.nome}`}
-                onClick={() => navegar({ nome: "registros", formularioId: formulario.id })}
-              >
-                Registros
-              </button>
-              <button
-                type="button"
-                className="rounded border border-slate-300 px-2 py-1 text-sm"
-                aria-label={`Editar o formulário ${formulario.nome}`}
-                onClick={() => navegar({ nome: "editarFormulario", formularioId: formulario.id })}
-              >
-                Editar
-              </button>
-              <button
-                type="button"
-                className="rounded border border-slate-300 px-2 py-1 text-sm"
-                aria-label={`Duplicar o formulário ${formulario.nome}`}
-                onClick={() => abrirDuplicacao(formulario)}
-              >
-                Duplicar
-              </button>
-              {confirmando === formulario.id ? (
-                <button
-                  type="button"
-                  className="rounded bg-red-600 px-2 py-1 text-sm text-white"
-                  onClick={() => void excluir(formulario)}
-                >
-                  Confirmar exclusão de {formulario.nome}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="rounded border border-red-300 px-2 py-1 text-sm text-red-700"
-                  aria-label={`Excluir o formulário ${formulario.nome}`}
-                  onClick={() => setConfirmando(formulario.id)}
-                >
-                  Excluir
-                </button>
-              )}
-              {duplicando === formulario.id ? (
-                <form
-                  className="flex basis-full flex-col gap-2 rounded bg-slate-50 p-3"
-                  onSubmit={(evento) => void duplicar(evento, formulario)}
-                >
-                  <label className="flex flex-col gap-1 text-sm">
-                    Nome da cópia
-                    <input
+        <Cartao>
+          <ul className="divide-y divide-pedra-200">
+            {carga.dados.map((formulario) => (
+              <li key={formulario.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
+                <div className="mr-auto flex min-w-0 items-center gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-controle bg-pedra-100 text-pedra-600">
+                    <Icone nome="registros" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{formulario.nome}</p>
+                    <p className="mt-0.5 text-sm text-pedra-500">
+                      <Selo>v{formulario.versao_atual_numero}</Selo>
+                      <span className="sr-only">versão {formulario.versao_atual_numero}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Botao
+                    variante="primario"
+                    tamanho="pequeno"
+                    aria-label={`Novo registro em ${formulario.nome}`}
+                    onClick={() => navegar({ nome: "novoRegistro", formularioId: formulario.id })}
+                  >
+                    Novo registro
+                  </Botao>
+                  <Botao
+                    tamanho="pequeno"
+                    aria-label={`Ver registros de ${formulario.nome}`}
+                    onClick={() => navegar({ nome: "registros", formularioId: formulario.id })}
+                  >
+                    Registros
+                  </Botao>
+                  <Botao
+                    variante="fantasma"
+                    tamanho="pequeno"
+                    aria-label={`Editar o formulário ${formulario.nome}`}
+                    onClick={() =>
+                      navegar({ nome: "editarFormulario", formularioId: formulario.id })
+                    }
+                  >
+                    <Icone nome="editar" />
+                    Editar
+                  </Botao>
+                  <Botao
+                    variante="fantasma"
+                    tamanho="pequeno"
+                    aria-label={`Duplicar o formulário ${formulario.nome}`}
+                    onClick={() => abrirDuplicacao(formulario)}
+                  >
+                    <Icone nome="copiar" />
+                    Duplicar
+                  </Botao>
+                  {confirmando === formulario.id ? (
+                    <Botao
+                      variante="perigoSolido"
+                      tamanho="pequeno"
+                      onClick={() => void excluir(formulario)}
+                    >
+                      Confirmar exclusão de {formulario.nome}
+                    </Botao>
+                  ) : (
+                    <Botao
+                      variante="perigo"
+                      tamanho="pequeno"
+                      aria-label={`Excluir o formulário ${formulario.nome}`}
+                      onClick={() => setConfirmando(formulario.id)}
+                    >
+                      <Icone nome="lixeira" />
+                      Excluir
+                    </Botao>
+                  )}
+                </div>
+                {duplicando === formulario.id ? (
+                  <form
+                    className="flex basis-full flex-col gap-3 rounded-controle bg-pedra-100 p-4"
+                    onSubmit={(evento) => void duplicar(evento, formulario)}
+                  >
+                    <CampoDeTexto
                       autoFocus
-                      className="rounded border border-slate-300 px-2 py-1"
+                      rotulo="Nome da cópia"
                       value={nomeDaCopia}
                       placeholder={`Em branco: «${formulario.nome} (cópia)»`}
-                      aria-invalid={errosDaCopia.length > 0}
-                      aria-describedby={errosDaCopia.length > 0 ? "erro-da-copia" : undefined}
+                      erros={errosDaCopia}
+                      dica="A cópia leva a definição atual na versão 1, na mesma pasta. Os registros não são copiados."
                       onChange={(evento) => {
                         setNomeDaCopia(evento.target.value);
                         setErrosDaCopia([]);
                       }}
                     />
-                  </label>
-                  {errosDaCopia.length > 0 ? (
-                    <p id="erro-da-copia" className="text-sm text-red-700">
-                      {errosDaCopia.join(" ")}
-                    </p>
-                  ) : null}
-                  <p className="text-sm text-slate-500">
-                    A cópia leva a definição atual na versão 1, na mesma pasta. Os registros não são
-                    copiados.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      disabled={copiando}
-                      className="rounded bg-slate-900 px-2 py-1 text-sm text-white disabled:opacity-60"
-                    >
-                      Criar cópia
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded border border-slate-300 px-2 py-1 text-sm"
-                      onClick={() => setDuplicando(null)}
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </form>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+                    <div className="flex gap-2">
+                      <Botao type="submit" variante="primario" carregando={copiando}>
+                        Criar cópia
+                      </Botao>
+                      <Botao onClick={() => setDuplicando(null)}>Cancelar</Botao>
+                    </div>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </Cartao>
       ) : null}
     </section>
   );

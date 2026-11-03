@@ -50,7 +50,7 @@ export function EditorDeFormula({
 
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-sm font-medium text-slate-700">
+      <label htmlFor={id} className="text-sm font-medium text-pedra-700">
         {rotulo}
       </label>
       <div className="relative">
@@ -81,7 +81,7 @@ export function EditorDeFormula({
           value={valor}
           aria-invalid={erro ? true : undefined}
           aria-describedby={erro ? idDoErro : undefined}
-          className="relative w-full rounded border border-slate-300 bg-transparent px-2 py-1.5 font-mono text-sm aria-[invalid=true]:border-red-500"
+          className="relative w-full rounded border border-pedra-300 bg-transparent px-2 py-1.5 font-mono text-sm aria-[invalid=true]:border-red-500"
           onChange={(e) => {
             aoMudar(e.target.value);
             setCursor(e.target.selectionStart);
@@ -100,7 +100,7 @@ export function EditorDeFormula({
         <ul
           role="listbox"
           aria-label="Sugestões"
-          className="rounded border border-slate-200 bg-white text-sm shadow"
+          className="rounded border border-pedra-200 bg-white text-sm shadow"
         >
           {sugestoes.map((sugestao) => (
             <li
@@ -108,7 +108,7 @@ export function EditorDeFormula({
               role="option"
               aria-selected={false}
               tabIndex={0}
-              className="cursor-pointer px-2 py-1 hover:bg-slate-100 focus:bg-slate-100"
+              className="cursor-pointer px-2 py-1 hover:bg-pedra-100 focus:bg-pedra-100"
               onClick={() => inserir(sugestao.inserir, true)}
               onKeyDown={(evento) => {
                 if (evento.key === "Enter" || evento.key === " ") {
@@ -118,14 +118,14 @@ export function EditorDeFormula({
               }}
             >
               <span className="font-mono">{sugestao.nome}</span>{" "}
-              <span className="text-slate-500">{sugestao.detalhe}</span>
+              <span className="text-pedra-500">{sugestao.detalhe}</span>
             </li>
           ))}
         </ul>
       ) : null}
 
       <fieldset className="text-sm" role="group" aria-label="Funções disponíveis">
-        <legend className="font-medium text-slate-600">Funções disponíveis</legend>
+        <legend className="font-medium text-pedra-600">Funções disponíveis</legend>
         <ul className="mt-1 flex flex-col gap-1">
           {funcoes.map((funcao) => (
             <li key={funcao.nome} className="flex flex-wrap items-baseline gap-2">
@@ -135,26 +135,26 @@ export function EditorDeFormula({
                   "(n)",
                   funcao.assinatura.slice(funcao.nome.length),
                 )}
-                className="rounded bg-slate-100 px-1.5 font-mono"
+                className="rounded bg-pedra-100 px-1.5 font-mono"
                 onClick={() => inserir(`${funcao.nome}(`, false)}
               >
                 {funcao.assinatura}
               </button>
-              <span className="text-slate-600">{funcao.descricao}</span>
+              <span className="text-pedra-600">{funcao.descricao}</span>
             </li>
           ))}
         </ul>
       </fieldset>
 
       <fieldset className="text-sm" role="group" aria-label="Campos e constantes">
-        <legend className="font-medium text-slate-600">Campos e constantes</legend>
+        <legend className="font-medium text-pedra-600">Campos e constantes</legend>
         <div className="mt-1 flex flex-wrap gap-1">
           {campos.map((campo) => (
             <button
               key={campo.id}
               type="button"
               title={campo.rotulo}
-              className="rounded bg-slate-100 px-1.5 font-mono"
+              className="rounded bg-pedra-100 px-1.5 font-mono"
               onClick={() => inserir(campo.id, false)}
             >
               {campo.id}
@@ -164,7 +164,7 @@ export function EditorDeFormula({
             <button
               key={constante}
               type="button"
-              className="rounded bg-slate-100 px-1.5 font-mono"
+              className="rounded bg-pedra-100 px-1.5 font-mono"
               onClick={() => inserir(constante, false)}
             >
               {constante}

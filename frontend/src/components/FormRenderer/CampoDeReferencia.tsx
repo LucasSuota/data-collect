@@ -83,7 +83,7 @@ export function CampoDeReferencia({ campo, valor, erros, somenteLeitura, aoMudar
             </p>
           ) : null}
           {estado.situacao === "pronto" && opcoes.length === 0 ? (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-pedra-500">
               Ainda não há registros em “{campo.formulario}”. Crie um primeiro.
             </p>
           ) : null}

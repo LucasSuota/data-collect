@@ -1,1 +1,94 @@
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
 @import "tailwindcss";
+
+/*
+ * Tokens de design: o único lugar onde cor, tipografia, raio, sombra e movimento são decididos.
+ * As telas usam estas classes (`bg-papel`, `text-pedra-600`, `rounded-cartao`...), nunca valores soltos.
+ *
+ * Direção: papel quente e tinta (o clima de uma ficha de laboratório ou de obra), neutros com tom
+ * e uma única cor de sinal, laranja de sinalização, reservada a foco, seleção e destino de arraste.
+ * As fontes vão dentro do pacote (@fontsource): o app instalado funciona sem internet.
+ */
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Neutros quentes: do papel à tinta. */
+  --color-papel: #f6f3ec;
+  --color-superficie: #fffdf8;
+  --color-pedra-50: #faf8f3;
+  --color-pedra-100: #f0ede5;
+  --color-pedra-200: #e3dfd4;
+  --color-pedra-300: #d0cabb;
+  --color-pedra-400: #a8a193;
+  --color-pedra-500: #7d776b;
+  --color-pedra-600: #5d584e;
+  --color-pedra-700: #46423a;
+  --color-pedra-800: #2f2c27;
+  --color-pedra-900: #1e1c19;
+
+  /* Cor de sinal: foco, seleção e destino de arraste. Nunca decorativa. */
+  --color-sinal-100: #ffe9db;
+  --color-sinal-300: #f6a46f;
+  --color-sinal-500: #d9480f;
+  --color-sinal-600: #b83b09;
+
+  /* Estados. Cada um tem fundo, borda e texto que passam de 4.5:1 sobre o fundo. */
+  --color-erro-50: #fdf0ee;
+  --color-erro-300: #e8a39b;
+  --color-erro-700: #9f2a1d;
+  --color-sucesso-50: #eef6ef;
+  --color-sucesso-300: #9cc7a4;
+  --color-sucesso-700: #2c6a3c;
+  --color-aviso-50: #fcf4e2;
+  --color-aviso-300: #e3c07a;
+  --color-aviso-700: #82540a;
+
+  --radius-controle: 0.375rem;
+  --radius-cartao: 0.625rem;
+
+  --shadow-cartao: 0 1px 0 rgb(30 28 25 / 0.04), 0 1px 3px rgb(30 28 25 / 0.07);
+  --shadow-elevada: 0 8px 24px -6px rgb(30 28 25 / 0.22), 0 2px 6px rgb(30 28 25 / 0.1);
+
+  --ease-saida: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duracao-rapida: 120ms;
+  --duracao-normal: 200ms;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-color: var(--color-papel);
+    color: var(--color-pedra-900);
+  }
+
+  /* Foco sempre visível e sempre da mesma cor: é o que orienta quem usa teclado. */
+  :focus-visible {
+    outline: 2px solid var(--color-sinal-500);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-sinal-100);
+  }
+}
+
+/* Quem pede menos movimento não recebe animação nem transição. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

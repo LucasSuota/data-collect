@@ -56,7 +56,7 @@ export function FormRenderer({
             return (
               <h2
                 key={campo.id}
-                className="mt-2 border-b border-slate-300 pb-1 text-lg font-semibold"
+                className="mt-2 border-b border-pedra-300 pb-1 text-lg font-semibold"
               >
                 {campo.rotulo}
               </h2>
@@ -216,10 +216,10 @@ function CampoCalculado({
   const id = `campo-${campo.id}`;
   return (
     <div className="flex flex-col gap-1" data-campo={campo.id}>
-      <span id={`${id}-rotulo`} className="text-sm font-medium text-slate-700">
+      <span id={`${id}-rotulo`} className="text-sm font-medium text-pedra-700">
         {campo.rotulo}
         {campo.unidade ? (
-          <span className="ml-1 font-normal text-slate-500">({campo.unidade})</span>
+          <span className="ml-1 font-normal text-pedra-500">({campo.unidade})</span>
         ) : null}
       </span>
       <output
@@ -228,7 +228,7 @@ function CampoCalculado({
         className={`rounded border px-2 py-1.5 ${
           resultado?.erro
             ? "border-red-300 bg-red-50 text-red-800"
-            : "border-slate-200 bg-slate-50 text-slate-800"
+            : "border-pedra-200 bg-pedra-50 text-pedra-800"
         }`}
       >
         {resultado?.erro

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ErroDaApi } from "../api/cliente";
+import { Aviso } from "../ui";
 
 export type Carga<T> =
   | { situacao: "carregando" }
@@ -43,16 +44,12 @@ export function mensagemDe(erro: unknown): string {
 
 export function Carregando() {
   return (
-    <p role="status" className="text-slate-500">
+    <p role="status" className="text-pedra-600">
       Carregando…
     </p>
   );
 }
 
 export function Falha({ mensagem }: { mensagem: string }) {
-  return (
-    <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-red-800">
-      {mensagem}
-    </p>
-  );
+  return <Aviso tom="erro">{mensagem}</Aviso>;
 }
