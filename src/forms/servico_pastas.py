@@ -19,7 +19,7 @@ def criar_pasta(
     conexao: sqlite3.Connection, nome: str, pasta_pai_id: int | None, agora: datetime
 ) -> Pasta:
     with transacao(conexao):
-        _conferir_destino(conexao, pasta_pai_id, "pasta_pai_id")
+        conferir_destino(conexao, pasta_pai_id, "pasta_pai_id")
         return repositorio.criar_pasta(conexao, nome, pasta_pai_id, agora)
 
 
@@ -34,7 +34,7 @@ def atualizar_pasta(
     """Renomeia e/ou move a pasta (substitui os dois campos, como o `PUT` do §2.10)."""
     repositorio.obter_pasta(conexao, pasta_id)  # 404 antes de qualquer 422
     with transacao(conexao):
-        _conferir_destino(conexao, pasta_pai_id, "pasta_pai_id")
+        conferir_destino(conexao, pasta_pai_id, "pasta_pai_id")
         # Mover para dentro de si mesma ou de uma descendente criaria um ciclo na árvore.
         if pasta_pai_id is not None and repositorio.pasta_esta_na_subarvore(
             conexao, pasta_pai_id, pasta_id
@@ -64,10 +64,11 @@ def mover_formulario(conexao: sqlite3.Connection, formulario_id: int, pasta_id: 
     """`pasta_id` nulo leva o formulário para a raiz."""
     repositorio.obter_formulario(conexao, formulario_id)  # 404 antes de qualquer 422
     with transacao(conexao):
-        _conferir_destino(conexao, pasta_id, "pasta_id")
+        conferir_destino(conexao, pasta_id, "pasta_id")
         repositorio.mover_formulario(conexao, formulario_id, pasta_id)
 
 
-def _conferir_destino(conexao: sqlite3.Connection, pasta_id: int | None, campo: str) -> None:
+def conferir_destino(conexao: sqlite3.Connection, pasta_id: int | None, campo: str) -> None:
+    """Recusa (422 no `campo`) uma pasta de destino que não existe; nulo é a raiz."""
     if pasta_id is not None and not repositorio.pasta_existe(conexao, pasta_id):
         raise PastaInvalida((ErroDeCampo(campo, _DESTINO_INEXISTENTE),))

@@ -7,7 +7,7 @@ controla a transação, então cada caso de uso grava tudo ou nada.
 import json
 import sqlite3
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -42,6 +42,7 @@ from forms.servico_consulta import (
 )
 from forms.servico_pastas import (
     atualizar_pasta,
+    conferir_destino,
     criar_pasta,
     excluir_pasta,
     listar_pastas,
@@ -201,16 +202,26 @@ def validar_definicao(conexao: sqlite3.Connection, definicao: ValorJson) -> Resu
 
 
 def criar_formulario(
-    conexao: sqlite3.Connection, nome: str, definicao: ValorJson, agora: datetime
+    conexao: sqlite3.Connection,
+    nome: str,
+    definicao: ValorJson,
+    agora: datetime,
+    pasta_id: int | None = None,
 ) -> FormularioCriado:
     """Cria o formulário e já publica a versão 1: um formulário sem versão não pode ser
-    preenchido, então esse estado não existe. Definição inválida não cria nada."""
+    preenchido, então esse estado não existe. Definição inválida não cria nada.
+    `pasta_id` (opcional) já põe o formulário numa pasta; nulo é a raiz (§2.10)."""
     with transacao(conexao):
+        conferir_destino(conexao, pasta_id, "pasta_id")
         conjunto = _validar_conjunto(conexao, [Rascunho(nome, definicao)])
         item = conjunto.itens[0]
         if item.erros:
             raise DefinicaoInvalida(tuple(item.erros))
-        return _gravar(conexao, conjunto, agora, versionando=None)[0]
+        criado = _gravar(conexao, conjunto, agora, versionando=None)[0]
+        if pasta_id is not None:
+            repositorio.mover_formulario(conexao, criado.formulario.id, pasta_id)
+            return FormularioCriado(replace(criado.formulario, pasta_id=pasta_id), criado.versao)
+        return criado
 
 
 def publicar_versao(

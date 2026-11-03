@@ -139,6 +139,7 @@ def test_listar_formularios_traz_a_versao_atual_sem_definicoes(cliente):
             "criado_em": "2026-11-02T10:00:00+00:00",
             "versao_atual_id": lista[0]["versao_atual_id"],
             "versao_atual_numero": 2,
+            "pasta_id": None,
         }
     ]
 

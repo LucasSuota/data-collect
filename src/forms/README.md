@@ -295,7 +295,7 @@ A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio 
 |---|---|
 | `api.py` | `criar_app(Configuracao)`, o `app` do uvicorn, o token por execução, o CORS e os tratadores de erro |
 | `api_esquemas.py` | Modelos Pydantic de entrada e saída; seus nomes e campos são o contrato com o front |
-| `api_rotas.py` | Os endpoints (formulários, versões, lote, validar, prévia, catálogo, registros, CSV, anexos) e as dependências (conexão por requisição, relógio, pasta de dados) |
+| `api_rotas.py` | Os endpoints (formulários, versões, lote, pastas, validar, prévia, catálogo, registros, CSV, anexos) e as dependências (conexão por requisição, relógio, pasta de dados) |
 | `api_extensoes.py` | `Extensao`, `descobrir_extensoes()` e `resposta_de_erro()`: como os módulos opcionais (`ia/`, `rag/`) acrescentam rotas sem o núcleo importá-los |
 | `exportar_openapi.py` | `forms-openapi`: grava o `openapi.json` do front; `--conferir` falha se estiver desatualizado |
 

@@ -63,6 +63,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/formularios/{formulario_id}/pasta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Move o formulário para uma pasta (ou para a raiz)
+         * @description `pasta_id` nulo leva o formulário à raiz. Só troca a pasta: versões, registros e referências não mudam. Pasta de destino inexistente é 422 no campo `pasta_id`.
+         */
+        put: operations["mover_formulario_formularios__formulario_id__pasta_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/formularios/{formulario_id}/versoes": {
         parameters: {
             query?: never;
@@ -96,6 +116,51 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pastas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista as pastas, em lista plana (o front monta a árvore) */
+        get: operations["listar_pastas_pastas_get"];
+        put?: never;
+        /**
+         * Cria uma pasta (na raiz ou dentro de outra)
+         * @description O nome é único entre pastas irmãs, sem diferenciar maiúsculas/minúsculas nem espaços nas pontas; repetido é 422 no campo `nome`.
+         */
+        post: operations["criar_pasta_pastas_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pastas/{pasta_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Renomeia e/ou move a pasta
+         * @description Substitui `nome` e `pasta_pai_id`. Mover para dentro dela mesma ou de uma subpasta é 422 no campo `pasta_pai_id`.
+         */
+        put: operations["atualizar_pasta_pastas__pasta_id__put"];
+        post?: never;
+        /**
+         * Exclui uma pasta vazia
+         * @description 409 se a pasta tem subpastas ou formulários; nada é apagado em cascata.
+         */
+        delete: operations["excluir_pasta_pastas__pasta_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -476,6 +541,11 @@ export interface components {
              * @description Definição em JSON: `{"campos": [...]}`.
              */
             definicao: unknown;
+            /**
+             * Pasta Id
+             * @description Pasta onde o formulário nasce; nulo (padrão) é a raiz.
+             */
+            pasta_id?: number | null;
         };
         /** FuncaoDoCatalogoSaida */
         FuncaoDoCatalogoSaida: {
@@ -524,6 +594,46 @@ export interface components {
         LoteEntrada: {
             /** Formularios */
             formularios: components["schemas"]["FormularioEntrada"][];
+        };
+        /** MoverFormularioEntrada */
+        MoverFormularioEntrada: {
+            /**
+             * Pasta Id
+             * @description Pasta de destino; nulo leva o formulário à raiz.
+             */
+            pasta_id: number | null;
+        };
+        /**
+         * PastaAtualizacao
+         * @description `PUT` substitui os dois campos (não há `PATCH`): omitir `pasta_pai_id` é erro, para não
+         *     mandar a pasta para a raiz sem querer. Nulo explícito é a raiz.
+         */
+        PastaAtualizacao: {
+            /** Nome */
+            nome: string;
+            /** Pasta Pai Id */
+            pasta_pai_id: number | null;
+        };
+        /** PastaEntrada */
+        PastaEntrada: {
+            /** Nome */
+            nome: string;
+            /**
+             * Pasta Pai Id
+             * @description Pasta onde a nova pasta nasce; nulo (padrão) é a raiz.
+             */
+            pasta_pai_id?: number | null;
+        };
+        /** PastaSaida */
+        PastaSaida: {
+            /** Id */
+            id: number;
+            /** Nome */
+            nome: string;
+            /** Pasta Pai Id */
+            pasta_pai_id: number | null;
+            /** Criado Em */
+            criado_em: string;
         };
         /** PerguntaEntrada */
         PerguntaEntrada: {
@@ -650,6 +760,11 @@ export interface components {
             versao_atual_id: number | null;
             /** Versao Atual Numero */
             versao_atual_numero: number | null;
+            /**
+             * Pasta Id
+             * @description Pasta do formulário; nulo é a raiz.
+             */
+            pasta_id?: number | null;
         };
         /** ResumoDeVersaoSaida */
         ResumoDeVersaoSaida: {
@@ -995,6 +1110,59 @@ export interface operations {
             };
         };
     };
+    mover_formulario_formularios__formulario_id__pasta_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoverFormularioEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumoDeFormularioSaida"];
+                };
+            };
+            /** @description Token ausente ou inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
     listar_versoes_formularios__formulario_id__versoes_get: {
         parameters: {
             query?: never;
@@ -1129,6 +1297,213 @@ export interface operations {
             };
             /** @description Recurso inexistente. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    listar_pastas_pastas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PastaSaida"][];
+                };
+            };
+            /** @description Token ausente ou inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    criar_pasta_pastas_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PastaEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PastaSaida"];
+                };
+            };
+            /** @description Token ausente ou inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    atualizar_pasta_pastas__pasta_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pasta_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PastaAtualizacao"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PastaSaida"];
+                };
+            };
+            /** @description Token ausente ou inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    excluir_pasta_pastas__pasta_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pasta_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token ausente ou inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Exclusão bloqueada por vínculo. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
