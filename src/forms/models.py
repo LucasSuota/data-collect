@@ -118,6 +118,17 @@ class Formulario:
     id: int
     nome: str
     criado_em: str
+    pasta_id: int | None = None  # nulo = raiz (§2.10)
+
+
+@dataclass(frozen=True)
+class Pasta:
+    """Organiza formulários numa árvore (§2.10); não afeta versões, registros nem referências."""
+
+    id: int
+    nome: str
+    pasta_pai_id: int | None  # nulo = raiz
+    criado_em: str
 
 
 @dataclass(frozen=True)
@@ -223,6 +234,14 @@ class LoteInvalido(ErroDeDominio):
 
 
 class RegistroInvalido(ErroDeDominio):
+    def __init__(self, erros: tuple[ErroDeCampo, ...]) -> None:
+        super().__init__("; ".join(f"{erro.campo}: {erro.mensagem}" for erro in erros))
+        self.erros = erros
+
+
+class PastaInvalida(ErroDeDominio):
+    """Nome vazio ou repetido, destino inexistente ou ciclo na árvore; 422 no campo (§2.10)."""
+
     def __init__(self, erros: tuple[ErroDeCampo, ...]) -> None:
         super().__init__("; ".join(f"{erro.campo}: {erro.mensagem}" for erro in erros))
         self.erros = erros
