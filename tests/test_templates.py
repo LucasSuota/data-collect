@@ -350,3 +350,152 @@ def test_lote_de_templates_com_um_invalido_nao_cria_nenhum(conexao, tmp_path):
 
     # assert
     assert servico.listar_formularios(conexao) == []
+
+
+# --- cadeia geotécnica: umidade → Proctor → densidade in situ ---
+
+AMOSTRA = {"identificacao": "P-01", "data_ensaio": "2026-11-02"}
+
+CADEIA = [
+    TEMPLATES / "densidade_insitu.json",
+    TEMPLATES / "proctor.json",
+    TEMPLATES / "ensaio_umidade.json",
+]
+
+
+@pytest.fixture
+def cadeia(conexao):
+    # a ordem do argumento é de propósito invertida: a origem é criada primeiro de qualquer jeito
+    criados = servico.importar_templates(conexao, CADEIA, AGORA)
+    return {c.formulario.nome: c for c in criados}
+
+
+def _valor(registro, campo):
+    guardado = registro.dados[campo]
+    return Decimal(guardado["valor"] if isinstance(guardado, dict) else guardado)
+
+
+def test_a_cadeia_de_templates_importa_junta_mesmo_fora_de_ordem(cadeia):
+    # assert
+    assert sorted(cadeia) == ["densidade_insitu", "ensaio_umidade", "proctor"]
+
+
+def test_teor_de_umidade_e_a_perda_de_agua_sobre_a_massa_de_solo_seco(conexao, cadeia):
+    # arrange: cápsula 20 g, úmido 120 g, seco 100 g → (120 - 100) / (100 - 20) = 25 %
+    umidade = cadeia["ensaio_umidade"]
+
+    # act
+    registro = _registro(
+        conexao, umidade, {**AMOSTRA, "tara_g": 20, "massa_umida_g": 120, "massa_seca_g": 100}
+    )
+
+    # assert
+    assert _valor(registro, "umidade_pct") == Decimal("25")
+
+
+def test_grau_de_compactacao_usa_o_proctor_e_a_umidade_de_campo(conexao, cadeia):
+    # arrange
+    ensaio = _registro(
+        conexao,
+        cadeia["ensaio_umidade"],
+        {**AMOSTRA, "tara_g": 20, "massa_umida_g": 120, "massa_seca_g": 100},
+    )
+    proctor = _registro(
+        conexao,
+        cadeia["proctor"],
+        {
+            "ensaio_umidade": ensaio.id,
+            "energia": "Normal",
+            "umidade_otima_pct": 12,
+            "gamad_max": "1.85",
+        },
+    )
+
+    # act: γd campo = 1800 / 1000 / (1 + 25/100) = 1,44 g/cm³ → GC = 1,44 / 1,85 = 77,8 %
+    insitu = _registro(
+        conexao,
+        cadeia["densidade_insitu"],
+        {
+            "proctor": proctor.id,
+            "ensaio_umidade_campo": ensaio.id,
+            "massa_solo_g": 1800,
+            "volume_cm3": 1000,
+            "gc_minimo_pct": 95,
+        },
+    )
+
+    # assert
+    assert _valor(proctor, "desvio_umidade") == Decimal("13")
+    assert _valor(insitu, "gamad_campo") == Decimal("1.44")
+    assert round(_valor(insitu, "gc_pct"), 1) == Decimal("77.8")
+    assert insitu.dados["conforme"]["valor"] is False
+
+
+def test_compactacao_acima_do_minimo_e_conforme(conexao, cadeia):
+    # arrange: umidade de 10 % e Proctor de 1,50 → γd campo = 1,70 / 1,10 ≈ 1,545 → GC ≈ 103 %
+    ensaio = _registro(
+        conexao,
+        cadeia["ensaio_umidade"],
+        {**AMOSTRA, "tara_g": 0, "massa_umida_g": 110, "massa_seca_g": 100},
+    )
+    proctor = _registro(
+        conexao,
+        cadeia["proctor"],
+        {
+            "ensaio_umidade": ensaio.id,
+            "energia": "Normal",
+            "umidade_otima_pct": 10,
+            "gamad_max": "1.50",
+        },
+    )
+
+    # act
+    insitu = _registro(
+        conexao,
+        cadeia["densidade_insitu"],
+        {
+            "proctor": proctor.id,
+            "ensaio_umidade_campo": ensaio.id,
+            "massa_solo_g": 1700,
+            "volume_cm3": 1000,
+            "gc_minimo_pct": 95,
+        },
+    )
+
+    # assert
+    assert insitu.dados["conforme"]["valor"] is True
+
+
+def test_corrigir_o_ensaio_de_umidade_recalcula_toda_a_cadeia(conexao, cadeia, tmp_path):
+    # arrange
+    base = {**AMOSTRA, "tara_g": 0, "massa_umida_g": 110, "massa_seca_g": 100}
+    ensaio = _registro(conexao, cadeia["ensaio_umidade"], base)
+    proctor = _registro(
+        conexao,
+        cadeia["proctor"],
+        {
+            "ensaio_umidade": ensaio.id,
+            "energia": "Normal",
+            "umidade_otima_pct": 10,
+            "gamad_max": "1.50",
+        },
+    )
+    insitu = _registro(
+        conexao,
+        cadeia["densidade_insitu"],
+        {
+            "proctor": proctor.id,
+            "ensaio_umidade_campo": ensaio.id,
+            "massa_solo_g": 1700,
+            "volume_cm3": 1000,
+            "gc_minimo_pct": 95,
+        },
+    )
+
+    # act: a umidade sobe para 30 %, e o γd de campo cai
+    servico.atualizar_registro(conexao, ensaio.id, {**base, "massa_umida_g": 130}, AGORA, tmp_path)
+
+    # assert
+    depois = servico.obter_registro(conexao, insitu.id)
+    assert _valor(depois, "gamad_campo") < _valor(insitu, "gamad_campo")
+    assert depois.dados["conforme"]["valor"] is False
