@@ -77,6 +77,13 @@ class FormularioEntrada(Modelo):
     )
 
 
+class DuplicarEntrada(Modelo):
+    nome: str | None = Field(
+        default=None,
+        description='Nome da cópia. Sem ele, o padrão é "<nome> (cópia)", "(cópia 2)"…',
+    )
+
+
 class LoteEntrada(Modelo):
     formularios: list[FormularioEntrada]
 
@@ -195,6 +202,7 @@ class FormularioDetalheSaida(Modelo):
     nome: str
     criado_em: str
     versao_atual: VersaoSaida
+    pasta_id: int | None = Field(default=None, description="Pasta do formulário; nulo é a raiz.")
 
 
 # --- pastas ---

@@ -63,6 +63,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/formularios/{formulario_id}/duplicar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Duplica o formulário
+         * @description Cria um formulário novo com a **versão 1 igual à definição da versão atual** do original, na mesma pasta e **sem registros**. O corpo é opcional: sem `nome`, o padrão é "<nome> (cópia)", depois "(cópia 2)"… Um `nome` repetido é 422 no campo `nome`.
+         */
+        post: operations["duplicar_formulario_formularios__formulario_id__duplicar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/formularios/{formulario_id}/pasta": {
         parameters: {
             query?: never;
@@ -501,6 +521,14 @@ export interface components {
             /** Campos */
             campos: components["schemas"]["CampoSaida"][];
         };
+        /** DuplicarEntrada */
+        DuplicarEntrada: {
+            /**
+             * Nome
+             * @description Nome da cópia. Sem ele, o padrão é "<nome> (cópia)", "(cópia 2)"…
+             */
+            nome?: string | null;
+        };
         /** ErroDeCampoSaida */
         ErroDeCampoSaida: {
             /**
@@ -531,6 +559,11 @@ export interface components {
             /** Criado Em */
             criado_em: string;
             versao_atual: components["schemas"]["VersaoSaida"];
+            /**
+             * Pasta Id
+             * @description Pasta do formulário; nulo é a raiz.
+             */
+            pasta_id?: number | null;
         };
         /** FormularioEntrada */
         FormularioEntrada: {
@@ -1092,6 +1125,59 @@ export interface operations {
             };
             /** @description Exclusão bloqueada por vínculo. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    duplicar_formulario_formularios__formulario_id__duplicar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formulario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DuplicarEntrada"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormularioDetalheSaida"];
+                };
+            };
+            /** @description Token ausente ou inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

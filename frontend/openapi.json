@@ -337,6 +337,91 @@
         }
       }
     },
+    "/formularios/{formulario_id}/duplicar": {
+      "post": {
+        "tags": [
+          "formulários"
+        ],
+        "summary": "Duplica o formulário",
+        "description": "Cria um formulário novo com a **versão 1 igual à definição da versão atual** do original, na mesma pasta e **sem registros**. O corpo é opcional: sem `nome`, o padrão é \"<nome> (cópia)\", depois \"(cópia 2)\"… Um `nome` repetido é 422 no campo `nome`.",
+        "operationId": "duplicar_formulario_formularios__formulario_id__duplicar_post",
+        "security": [
+          {
+            "TokenDaExecucao": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "formulario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Formulario Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DuplicarEntrada"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Entrada"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormularioDetalheSaida"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente ou inválido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso inexistente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Dados inválidos, com os erros por campo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroSaida"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/formularios/{formulario_id}/pasta": {
       "put": {
         "tags": [
@@ -2482,6 +2567,25 @@
         ],
         "title": "DefinicaoSaida"
       },
+      "DuplicarEntrada": {
+        "properties": {
+          "nome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nome",
+            "description": "Nome da cópia. Sem ele, o padrão é \"<nome> (cópia)\", \"(cópia 2)\"…"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DuplicarEntrada"
+      },
       "ErroDeCampoSaida": {
         "properties": {
           "campo": {
@@ -2550,6 +2654,18 @@
           },
           "versao_atual": {
             "$ref": "#/components/schemas/VersaoSaida"
+          },
+          "pasta_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pasta Id",
+            "description": "Pasta do formulário; nulo é a raiz."
           }
         },
         "additionalProperties": false,
