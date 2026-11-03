@@ -142,7 +142,11 @@ VERSAO_ATUAL_DO_ESQUEMA = len(MIGRACOES)
 
 def abrir_conexao(caminho: Path | str) -> sqlite3.Connection:
     """Abre o banco com as chaves estrangeiras ligadas e o esquema atualizado."""
-    conexao = sqlite3.connect(caminho)
+    # A API abre a conexão numa dependência síncrona e a usa no endpoint; o FastAPI roda as duas
+    # no pool de threads, possivelmente em threads diferentes. O padrão (`check_same_thread=True`)
+    # recusaria o uso (`ProgrammingError`) quando requisições chegam em paralelo. É seguro liberar:
+    # cada requisição tem a sua conexão, usada por uma etapa de cada vez (nunca compartilhada).
+    conexao = sqlite3.connect(caminho, check_same_thread=False)
     try:
         conexao.row_factory = sqlite3.Row
         # O SQLite deixa as chaves estrangeiras desligadas por padrão, por conexão.
