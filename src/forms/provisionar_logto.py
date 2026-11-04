@@ -6,7 +6,7 @@ front (refresh token com rotação), um aplicativo M2M só para a API (ler perfi
 o conector de e-mail (SMTP), e a experiência de login (e-mail e senha de no mínimo 10 caracteres,
 tela em PT-BR, aceite dos termos no cadastro). No fim escreve, na pasta de configuração
 compartilhada, o `api.env` (credenciais M2M, lido pela API) e o `frontend-config.json` (lido pelo
-front em `/config.json`).
+front em `/config.json`, quando algum servidor estático o serve).
 
 Para chamar a Management API ele usa o aplicativo `m-default`, que o próprio Logto cria no seed;
 o segredo dele é lido do banco do Logto. Esse segredo **não** vai para a API nem para o disco.
@@ -317,7 +317,7 @@ def escrever_configuracao(ambiente: Ambiente, id_web: str, id_m2m: str, segredo_
             "appId": id_web,
             "resource": ambiente.recurso_da_api,
         },
-        "apiBase": "/api",
+        "apiBase": ambiente.recurso_da_api,
     }
     (pasta / "frontend-config.json").write_text(json.dumps(publica, indent=2) + "\n")
 
