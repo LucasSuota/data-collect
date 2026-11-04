@@ -17,7 +17,7 @@ from forms.api_dependencias import DepConexao, autorizar
 from forms.api_esquemas import Modelo
 from forms.api_extensoes import Extensao
 from forms.api_rotas import ERROS_COMUNS
-from forms.ia.cliente import ClienteDeLLM, IaIndisponivel, criar_cliente
+from forms.ia.cliente import ClienteDeLLM, IaIndisponivel
 from forms.rag.chunker import Trecho, carregar_documentos
 from forms.rag.indice import Buscador, IndiceBm25
 from forms.rag.responder import perguntar
@@ -53,11 +53,14 @@ class RespostaSaida(Modelo):
 # --- dependências ---
 
 
-def obter_cliente_opcional() -> ClienteDeLLM | None:
+def obter_cliente_opcional(conexao: DepConexao) -> ClienteDeLLM | None:
+    """O provedor da equipe, se ela ligou a IA; senão o assistente segue só com os trechos."""
+    from forms.ia import configuracao  # noqa: PLC0415 - o módulo `ia` é opcional
+
     try:
-        return criar_cliente(os.environ)
+        return configuracao.criar_cliente_da_equipe(conexao, configuracao.cifra_da_instancia())
     except IaIndisponivel:
-        return None  # sem chave: o assistente segue, mostrando só os trechos
+        return None
 
 
 def localizar_docs(
@@ -76,6 +79,13 @@ def localizar_docs(
             candidato = base / "docs"
         else:
             candidato = Path(__file__).resolve().parents[3] / "docs"
+    return candidato if candidato.is_dir() else None
+
+
+def localizar_ajuda(ambiente: Mapping[str, str]) -> Path | None:
+    """Os guias da central de ajuda (`ajuda/`): `FORMS_AJUDA_DIR` ou a pasta do repositório."""
+    explicito = ambiente.get("FORMS_AJUDA_DIR")
+    candidato = Path(explicito) if explicito else Path(__file__).resolve().parents[3] / "ajuda"
     return candidato if candidato.is_dir() else None
 
 

@@ -18,6 +18,8 @@ PUBLICAS: frozenset[Rota] = frozenset(
         ("GET", "/readyz"),
         ("GET", "/legal"),
         ("GET", "/legal/{documento}"),
+        ("GET", "/ajuda"),
+        ("GET", "/ajuda/{guia}"),
         ("GET", "/catalogo/permissoes"),
     }
 )

@@ -7,7 +7,7 @@ uso único) está em `servico_equipes.py`. A permissão de cada rota vem da matr
 
 from fastapi import APIRouter, Depends, Response
 
-from forms import legal, servico_equipes
+from forms import ajuda, legal, servico_equipes
 from forms.api_dependencias import DepAgora, DepConexao, autorizar
 from forms.api_esquemas import (
     AceitarConviteSaida,
@@ -28,6 +28,8 @@ from forms.api_esquemas import (
     EquipeSaida,
     ErroSaida,
     EuSaida,
+    GuiaSaida,
+    GuiasSaida,
     MembroSaida,
     PermissaoSaida,
     PessoaSaida,
@@ -91,6 +93,28 @@ def _documento(doc: legal.Documento) -> DocumentoLegalSaida:
     return DocumentoLegalSaida(
         id=doc.id, titulo=doc.titulo, versao=doc.versao, markdown=doc.markdown
     )
+
+
+@roteador_publico.get(
+    "/ajuda",
+    response_model=GuiasSaida,
+    summary="Os guias da central de ajuda",
+)
+def guias_de_ajuda() -> GuiasSaida:
+    return GuiasSaida(
+        guias=[GuiaSaida(id=g.id, titulo=g.titulo, markdown=g.markdown) for g in ajuda.listar()]
+    )
+
+
+@roteador_publico.get(
+    "/ajuda/{guia}",
+    response_model=GuiaSaida,
+    summary="Um guia da central de ajuda",
+    responses={404: {"model": ErroSaida, "description": "Guia inexistente."}},
+)
+def guia_de_ajuda(guia: str) -> GuiaSaida:
+    g = ajuda.ler(guia)
+    return GuiaSaida(id=g.id, titulo=g.titulo, markdown=g.markdown)
 
 
 # --- eu ---

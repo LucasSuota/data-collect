@@ -726,3 +726,13 @@ class RascunhoSaida(Modelo):
     revisao: int
     atualizado_por: PessoaResumoSaida | None
     atualizado_em: str
+
+
+class GuiaSaida(Modelo):
+    id: str
+    titulo: str
+    markdown: str = Field(description="Markdown para o front renderizar sem HTML cru.")
+
+
+class GuiasSaida(Modelo):
+    guias: list[GuiaSaida]
