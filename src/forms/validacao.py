@@ -23,6 +23,7 @@ from forms.models import (
     Definicao,
     DefinicaoInvalida,
     ErroDeCampo,
+    Exibicao,
     FormulaInvalida,
     TipoCampo,
     ValorInvalido,
@@ -98,9 +99,74 @@ def analisar_definicao(dados: ValorJson, origens: Origens | None = None) -> Anal
             com_erro.add(leitura.id_valido)
 
     tipos_calculados = _validar_formulas(campos, com_erro, origens or {}, erros)
+    exibicao = _ler_exibicao(dados, [c for _, c in campos], tipos_calculados, erros)
 
-    definicao = None if erros else Definicao(tuple(campo for _, campo in campos))
+    definicao = None if erros else Definicao(tuple(campo for _, campo in campos), exibicao)
     return AnaliseDeDefinicao(tuple(erros), definicao, tipos_calculados)
+
+
+def _ler_exibicao(
+    dados: ValorJson,
+    campos: list[Campo],
+    tipos_calculados: Mapping[str, TipoFormula],
+    erros: list[ErroDeCampo],
+) -> Exibicao | None:
+    """`exibicao` é opcional (§5.2): campo em destaque, de status e do resumo, conferidos aqui."""
+    bruta = dados.get("exibicao") if isinstance(dados, dict) else None
+    if bruta is None:
+        return None
+    if not isinstance(bruta, dict):
+        erros.append(ErroDeCampo("exibicao", "A exibição deve ser um objeto."))
+        return None
+    for nome in sorted(set(bruta) - {"destaque", "status", "resumo"}):
+        erros.append(ErroDeCampo(f"exibicao.{nome}", f"A propriedade '{nome}' não existe."))
+    por_id = {campo.id: campo for campo in campos}
+
+    def ler_id(nome: str, aceita, motivo: str) -> str | None:
+        valor = bruta.get(nome)
+        if valor is None:
+            return None
+        campo = por_id.get(valor) if isinstance(valor, str) else None
+        if campo is None:
+            erros.append(ErroDeCampo(f"exibicao.{nome}", f"O campo {valor!r} não existe."))
+            return None
+        if not aceita(campo):
+            erros.append(ErroDeCampo(f"exibicao.{nome}", motivo))
+            return None
+        return campo.id
+
+    destaque = ler_id(
+        "destaque",
+        lambda c: (
+            c.tipo is TipoCampo.NUMERO
+            or (c.tipo is TipoCampo.CALCULADO and tipos_calculados.get(c.id) is TipoFormula.NUMERO)
+        ),
+        "O destaque deve ser um campo numérico ou calculado numérico.",
+    )
+    status = ler_id(
+        "status",
+        lambda c: (
+            c.tipo is TipoCampo.CALCULADO and tipos_calculados.get(c.id) is TipoFormula.BOOLEANO
+        ),
+        "O status deve ser um campo calculado booleano (sim/não).",
+    )
+    resumo: list[str] = []
+    bruto_resumo = bruta.get("resumo")
+    if bruto_resumo is not None:
+        if not isinstance(bruto_resumo, list):
+            erros.append(ErroDeCampo("exibicao.resumo", "O resumo deve ser uma lista de campos."))
+        else:
+            for item in bruto_resumo:
+                campo = por_id.get(item) if isinstance(item, str) else None
+                if campo is None or campo.tipo is TipoCampo.SECAO:
+                    erros.append(
+                        ErroDeCampo(
+                            "exibicao.resumo", f"O campo {item!r} não pode estar no resumo."
+                        )
+                    )
+                else:
+                    resumo.append(campo.id)
+    return Exibicao(destaque, status, tuple(resumo))
 
 
 def compartilhados_da_definicao(
@@ -291,6 +357,7 @@ def _formula(valor: ValorJson, origens: Origens) -> _Lido | str:
 
 
 _LEITORES_DE_PROPRIEDADE = {
+    "ia": _booleano,
     "obrigatorio": _booleano,
     "compartilhado": _booleano,
     "unidade": _texto,

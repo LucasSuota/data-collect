@@ -778,3 +778,63 @@ def guardar_vetores(conexao: Conexao, vetores: Mapping[str, bytes]) -> None:
 def apagar_vetores(conexao: Conexao, chaves: Iterable[str]) -> None:
     with conexao.cursor() as cursor:
         cursor.executemany("DELETE FROM vetores_trechos WHERE chave = %s", [(c,) for c in chaves])
+
+
+# --- busca global (§2.18) ---
+
+
+def _como_padrao_like(termo: str) -> str:
+    """O termo vira `%termo%` com `%`, `_` e `\\` escapados: o texto da pessoa é só dado."""
+    escapado = termo.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escapado}%"
+
+
+def buscar_formularios_por_nome(conexao: Conexao, termo: str, limite: int) -> list[Formulario]:
+    linhas = conexao.execute(
+        "SELECT id, nome, criado_em, pasta_id FROM formularios"
+        " WHERE grupo_id = %s AND nome ILIKE %s ORDER BY nome LIMIT %s",
+        (conexao.grupo_id, _como_padrao_like(termo), limite),
+    )
+    return [_formulario_da_linha(linha) for linha in linhas]
+
+
+def buscar_registros_por_texto(
+    conexao: Conexao, termo: str, limite: int
+) -> list[tuple[int, int, str]]:
+    """(registro, formulário, nome do formulário) com o termo num campo `texto` ou `selecao`
+    **da própria versão do registro**: número e data (guardados como texto) não entram."""
+    linhas = conexao.execute(
+        """
+        SELECT r.id, r.formulario_id, f.nome FROM registros r
+        JOIN formularios f ON f.id = r.formulario_id
+        JOIN versoes_formulario v ON v.id = r.versao_id
+        WHERE r.grupo_id = %s AND EXISTS (
+            SELECT 1 FROM jsonb_each_text(r.dados) e,
+                 jsonb_array_elements(v.definicao -> 'campos') c
+            WHERE c ->> 'id' = e.key AND c ->> 'tipo' IN ('texto', 'selecao')
+                AND e.value ILIKE %s
+        )
+        ORDER BY r.id DESC LIMIT %s
+        """,
+        (conexao.grupo_id, _como_padrao_like(termo), limite),
+    )
+    return [(linha[0], linha[1], linha[2]) for linha in linhas]
+
+
+def registro_existe(conexao: Conexao, registro_id: int) -> tuple[int, str] | None:
+    """(formulário, nome do formulário) do registro, se ele existe nesta equipe."""
+    linha = conexao.execute(
+        "SELECT r.formulario_id, f.nome FROM registros r JOIN formularios f"
+        " ON f.id = r.formulario_id WHERE r.id = %s AND r.grupo_id = %s",
+        (registro_id, conexao.grupo_id),
+    ).fetchone()
+    return None if linha is None else (linha[0], linha[1])
+
+
+def registros_recentes(conexao: Conexao, limite: int) -> list[Registro]:
+    linhas = conexao.execute(
+        f"SELECT {_COLUNAS_DO_REGISTRO} FROM registros WHERE grupo_id = %s"  # noqa: S608
+        " ORDER BY atualizado_em DESC, id DESC LIMIT %s",
+        (conexao.grupo_id, limite),
+    )
+    return [_registro_da_linha(linha) for linha in linhas]

@@ -5,7 +5,7 @@ banco: o cabeçalho `X-Equipe` do cliente é só um pedido, e a pertença à equ
 A matriz endpoint → permissão (`api_permissoes.py`) é aplicada aqui, uma vez, para toda rota.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -61,11 +61,13 @@ async def obter_conexao(
     """
     pool = request.app.state.pool
     rota = (request.method, request.scope["route"].path)
+    gestor = request.app.state.gestor
+    perfil = gestor.perfil if gestor is not None else None
     async with request.app.state.limite_do_pool:
         conexao = await run_in_threadpool(pool.getconn)
         try:
             await run_in_threadpool(
-                _declarar_contexto, conexao, classificar(rota), identidade, equipe, agora
+                _declarar_contexto, conexao, classificar(rota), identidade, equipe, agora, perfil
             )
             yield conexao
         finally:
@@ -78,10 +80,15 @@ def _devolver(pool: ConnectionPool[Conexao], conexao: Conexao) -> None:
 
 
 def _declarar_contexto(
-    conexao: Conexao, classe: str, identidade: Identidade, equipe: int | None, agora: datetime
+    conexao: Conexao,
+    classe: str,
+    identidade: Identidade,
+    equipe: int | None,
+    agora: datetime,
+    perfil: Callable[[str], tuple[str | None, str | None]] | None,
 ) -> None:
     usuario = servico_equipes.identificar(
-        conexao, identidade.sub, identidade.nome, identidade.email, agora
+        conexao, identidade.sub, identidade.nome, identidade.email, agora, perfil
     )
     if not usuario.ativo:
         raise SemAcessoAEquipe("Esta conta está desativada.")

@@ -5,6 +5,7 @@ controla a transação, então cada caso de uso grava tudo ou nada.
 """
 
 import json
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -35,7 +36,11 @@ from forms.servico_base import (
 from forms.servico_consulta import (
     LIMITE_MAXIMO,
     LIMITE_PADRAO,
+    Contagens,
     ListagemDeRegistros,
+    contar_por_estado,
+    estado_do_registro,
+    exibicao_efetiva,
     exportar_csv,
     listar_registros,
 )
@@ -43,6 +48,19 @@ from forms.servico_equipes import (
     contexto_da_pessoa,
     criar_equipe,
     garantir_primeiro_administrador,
+)
+from forms.servico_extras import (
+    ResultadoDaBusca,
+    atualizar_progresso,
+    buscar,
+    excluir_minha_conta,
+    exportar_meus_dados,
+    historico_do_registro,
+    listar_notificacoes,
+    marcar_notificacao_lida,
+    nomes_de_pessoas,
+    obter_progresso,
+    recentes,
 )
 from forms.servico_pastas import (
     atualizar_pasta,
@@ -316,6 +334,71 @@ def importar_templates(
     return criar_formularios_em_lote(conexao, [ler_template(c) for c in caminhos], agora)
 
 
+@dataclass(frozen=True)
+class ExemploDeTemplate:
+    nome: str
+    descricao: str
+    campos: int
+    depende_de: tuple[str, ...]
+
+
+# Descrição de cada exemplo da galeria (§2.16). O arquivo é só a definição; o texto fica aqui.
+_DESCRICAO_DOS_EXEMPLOS = {
+    "corpo_de_prova": "Controle de corpos de prova de concreto: resistência e conformidade.",
+    "inspecao_obra": "Inspeção de obra: seções, seleção, sim/não, localização e segurança.",
+    "ensaio_umidade": "Ensaio de umidade de uma amostra de solo (origem da cadeia).",
+    "proctor": "Ensaio Proctor, que usa a umidade do ensaio de umidade.",
+    "densidade_insitu": "Densidade in situ e grau de compactação, a partir do Proctor.",
+}
+
+
+def pasta_de_templates() -> Path:
+    padrao = Path(__file__).resolve().parents[2] / "templates"
+    return Path(os.environ.get("FORMS_TEMPLATES_DIR") or padrao)
+
+
+def listar_exemplos(pasta: Path | None = None) -> list[ExemploDeTemplate]:
+    """Os templates empacotados, para a galeria "Começar com um exemplo"."""
+    exemplos = []
+    for arquivo in sorted((pasta or pasta_de_templates()).glob("*.json")):
+        rascunho = ler_template(arquivo)
+        definicao = rascunho.definicao if isinstance(rascunho.definicao, dict) else {}
+        campos = definicao.get("campos") if isinstance(definicao.get("campos"), list) else []
+        origens = tuple(
+            sorted(
+                {
+                    c["formulario"]
+                    for c in campos
+                    if isinstance(c, dict)
+                    and c.get("tipo") == "referencia"
+                    and isinstance(c.get("formulario"), str)
+                }
+            )
+        )
+        exemplos.append(
+            ExemploDeTemplate(
+                arquivo.stem,
+                _DESCRICAO_DOS_EXEMPLOS.get(arquivo.stem, "Exemplo de formulário."),
+                len(campos),
+                origens,
+            )
+        )
+    return exemplos
+
+
+def importar_exemplos(
+    conexao: Conexao, nomes: Sequence[str], agora: datetime, pasta: Path | None = None
+) -> list[FormularioCriado]:
+    """Importa exemplos escolhidos, numa transação e na ordem das dependências. O nome vem da
+    galeria e é conferido contra os arquivos: nada de caminho vindo do cliente (§12)."""
+    disponiveis = {e.nome for e in listar_exemplos(pasta)}
+    desconhecidos = [n for n in nomes if n not in disponiveis]
+    if desconhecidos:
+        raise NaoEncontrado(f"Exemplo '{desconhecidos[0]}' não encontrado.")
+    base = pasta or pasta_de_templates()
+    return importar_templates(conexao, [base / f"{n}.json" for n in dict.fromkeys(nomes)], agora)
+
+
 def ler_template(caminho: Path, nome: str | None = None) -> Rascunho:
     try:
         texto = caminho.read_text(encoding="utf-8")
@@ -559,6 +642,24 @@ def _gravar(
 
 # `api.py` e `cli.py` chamam tudo por aqui; cada grupo de casos de uso mora no seu módulo.
 __all__ = [
+    "ExemploDeTemplate",
+    "importar_exemplos",
+    "listar_exemplos",
+    "ResultadoDaBusca",
+    "atualizar_progresso",
+    "buscar",
+    "excluir_minha_conta",
+    "exportar_meus_dados",
+    "historico_do_registro",
+    "listar_notificacoes",
+    "marcar_notificacao_lida",
+    "nomes_de_pessoas",
+    "obter_progresso",
+    "recentes",
+    "Contagens",
+    "estado_do_registro",
+    "exibicao_efetiva",
+    "contar_por_estado",
     "FUNCOES",
     "Conexao",
     "LIMITE_MAXIMO",

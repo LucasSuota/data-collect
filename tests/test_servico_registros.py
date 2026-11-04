@@ -281,7 +281,7 @@ def test_excluir_registro_livre_apaga_de_verdade(conexao, corpo):
     registro = _registro(conexao, corpo, ENTRADA_VALIDA)
 
     # act
-    servico.excluir_registro(conexao, registro.id)
+    servico.excluir_registro(conexao, registro.id, AGORA)
 
     # assert
     with pytest.raises(NaoEncontrado):
@@ -291,7 +291,7 @@ def test_excluir_registro_livre_apaga_de_verdade(conexao, corpo):
 def test_excluir_registro_inexistente_e_nao_encontrado(conexao):
     # act / assert
     with pytest.raises(NaoEncontrado):
-        servico.excluir_registro(conexao, 99)
+        servico.excluir_registro(conexao, 99, AGORA)
 
 
 # --- referência e campos compartilhados (#26) ---
@@ -608,7 +608,7 @@ def test_registro_referenciado_nao_pode_ser_excluido(conexao, cadeia):
 
     # act
     with pytest.raises(ExclusaoBloqueada) as excecao:
-        servico.excluir_registro(conexao, ensaio.id)
+        servico.excluir_registro(conexao, ensaio.id, AGORA)
 
     # assert
     assert str(proctor.id) in str(excecao.value)
@@ -621,8 +621,8 @@ def test_registro_pode_ser_excluido_quando_o_dependente_some(conexao, cadeia):
     proctor = _proctor(conexao, cadeia, ensaio.id)
 
     # act
-    servico.excluir_registro(conexao, proctor.id)
-    servico.excluir_registro(conexao, ensaio.id)
+    servico.excluir_registro(conexao, proctor.id, AGORA)
+    servico.excluir_registro(conexao, ensaio.id, AGORA)
 
     # assert
     with pytest.raises(NaoEncontrado):

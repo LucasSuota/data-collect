@@ -35,6 +35,8 @@ class Campo:
     formula: str | None = None
     formulario: str | None = None
     compartilhado: bool = False
+    # `False` = nunca vai à IA, nem em índice nem em prompt (§2.15).
+    ia: bool = True
 
     def para_json(self) -> dict[str, ValorJson]:
         """Forma canônica do contrato (§6): só o que não é padrão, na mesma ordem sempre."""
@@ -57,6 +59,8 @@ class Campo:
             dados["formulario"] = self.formulario
         if self.compartilhado:
             dados["compartilhado"] = True
+        if not self.ia:
+            dados["ia"] = False
         return dados
 
     @classmethod
@@ -73,6 +77,7 @@ class Campo:
             formula=_texto_ou_nulo(dados.get("formula")),
             formulario=_texto_ou_nulo(dados.get("formulario")),
             compartilhado=dados.get("compartilhado") is True,
+            ia=dados.get("ia") is not False,
         )
 
 
@@ -89,22 +94,55 @@ def _lista(valor: ValorJson) -> list[ValorJson]:
 
 
 @dataclass(frozen=True)
-class Definicao:
-    campos: tuple[Campo, ...]
+class Exibicao:
+    """Como o registro aparece em cartões e filtros (§2.3): campo em destaque, campo de status
+    (calculado booleano) e campos do resumo. Tudo opcional."""
+
+    destaque: str | None = None
+    status: str | None = None
+    resumo: tuple[str, ...] = ()
 
     def para_json(self) -> dict[str, ValorJson]:
-        return {"campos": [campo.para_json() for campo in self.campos]}
+        dados: dict[str, ValorJson] = {}
+        if self.destaque is not None:
+            dados["destaque"] = self.destaque
+        if self.status is not None:
+            dados["status"] = self.status
+        if self.resumo:
+            dados["resumo"] = list(self.resumo)
+        return dados
+
+
+@dataclass(frozen=True)
+class Definicao:
+    campos: tuple[Campo, ...]
+    exibicao: Exibicao | None = None
+
+    def para_json(self) -> dict[str, ValorJson]:
+        dados: dict[str, ValorJson] = {"campos": [campo.para_json() for campo in self.campos]}
+        if self.exibicao is not None:
+            dados["exibicao"] = self.exibicao.para_json()
+        return dados
 
     @classmethod
     def de_json(cls, dados: dict[str, ValorJson]) -> "Definicao":
         """Lê uma definição já validada (a guardada no banco); a entrada do usuário passa
         antes por `validacao.analisar_definicao`."""
+        bruta = dados.get("exibicao")
+        exibicao = None
+        if isinstance(bruta, dict):
+            exibicao = Exibicao(
+                destaque=_texto_ou_nulo(bruta.get("destaque")),
+                status=_texto_ou_nulo(bruta.get("status")),
+                resumo=tuple(str(c) for c in _lista(bruta.get("resumo"))),
+            )
         return cls(
             tuple(
                 Campo.de_json(campo)
                 for campo in _lista(dados.get("campos"))
                 if isinstance(campo, dict)
-            )
+            ),
+            exibicao,
         )
 
 

@@ -31,6 +31,10 @@ class EsquemaMaisNovo(ErroDeDominio):
     """O banco foi criado por uma versão do app mais nova que esta."""
 
 
+class EsquemaDesatualizado(ErroDeDominio):
+    """O banco não recebeu todas as migrações deste app (`/readyz` responde 503)."""
+
+
 class SemContexto(ErroDeDominio):
     """A conexão não declarou a equipe: nenhuma consulta de dados pode rodar assim."""
 

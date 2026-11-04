@@ -78,6 +78,7 @@ PERMISSAO_DA_ROTA: dict[Rota, str] = {
     ("DELETE", "/registros/{registro_id}"): "registros:excluir",
     ("GET", "/registros/{registro_id}/historico"): "historico:ver",
     ("GET", "/busca"): "registros:ver",
+    ("GET", "/registros/recentes"): "registros:ver",
     ("GET", "/cargos"): "equipe:ver",
     ("POST", "/cargos"): "cargos:editar",
     ("PUT", "/cargos/{cargo_id}"): "cargos:editar",

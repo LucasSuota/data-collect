@@ -8,6 +8,7 @@ resposta é mudança incompatível.
 validação (com erros por `id` de campo) é do servidor, não do Pydantic.
 """
 
+from collections.abc import Mapping
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
@@ -150,6 +151,9 @@ class CampoSaida(Modelo):
     formula: str | None = None
     formulario: str | None = None
     compartilhado: bool | None = None
+    ia: bool | None = Field(
+        default=None, description="`false`: o campo nunca é enviado à IA (§2.15)."
+    )
 
     # Sem anotação de retorno de propósito: com `-> dict` o Pydantic trocaria o esquema do OpenAPI
     # por um objeto genérico, e o TypeScript gerado perderia os campos.
@@ -163,12 +167,34 @@ class CampoSaida(Modelo):
         return cls.model_validate(campo.para_json())
 
 
+class ExibicaoSaida(Modelo):
+    """Como o registro aparece em cartões e filtros; tudo opcional (§2.3)."""
+
+    destaque: str | None = Field(default=None, description="Campo numérico em destaque.")
+    status: str | None = Field(default=None, description="Campo calculado booleano de status.")
+    resumo: list[str] = Field(default_factory=list, description="Campos do subtítulo.")
+
+
 class DefinicaoSaida(Modelo):
     campos: list[CampoSaida]
+    exibicao: ExibicaoSaida | None = None
 
     @classmethod
     def de(cls, definicao: Definicao) -> "DefinicaoSaida":
-        return cls(campos=[CampoSaida.de(campo) for campo in definicao.campos])
+        exibicao = definicao.exibicao
+        return cls(
+            campos=[CampoSaida.de(campo) for campo in definicao.campos],
+            exibicao=None
+            if exibicao is None
+            else ExibicaoSaida(
+                destaque=exibicao.destaque, status=exibicao.status, resumo=list(exibicao.resumo)
+            ),
+        )
+
+    # `exibicao` ausente não vira `null`: a definição sai como foi escrita.
+    @model_serializer(mode="wrap")
+    def _omitir_exibicao_vazia(self, proximo: SerializerFunctionWrapHandler):
+        return {nome: valor for nome, valor in proximo(self).items() if valor is not None}
 
 
 class VersaoSaida(Modelo):
@@ -344,6 +370,14 @@ class RegistroAtualizacao(Modelo):
     """`PUT` substitui todos os valores (não há `PATCH`)."""
 
     dados: object
+    revisao: int = Field(
+        description="A `revisao` do registro lida antes de editar; diferente → 409 (§2.14)."
+    )
+
+
+class PessoaResumoSaida(Modelo):
+    id: int
+    nome: str
 
 
 class RegistroSaida(Modelo):
@@ -353,18 +387,43 @@ class RegistroSaida(Modelo):
     dados: dict[str, object] = Field(
         description="Número sempre como string; campo calculado como `{valor, erro}`."
     )
+    revisao: int = Field(description="Mande de volta no `PUT` (concorrência otimista).")
+    criado_por: PessoaResumoSaida | None = Field(
+        description="Nulo se a pessoa excluiu a conta (autoria anonimizada)."
+    )
+    atualizado_por: PessoaResumoSaida | None
     criado_em: str
     atualizado_em: str
+    estado: Literal["conforme", "nao_conforme", "erro", "aguardando", "sem_status"] | None = Field(
+        default=None,
+        description="Estado do campo de status, decidido pelo servidor (§7). Só na listagem.",
+    )
 
     @classmethod
-    def de(cls, registro: Registro) -> "RegistroSaida":
+    def de(
+        cls,
+        registro: Registro,
+        nomes: Mapping[int, str] | None = None,
+        estado: str | None = None,
+    ) -> "RegistroSaida":
+        nomes = nomes or {}
+
+        def pessoa(id_: int | None) -> PessoaResumoSaida | None:
+            if id_ is None or id_ not in nomes:
+                return None
+            return PessoaResumoSaida(id=id_, nome=nomes[id_])
+
         return cls(
             id=registro.id,
             formulario_id=registro.formulario_id,
             versao_id=registro.versao_id,
             dados=dict(registro.dados),
+            revisao=registro.revisao,
+            criado_por=pessoa(registro.criado_por),
+            atualizado_por=pessoa(registro.atualizado_por),
             criado_em=registro.criado_em,
             atualizado_em=registro.atualizado_em,
+            estado=estado,  # type: ignore[arg-type]  # o Pydantic confere o `Literal` na criação
         )
 
 
@@ -414,6 +473,9 @@ class ListagemDeRegistrosSaida(Modelo):
     colunas: list[ColunaSaida]
     itens: list[RegistroSaida]
     total: int
+    exibicao: ExibicaoSaida = Field(
+        description="Destaque, status e resumo efetivos (a definição, com o padrão onde faltar)."
+    )
 
 
 # --- pessoa, equipe, cargos, convites e termos (§2.12 a §2.15) ---
@@ -547,6 +609,7 @@ class ConsentimentoEntrada(Modelo):
 class HistoricoSaida(Modelo):
     id: int
     usuario_id: int | None
+    pessoa: str | None
     quando: str
     acao: str
     valores_anteriores: object | None
@@ -555,3 +618,92 @@ class HistoricoSaida(Modelo):
 
 class SaudeSaida(Modelo):
     status: Literal["ok"]
+
+
+class ContagensSaida(Modelo):
+    """Registros por estado do campo de status, com os mesmos filtros da listagem."""
+
+    campo_status: str | None
+    total: int
+    conforme: int
+    nao_conforme: int
+    erro: int
+    aguardando: int
+
+
+class BuscaFormularioSaida(Modelo):
+    id: int
+    nome: str
+
+
+class BuscaRegistroSaida(Modelo):
+    id: int
+    formulario_id: int
+    formulario: str
+
+
+class BuscaSaida(Modelo):
+    formularios: list[BuscaFormularioSaida]
+    registros: list[BuscaRegistroSaida]
+
+
+class DestaqueSaida(Modelo):
+    rotulo: str
+    valor: str | None
+    unidade: str | None
+
+
+class RegistroRecenteSaida(Modelo):
+    id: int
+    formulario_id: int
+    formulario: str
+    atualizado_em: str
+    estado: Literal["conforme", "nao_conforme", "erro", "aguardando", "sem_status"]
+    destaque: DestaqueSaida | None
+
+
+class NotificacaoSaida(Modelo):
+    id: int
+    tipo: Literal["convite_aceito", "cargo_alterado", "registro_editado", "erro_em_cascata"]
+    referencia: dict[str, object]
+    lida: bool
+    criada_em: str
+
+
+class NotificacoesSaida(Modelo):
+    itens: list[NotificacaoSaida]
+    nao_lidas: int
+
+
+class ProgressoSaida(Modelo):
+    tour_concluido: bool
+    passo: int
+    checklist_dispensado: bool
+
+
+class ProgressoEntrada(Modelo):
+    tour_concluido: bool
+    passo: int = Field(ge=0, le=50)
+    checklist_dispensado: bool
+
+
+class ProntoSaida(Modelo):
+    status: Literal["ok"]
+    migracao: int = Field(description="Último número de migração aplicado.")
+
+
+class ExemploSaida(Modelo):
+    nome: str
+    descricao: str
+    campos: int
+    depende_de: list[str] = Field(
+        description="Nomes dos exemplos que este usa (importados juntos)."
+    )
+
+
+class ImportarExemplosEntrada(Modelo):
+    nomes: list[str] = Field(min_length=1, max_length=20)
+
+
+class ExemplosImportadosSaida(Modelo):
+    formularios: list[str]

@@ -4,6 +4,7 @@ Cada rota chama uma função de `servico` e converte o resultado em modelo de re
 de domínio viram o status HTTP certo em `api.py`.
 """
 
+import dataclasses
 import re
 from datetime import date
 from typing import Annotated
@@ -14,11 +15,14 @@ from forms import servico
 from forms.api_dependencias import DepAgora, DepConexao, autorizar
 from forms.api_esquemas import (
     CatalogoSaida,
+    ContagensSaida,
     DuplicarEntrada,
     ErroDeCampoSaida,
     ErroSaida,
+    ExibicaoSaida,
     FormularioDetalheSaida,
     FormularioEntrada,
+    HistoricoSaida,
     ListagemDeRegistrosSaida,
     LoteEntrada,
     MoverFormularioEntrada,
@@ -39,7 +43,8 @@ from forms.api_esquemas import (
     VersaoSaida,
     coluna_de,
 )
-from forms.models import ErroDeCampo, Formulario, RegistroInvalido, Versao
+from forms.banco import Conexao
+from forms.models import ErroDeCampo, Formulario, Registro, RegistroInvalido, Versao
 from forms.servico import Rascunho
 
 # Erros comuns a (quase) todo endpoint, para o OpenAPI mostrar o formato uniforme.
@@ -333,7 +338,7 @@ def criar_registro(
     registro = servico.criar_registro(
         conexao, formulario_id, entrada.versao_id, entrada.dados, agora
     )
-    return RegistroSaida.de(registro)
+    return _saida_do_registro(conexao, registro)
 
 
 @roteador.get(
@@ -355,6 +360,7 @@ def listar_registros(
     deslocamento: Annotated[int, Query(ge=0)] = 0,
     criado_de: date | None = None,
     criado_ate: date | None = None,
+    meus: Annotated[bool, Query(description="Só os registros que eu criei.")] = False,
     filtro: Annotated[list[str] | None, Query(description="`campo:valor`, repetível.")] = None,
 ) -> ListagemDeRegistrosSaida:
     listagem = servico.listar_registros(
@@ -366,13 +372,53 @@ def listar_registros(
         criado_ate=criado_ate,
         limite=limite,
         deslocamento=deslocamento,
+        meus=meus,
+    )
+    nomes = servico.nomes_de_pessoas(
+        conexao, [i for r in listagem.itens for i in (r.criado_por, r.atualizado_por)]
     )
     return ListagemDeRegistrosSaida(
         versao_id=listagem.versao_id,
         colunas=[coluna_de(c) for c in listagem.colunas],
-        itens=[RegistroSaida.de(r) for r in listagem.itens],
+        itens=[
+            RegistroSaida.de(r, nomes, servico.estado_do_registro(r.dados, listagem.campo_status))
+            for r in listagem.itens
+        ],
         total=listagem.total,
+        exibicao=ExibicaoSaida(
+            destaque=listagem.exibicao.destaque,
+            status=listagem.exibicao.status,
+            resumo=list(listagem.exibicao.resumo),
+        ),
     )
+
+
+@roteador.get(
+    "/formularios/{formulario_id}/registros/contagens",
+    response_model=ContagensSaida,
+    tags=["registros"],
+    summary="Registros por estado (conforme, não conforme, erro, aguardando)",
+    description="Mesma versão e mesmos filtros da listagem; o estado é decidido pelo servidor.",
+)
+def contar_registros(
+    formulario_id: int,
+    conexao: DepConexao,
+    versao_id: int | None = None,
+    criado_de: date | None = None,
+    criado_ate: date | None = None,
+    meus: bool = False,
+    filtro: Annotated[list[str] | None, Query(description="`campo:valor`, repetível.")] = None,
+) -> ContagensSaida:
+    contagens = servico.contar_por_estado(
+        conexao,
+        formulario_id,
+        versao_id=versao_id,
+        filtros=ler_filtros(filtro or []),
+        criado_de=criado_de,
+        criado_ate=criado_ate,
+        meus=meus,
+    )
+    return ContagensSaida(**dataclasses.asdict(contagens))
 
 
 @roteador.get(
@@ -392,6 +438,7 @@ def exportar_registros(
     versao_id: int | None = None,
     criado_de: date | None = None,
     criado_ate: date | None = None,
+    meus: bool = False,
     filtro: Annotated[list[str] | None, Query(description="`campo:valor`, repetível.")] = None,
 ) -> Response:
     nome = servico.obter_formulario(conexao, formulario_id).formulario.nome
@@ -402,6 +449,7 @@ def exportar_registros(
         filtros=ler_filtros(filtro or []),
         criado_de=criado_de,
         criado_ate=criado_ate,
+        meus=meus,
     )
     return Response(
         content=conteudo,
@@ -420,7 +468,7 @@ def exportar_registros(
     summary="Um registro; o `versao_id` dele aponta a definição certa",
 )
 def obter_registro(registro_id: int, conexao: DepConexao) -> RegistroSaida:
-    return RegistroSaida.de(servico.obter_registro(conexao, registro_id))
+    return _saida_do_registro(conexao, servico.obter_registro(conexao, registro_id))
 
 
 @roteador.put(
@@ -439,7 +487,10 @@ def atualizar_registro(
     conexao: DepConexao,
     agora: DepAgora,
 ) -> RegistroSaida:
-    return RegistroSaida.de(servico.atualizar_registro(conexao, registro_id, entrada.dados, agora))
+    registro = servico.atualizar_registro(
+        conexao, registro_id, entrada.dados, agora, entrada.revisao
+    )
+    return _saida_do_registro(conexao, registro)
 
 
 @roteador.delete(
@@ -451,12 +502,38 @@ def atualizar_registro(
     description="409 se outro registro o referencia.",
     responses=_ERRO_409,
 )
-def excluir_registro(registro_id: int, conexao: DepConexao) -> Response:
-    servico.excluir_registro(conexao, registro_id)
+def excluir_registro(registro_id: int, conexao: DepConexao, agora: DepAgora) -> Response:
+    servico.excluir_registro(conexao, registro_id, agora)
     return Response(status_code=204)
 
 
+@roteador.get(
+    "/registros/{registro_id}/historico",
+    response_model=list[HistoricoSaida],
+    tags=["registros"],
+    summary="Histórico de alterações do registro (quem, quando, o que havia antes)",
+)
+def historico_do_registro(registro_id: int, conexao: DepConexao) -> list[HistoricoSaida]:
+    return [
+        HistoricoSaida(
+            id=e.id,
+            usuario_id=e.usuario_id,
+            pessoa=nome,
+            quando=e.quando,
+            acao=e.acao,
+            valores_anteriores=e.valores_anteriores,
+            motivo=e.motivo,
+        )
+        for e, nome in servico.historico_do_registro(conexao, registro_id)
+    ]
+
+
 # --- apoio ---
+
+
+def _saida_do_registro(conexao: Conexao, registro: Registro) -> RegistroSaida:
+    nomes = servico.nomes_de_pessoas(conexao, [registro.criado_por, registro.atualizado_por])
+    return RegistroSaida.de(registro, nomes)
 
 
 def _detalhe(formulario: Formulario, versao: Versao) -> FormularioDetalheSaida:

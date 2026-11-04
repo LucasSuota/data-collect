@@ -25,9 +25,12 @@ from forms.api_equipes import roteador as roteador_equipes
 from forms.api_equipes import roteador_publico
 from forms.api_esquemas import ErroDeCampoSaida
 from forms.api_extensoes import Extensao, descobrir_extensoes, resposta_de_erro
+from forms.api_extras import roteador as roteador_extras
+from forms.api_extras import roteador_aberto
 from forms.api_permissoes import verificar_matriz
 from forms.api_rotas import roteador
 from forms.auth import ValidadorDeToken, validador_do_ambiente
+from forms.logto import ClienteLogto, GestorDeIdentidade, IdentidadeIndisponivel
 from forms.models import (
     CargoInvalido,
     ConflitoDeRevisao,
@@ -57,6 +60,9 @@ class Configuracao:
     # Logto auto-hospedado (§2.12). Sem eles a API recusa todo pedido autenticado (falha fechada).
     logto_endpoint: str | None = None
     logto_audiencia: str | None = None
+    # Aplicativo M2M do Logto: lê o perfil de quem entra e apaga contas (§2.15).
+    logto_m2m_id: str | None = None
+    logto_m2m_segredo: str | None = None
     # Quem migra o esquema (o dono do banco); vazio = não migra ao iniciar.
     dsn_de_migracao: str | None = None
     producao: bool = False
@@ -84,6 +90,8 @@ class Configuracao:
             origens_cors=origens or ORIGENS_PADRAO,
             logto_endpoint=ambiente.get("LOGTO_ENDPOINT") or None,
             logto_audiencia=ambiente.get("LOGTO_API_RESOURCE") or None,
+            logto_m2m_id=ambiente.get("LOGTO_M2M_ID") or None,
+            logto_m2m_segredo=ambiente.get("LOGTO_M2M_SECRET") or None,
             dsn_de_migracao=ambiente.get("FORMS_MIGRATION_URL") or None,
             producao=(ambiente.get("FORMS_AMBIENTE") or "").strip().lower() == "producao",
             primeiro_administrador=ambiente.get("FORMS_ADMIN_EMAIL") or None,
@@ -96,6 +104,7 @@ def criar_app(
     extensoes: Sequence[Extensao] = (),
     pool: ConnectionPool[banco.Conexao] | None = None,
     validador: ValidadorDeToken | None = None,
+    gestor: GestorDeIdentidade | None = None,
 ) -> FastAPI:
     """Monta a aplicação. `pool` e `validador` podem ser injetados (testes); sem eles, saem da
     configuração. Sem Logto configurado, `validador` fica vazio e a API recusa todo pedido
@@ -135,12 +144,15 @@ def criar_app(
     )
     app.state.configuracao = configuracao
     app.state.validador = validador or _validador_da_configuracao(configuracao)
+    app.state.gestor = gestor or _gestor_da_configuracao(configuracao)
     app.state.limite_do_pool = asyncio.Semaphore(_tamanho_do_pool(pool, configuracao))
     if pool is not None:
         app.state.pool = pool
     app.include_router(roteador_publico)
+    app.include_router(roteador_aberto)
     app.include_router(roteador)
     app.include_router(roteador_equipes)
+    app.include_router(roteador_extras)
     for extensao in extensoes:
         app.include_router(extensao.roteador)
         for tipo, tratador in extensao.tratadores.items():
@@ -166,6 +178,14 @@ def criar_app(
 
 def _tamanho_do_pool(pool: ConnectionPool[banco.Conexao] | None, configuracao: Configuracao) -> int:
     return pool.max_size if pool is not None else banco.TAMANHO_DO_POOL
+
+
+def _gestor_da_configuracao(configuracao: Configuracao) -> GestorDeIdentidade | None:
+    if configuracao.logto_endpoint and configuracao.logto_m2m_id and configuracao.logto_m2m_segredo:
+        return ClienteLogto(
+            configuracao.logto_endpoint, configuracao.logto_m2m_id, configuracao.logto_m2m_segredo
+        )
+    return None
 
 
 def _validador_da_configuracao(configuracao: Configuracao) -> ValidadorDeToken | None:
@@ -267,6 +287,14 @@ def _registrar_tratadores_de_erro(app: FastAPI) -> None:
     @app.exception_handler(ConflitoDeRevisao)
     async def _conflito(_: Request, erro: ConflitoDeRevisao) -> JSONResponse:
         return resposta_de_erro(409, str(erro), codigo="revisao_desatualizada")
+
+    @app.exception_handler(banco.EsquemaDesatualizado)
+    async def _desatualizado(_: Request, erro: banco.EsquemaDesatualizado) -> JSONResponse:
+        return resposta_de_erro(503, str(erro))
+
+    @app.exception_handler(IdentidadeIndisponivel)
+    async def _identidade(_: Request, erro: IdentidadeIndisponivel) -> JSONResponse:
+        return resposta_de_erro(502, str(erro))
 
     @app.exception_handler(ValorInvalido)
     async def _valor(_: Request, erro: ValorInvalido) -> JSONResponse:

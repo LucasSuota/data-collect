@@ -26,7 +26,7 @@ _LATITUDE_MAXIMA = Decimal(90)
 _LONGITUDE_MAXIMA = Decimal(180)
 
 # Propriedades que todo campo tem; `ESPECIFICACOES` lista só as demais.
-PROPRIEDADES_COMUNS = ("id", "tipo", "rotulo")
+PROPRIEDADES_COMUNS = ("id", "tipo", "rotulo", "ia")
 
 # `Decimal(str)` aceita "1_000", "NaN", "Infinity" e até dígitos de outros alfabetos ("١٢٣"),
 # então a string é conferida por esta regra (só dígitos ASCII) antes de virar `Decimal`.

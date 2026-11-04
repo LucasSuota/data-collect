@@ -8,11 +8,12 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
-from forms import repositorio, validacao
+from forms import repositorio, repositorio_extras, servico_equipes, validacao
 from forms.banco import Conexao
 from forms.formulas import TipoFormula, Valor, ValorDeCampo, calcular_campos
 from forms.models import (
     Campo,
+    ConflitoDeRevisao,
     Definicao,
     ErroDeCampo,
     ExclusaoBloqueada,
@@ -20,6 +21,7 @@ from forms.models import (
     Registro,
     RegistroInvalido,
     ResultadoCalculado,
+    SemPermissao,
     TipoCampo,
     ValorInvalido,
     ValorJson,
@@ -82,6 +84,7 @@ def criar_registro(
             conexao, formulario_id, versao_id, preparado.dados, agora
         )
         repositorio.substituir_referencias(conexao, registro.id, preparado.referencias)
+        repositorio.registrar_historico(conexao, registro.id, "criado", None, agora)
         return registro
 
 
@@ -90,24 +93,63 @@ def atualizar_registro(
     registro_id: int,
     dados: ValorJson,
     agora: datetime,
+    revisao: int | None = None,
 ) -> Registro:
     """Substitui todos os valores (sem PATCH), recalcula tudo e recalcula os dependentes.
 
-    O registro continua na versão de origem. Tudo, inclusive a cascata, numa transação só.
+    O registro continua na versão de origem. Tudo, inclusive a cascata e o histórico, numa
+    transação só. Com `revisao`, só grava se ninguém alterou o registro desde a leitura (§2.14).
     """
-    atual = repositorio.obter_registro(conexao, registro_id)
-    versao = repositorio.obter_versao(conexao, atual.versao_id)
+    lido = repositorio.obter_registro(conexao, registro_id)
+    _exigir_edicao(conexao, lido)
+    versao = repositorio.obter_versao(conexao, lido.versao_id)
     cache = Cache()
     with transacao(conexao):
+        # Trava a linha: duas edições simultâneas se enfileiram em vez de se sobrepor.
+        atual = repositorio.obter_registro(conexao, registro_id, travar=True)
+        if revisao is not None and atual.revisao != revisao:
+            raise ConflitoDeRevisao(_mensagem_do_conflito(conexao, atual))
         preparado = _preparar(conexao, versao, dados, atual=atual, cache=cache)
-        registro = repositorio.atualizar_registro(conexao, registro_id, preparado.dados, agora)
+        registro = repositorio.atualizar_registro(
+            conexao, registro_id, preparado.dados, agora, revisao_esperada=revisao
+        )
+        repositorio.registrar_historico(conexao, registro_id, "editado", atual.dados, agora)
         repositorio.substituir_referencias(conexao, registro_id, preparado.referencias)
+        _avisar_edicao(conexao, atual, agora)
         for dependente_id in repositorio.registros_dependentes(conexao, registro_id):
-            _recalcular_dependente(conexao, dependente_id, agora, cache)
+            _recalcular_dependente(conexao, dependente_id, agora, cache, origem_id=registro_id)
     return registro
 
 
-def excluir_registro(conexao: Conexao, registro_id: int) -> None:
+def _exigir_edicao(conexao: Conexao, registro: Registro) -> None:
+    """`editar_todos` edita qualquer um; `editar_proprios` só o que a pessoa criou (§2.13)."""
+    contexto = conexao.contexto
+    if contexto is None:
+        raise SemPermissao("registros:editar_proprios")
+    if contexto.tem("registros:editar_todos"):
+        return
+    if contexto.tem("registros:editar_proprios") and registro.criado_por == contexto.usuario_id:
+        return
+    raise SemPermissao("registros:editar_proprios")
+
+
+def _mensagem_do_conflito(conexao: Conexao, atual: Registro) -> str:
+    por = atual.atualizado_por
+    nome = repositorio_extras.nomes_de_usuarios(conexao, [por] if por else []).get(por or 0)
+    quem = nome or "Outra pessoa"
+    return f"{quem} alterou este registro em {atual.atualizado_em}. Recarregue antes de salvar."
+
+
+def _avisar_edicao(conexao: Conexao, antes: Registro, agora: datetime) -> None:
+    """Quem criou o registro é avisado quando outra pessoa o edita (§2.18)."""
+    autor = antes.criado_por
+    if autor is not None and autor != conexao.usuario_id:
+        repositorio_extras.criar_notificacao(
+            conexao, autor, "registro_editado", {"registro_id": antes.id}, agora
+        )
+
+
+def excluir_registro(conexao: Conexao, registro_id: int, agora: datetime) -> None:
     """Apaga de verdade, exceto se outro registro o referencia (§2.7)."""
     repositorio.obter_registro(conexao, registro_id)
     referenciadores = repositorio.registros_que_referenciam(conexao, registro_id)
@@ -117,7 +159,10 @@ def excluir_registro(conexao: Conexao, registro_id: int) -> None:
             f"O registro {registro_id} é referenciado pelos registros {lista} e não pode ser "
             "excluído."
         )
+    servico_equipes.exigir(conexao, "registros:excluir")
     with transacao(conexao):
+        anterior = repositorio.obter_registro(conexao, registro_id, travar=True)
+        repositorio.registrar_historico(conexao, registro_id, "excluido", anterior.dados, agora)
         repositorio.excluir_registro(conexao, registro_id)
 
 
@@ -341,13 +386,13 @@ def _do_json(valor: ValorJson, tipo: TipoFormula) -> Valor:
 
 
 def _recalcular_dependente(
-    conexao: Conexao, registro_id: int, agora: datetime, cache: Cache
+    conexao: Conexao, registro_id: int, agora: datetime, cache: Cache, origem_id: int
 ) -> None:
     """Recalcula só os campos calculados do dependente, contra a versão dele (§2.7).
 
     Erro de cálculo vira erro no campo; só o que não é cálculo (bug, banco) levanta e desfaz tudo.
     """
-    registro = repositorio.obter_registro(conexao, registro_id)
+    registro = repositorio.obter_registro(conexao, registro_id, travar=True)
     definicao = repositorio.obter_versao(conexao, registro.versao_id).definicao
     entradas = {
         campo.id: normalizar_valor(campo, registro.dados.get(campo.id))
@@ -360,5 +405,36 @@ def _recalcular_dependente(
     novos = dict(registro.dados)
     for id_do_campo, resultado in calculados.items():
         novos[id_do_campo] = {"valor": resultado.valor, "erro": resultado.erro}
-    if novos != registro.dados:  # não regrava (nem muda `atualizado_em`) quem não mudou
-        repositorio.atualizar_registro(conexao, registro_id, novos, agora)
+    if novos == registro.dados:  # não regrava (nem muda `atualizado_em`) quem não mudou
+        return
+    repositorio.atualizar_registro(conexao, registro_id, novos, agora)
+    repositorio.registrar_historico(
+        conexao,
+        registro_id,
+        "recalculado",
+        registro.dados,
+        agora,
+        motivo=f"recalculado por alteração em #{origem_id}",
+    )
+    _avisar_erro_em_cascata(conexao, registro, calculados, agora)
+
+
+def _avisar_erro_em_cascata(
+    conexao: Conexao,
+    registro: Registro,
+    calculados: dict[str, ResultadoCalculado],
+    agora: datetime,
+) -> None:
+    """Erro de cálculo novo num registro seu, causado por outra edição, vira aviso (§2.18)."""
+    autor = registro.criado_por
+    if autor is None or autor == conexao.usuario_id:
+        return
+    antes = {
+        id_: isinstance(v, dict) and v.get("erro") is not None
+        for id_, v in registro.dados.items()
+        if isinstance(v, dict) and "erro" in v
+    }
+    if any(r.erro is not None and not antes.get(id_, False) for id_, r in calculados.items()):
+        repositorio_extras.criar_notificacao(
+            conexao, autor, "erro_em_cascata", {"registro_id": registro.id}, agora
+        )

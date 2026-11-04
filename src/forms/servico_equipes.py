@@ -5,6 +5,7 @@ ninguém concede o que não tem (convite, cargo ou permissão acima do próprio)
 só existe em claro uma vez. O `servico` não sabe de HTTP: o contexto vem pela conexão.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -14,6 +15,7 @@ from forms.models import (
     CargoInvalido,
     Contexto,
     ErroDeCampo,
+    ErroDeDominio,
     NaoEncontrado,
     SemAcessoAEquipe,
     SemPermissao,
@@ -97,11 +99,26 @@ def renomear_equipe(conexao: Conexao, nome: str) -> None:
 
 
 def identificar(
-    conexao: Conexao, sub: str, nome: str | None, email: str | None, agora: datetime
+    conexao: Conexao,
+    sub: str,
+    nome: str | None,
+    email: str | None,
+    agora: datetime,
+    perfil: Callable[[str], tuple[str | None, str | None]] | None = None,
 ) -> Usuario:
-    """Primeira vez que a pessoa aparece com um token válido: cria o registro dela (JIT)."""
+    """Primeira vez que a pessoa aparece com um token válido: cria o registro dela (JIT).
+
+    O token de acesso não traz nome nem e-mail; `perfil` (o Logto) os busca só nessa primeira vez.
+    Se o Logto não responder, a pessoa entra com um nome genérico e o perfil vem na próxima.
+    """
     usuario = repositorio_equipes.obter_usuario_por_sub(conexao, sub)
     if usuario is None:
+        if perfil is not None and not (nome and email):
+            try:
+                nome_do_logto, email_do_logto = perfil(sub)
+            except ErroDeDominio:
+                nome_do_logto = email_do_logto = None
+            nome, email = nome or nome_do_logto, email or email_do_logto
         return repositorio_equipes.criar_usuario(
             conexao, sub, nome or "Pessoa sem nome", email, agora
         )

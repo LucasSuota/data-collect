@@ -525,7 +525,10 @@ def test_obter_e_atualizar_registro_substitui_tudo_e_mantem_a_versao(cliente):
     registro = _registro(cliente, criado).json()
 
     # act
-    atualizado = cliente.put(f"/registros/{registro['id']}", json={"dados": {"fck_mpa": 30}})
+    atualizado = cliente.put(
+        f"/registros/{registro['id']}",
+        json={"dados": {"fck_mpa": 30}, "revisao": registro["revisao"]},
+    )
     lido = cliente.get(f"/registros/{registro['id']}")
 
     # assert
@@ -540,8 +543,12 @@ def test_obter_e_atualizar_registro_substitui_tudo_e_mantem_a_versao(cliente):
         "formulario_id",
         "versao_id",
         "dados",
+        "revisao",
+        "criado_por",
+        "atualizado_por",
         "criado_em",
         "atualizado_em",
+        "estado",
     }
 
 
@@ -553,7 +560,7 @@ def test_nao_existe_patch_de_registro(cliente):
 def test_atualizar_ou_obter_registro_inexistente_e_404(cliente):
     # act / assert
     assert cliente.get("/registros/999").status_code == 404
-    assert cliente.put("/registros/999", json={"dados": {}}).status_code == 404
+    assert cliente.put("/registros/999", json={"dados": {}, "revisao": 1}).status_code == 404
     assert cliente.delete("/registros/999").status_code == 404
 
 
@@ -608,7 +615,9 @@ def test_atualizar_a_origem_recalcula_o_dependente_na_resposta_seguinte(cliente)
     assert dependente["dados"]["seca"]["valor"] == "1.0"
 
     # act
-    cliente.put(f"/registros/{origem['id']}", json={"dados": {"umidade": "2"}})
+    cliente.put(
+        f"/registros/{origem['id']}", json={"dados": {"umidade": "2"}, "revisao": origem["revisao"]}
+    )
 
     # assert
     assert cliente.get(f"/registros/{dependente['id']}").json()["dados"]["seca"]["valor"] == "4"
@@ -631,7 +640,7 @@ def test_listagem_com_paginacao_total_e_versao(cliente):
     # assert
     assert pagina["total"] == 3 and len(pagina["itens"]) == 1
     assert pagina["versao_id"] == criado["versao_atual"]["id"]
-    assert set(pagina) == {"versao_id", "colunas", "itens", "total"}
+    assert set(pagina) == {"versao_id", "colunas", "itens", "total", "exibicao"}
 
 
 def test_filtro_por_campo_usa_filtro_campo_valor_repetivel(cliente):
