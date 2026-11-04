@@ -17,3 +17,7 @@ node_modules/
 empacotamento/build/
 empacotamento/dist/
 empacotamento/instaladores/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/

@@ -73,14 +73,27 @@
 	}
 }
 
-# Login e cadastro (Logto): limite bem mais estrito contra força bruta e enumeração
+# Login e cadastro (Logto). A tela carrega dezenas de arquivos, então o limite geral é folgado;
+# o estrito (contra força bruta e enumeração) vale só para quem ENVIA credenciais.
 {$AUTH_HOST:auth.localhost} {
 	import cabecalhos
 	encode zstd gzip
-	rate_limit {
-		zone auth_por_ip {
+
+	@credenciais {
+		method POST
+		path /api/experience* /api/interaction* /oidc/token
+	}
+	rate_limit @credenciais {
+		zone auth_credenciais_por_ip {
 			key {remote_host}
-			events 60
+			events 30
+			window 1m
+		}
+	}
+	rate_limit {
+		zone auth_geral_por_ip {
+			key {remote_host}
+			events 600
 			window 1m
 		}
 	}

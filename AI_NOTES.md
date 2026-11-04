@@ -68,3 +68,24 @@ Registro honesto dos erros que a IA cometeu durante a construção: lógica erra
 - **O que a IA fez de errado:** o tamanho da área vinha só do `ResizeObserver`, que não tinha disparado quando a vista foi calculada; o ajuste usou o tamanho padrão (900×560) e o cartão da direita saiu cortado. Os testes de jsdom não medem layout e passavam.
 - **Como foi detectado:** captura de tela com o Chrome sem interface (o resultado visual não aparece em teste unitário).
 - **Correção:** medida inicial própria (`getBoundingClientRect` num `requestAnimationFrame`) além do observador, e a geometria do ajuste isolada em função pura testada (`geometria.ts`).
+
+### 2026-11-04 — Row Level Security escondido pelos testes: convite "inexistente" e equipe "sem acesso"
+
+- **Pedido:** subir a pilha inteira (Postgres, Logto, API, proxy) e fazer a primeira pessoa entrar pelo convite.
+- **O que a IA fez de errado:** a API passou nos mais de 2.000 testes, mas esses testes conectavam no banco como dono (superusuário), que **ignora o Row Level Security**. Em produção a API conecta como `forms_app`, e duas consultas liam `cargos` (que tem RLS) antes de a equipe ser declarada na conexão: `aceitar_convite` juntava o convite com `cargos` e o convite "sumia" (404), e `contexto_da_pessoa` buscava o cargo do membro e respondia "você não faz parte desta equipe" (403) a quem era membro.
+- **Como foi detectado:** só ao rodar o fluxo real no navegador (Playwright contra o `docker compose`): o log da API mostrava `POST /convites/.../aceitar 404`, depois a interface mostrava o erro de equipe em toda tela.
+- **Correção:** `LEFT JOIN` na busca do convite; `contexto_da_pessoa` e `cargo_e_permissoes` declaram a equipe candidata só durante a leitura do cargo (a pertença continua sendo conferida em `membros_grupo`, sem RLS). Dois testes novos rodam no papel `forms_app` e falham sem a correção, e a fixture da API dos testes passou a usar esse papel (`criar_pool(..., papel="forms_app")`), para o RLS valer em toda a suíte. Lição: teste que roda com mais privilégio do que a produção não prova isolamento.
+
+### 2026-11-04 — laço de requisições no front: a sessão era recriada a cada busca de token
+
+- **Pedido:** tela de entrada com Logto e renovação do token.
+- **O que a IA fez de errado:** o objeto de sessão (com a função `pode`) era recriado a cada render do componente pai, e o SDK do Logto muda o `isLoading` a cada busca de token. As telas tinham `pode` nas dependências dos efeitos, então cada busca de token refazia as chamadas à API, que buscavam token de novo. Além disso, o `isLoading` trocava a árvore por um esqueleto e desmontava a sessão, refazendo `GET /eu` (sete vezes seguidas no log).
+- **Como foi detectado:** o limite de requisições do proxy começou a responder 429 em telas simples; contar as chamadas no Playwright mostrou a tempestade. Os testes de componente não pegam isso porque trocam o SDK por um cliente falso.
+- **Correção:** a sessão é memoizada pelos dados (`useMemo`), a função de sair fica estável, e a tela de carregamento só aparece enquanto ainda não há login.
+
+### 2026-11-04 — limite de requisições do proxy medido pela API, não pela tela de login
+
+- **Pedido:** limite por IP no proxy para o login do Logto.
+- **O que a IA fez de errado:** pôs 60 requisições por minuto no host do login, achando que era só "formulário de senha". A tela do Logto carrega dezenas de arquivos, e o 429 do proxy chegava ao navegador sem cabeçalho CORS, que apareceu como falha de CORS no `openid-configuration`, escondendo a causa.
+- **Como foi detectado:** console do navegador no Playwright ("blocked by CORS policy") e um `curl` com `Origin` que devolveu 429.
+- **Correção:** limite geral folgado (600 por minuto) e um limite estrito (30 por minuto) só para quem **envia credenciais** (`POST` em `/api/experience*`, `/api/interaction*` e `/oidc/token`).
