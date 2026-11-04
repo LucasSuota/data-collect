@@ -62,8 +62,6 @@ def formatar_celula(coluna: Coluna, guardado: ValorJson) -> str:
             return _sim_nao(guardado)
         case TipoCampo.LOCALIZACAO:
             return _localizacao(guardado)
-        case TipoCampo.FOTO:
-            return str(len(guardado)) if isinstance(guardado, list) else ""
         case TipoCampo.TEXTO | TipoCampo.SELECAO:
             # Só célula de texto é neutralizada: número (`-3,5`) tem de sair como número.
             return _neutralizar(str(guardado))

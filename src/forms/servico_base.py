@@ -1,15 +1,15 @@
 """Peças comuns aos casos de uso: transação e campos compartilhados dos formulários publicados.
 
-Fica separado de `servico.py` para os módulos de casos de uso (formulários, registros, anexos)
+Fica separado de `servico.py` para os módulos de casos de uso (formulários, registros, pastas)
 usarem as mesmas regras sem importar uns aos outros.
 """
 
-import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from forms import repositorio, validacao
+from forms.banco import Conexao
 from forms.formulas import TipoFormula
 from forms.models import Formulario, NaoEncontrado, ValorJson, Versao
 from forms.validacao import CampoCompartilhado, Origens
@@ -18,16 +18,11 @@ from forms.validacao import CampoCompartilhado, Origens
 
 
 @contextmanager
-def transacao(conexao: sqlite3.Connection) -> Iterator[None]:
-    """BEGIN explícito: sem ele o `sqlite3` não abre transação para DDL e, aqui, também deixaria
-    uma falha no meio de um lote com formulários já gravados."""
-    conexao.execute("BEGIN")
-    try:
+def transacao(conexao: Conexao) -> Iterator[None]:
+    """Atomicidade de um caso de uso: ou tudo entra, ou nada. A conexão é `autocommit`, então
+    `transaction()` abre um BEGIN real (ou um savepoint, se já houver uma transação)."""
+    with conexao.transaction():
         yield
-    except BaseException:
-        conexao.rollback()
-        raise
-    conexao.commit()
 
 
 # --- campos compartilhados de formulários já publicados ---
@@ -49,7 +44,7 @@ def referencias_brutas(definicao: ValorJson) -> list[tuple[str, str]]:
 
 
 def origens_publicadas(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     referencias: Sequence[tuple[str, str]],
     cache: dict[int, dict[str, CampoCompartilhado]],
 ) -> Origens:
@@ -62,7 +57,7 @@ def origens_publicadas(
 
 
 def compartilhados_publicados(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     formulario: Formulario,
     cache: dict[int, dict[str, CampoCompartilhado]],
 ) -> dict[str, CampoCompartilhado]:
@@ -98,7 +93,7 @@ class Cache:
 
 
 def tipos_calculados_da_versao(
-    conexao: sqlite3.Connection, versao: Versao, cache: Cache
+    conexao: Conexao, versao: Versao, cache: Cache
 ) -> dict[str, TipoFormula]:
     """Tipo inferido de cada campo `calculado` de uma versão (não é guardado: sai da análise)."""
     if versao.id not in cache.tipos_calculados:

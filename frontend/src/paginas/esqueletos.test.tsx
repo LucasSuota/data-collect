@@ -26,6 +26,7 @@ describe("esqueletos de carregamento", () => {
       <PaginaDeRegistros formularioId={1} navegar={vi.fn()} />,
       clienteFalso({
         listarRegistros: pendente,
+        contagens: pendente,
         obterFormulario: pendente,
         listarVersoes: pendente,
       }),

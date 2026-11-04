@@ -14,7 +14,6 @@ from forms.ia.validacao import (
     validar_resumo,
 )
 from forms.models import ValorInvalido
-from forms.repositorio import abrir_conexao
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 D = Decimal
@@ -36,13 +35,6 @@ DEFINICAO = {
         {"id": "inverso", "tipo": "calculado", "rotulo": "Inverso", "formula": "1 / carga"},
     ]
 }
-
-
-@pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
 
 
 @pytest.fixture

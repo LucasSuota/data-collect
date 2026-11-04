@@ -11,7 +11,6 @@
     {"id": "area_isolada", "tipo": "sim_nao", "rotulo": "Área isolada?"},
     {"id": "seguranca_ok", "tipo": "calculado", "rotulo": "Segurança em ordem?",
      "formula": "epi_utilizado and area_isolada"},
-    {"id": "fotos", "tipo": "foto", "rotulo": "Fotos", "maximo": 5},
     {"id": "observacoes", "tipo": "texto", "rotulo": "Observações"}
   ]
 }

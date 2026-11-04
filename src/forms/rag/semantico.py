@@ -7,11 +7,11 @@ base e o fallback: sem provedor de embeddings, sem internet ou sem chave, vale s
 
 import hashlib
 import math
-import sqlite3
 import struct
 from collections.abc import Sequence
 
 from forms import repositorio
+from forms.banco import Conexao
 from forms.ia.cliente import ClienteDeLLM, IaIndisponivel
 from forms.rag.chunker import Trecho
 from forms.rag.indice import IndiceBm25, ResultadoDeBusca
@@ -78,7 +78,7 @@ class IndiceSemantico:
 
 
 def carregar_vetores(
-    conexao: sqlite3.Connection, cliente: ClienteDeLLM, trechos: Sequence[Trecho]
+    conexao: Conexao, cliente: ClienteDeLLM, trechos: Sequence[Trecho]
 ) -> list[list[float]]:
     """Os vetores dos trechos, na ordem dada. Só o que ainda não está no banco é vetorizado.
 

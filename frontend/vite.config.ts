@@ -12,5 +12,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // Os specs de e2e são do Playwright, não do Vitest.
+    exclude: ["node_modules", "dist", "e2e/**"],
+    // Máquinas lentas (CI, notebook sob carga) estouravam os 5 s padrão no primeiro teste de cada arquivo.
+    testTimeout: 20_000,
   },
 });

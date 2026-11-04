@@ -31,9 +31,9 @@ const CATALOGO: Catalogo = {
       propriedades: [...COMUNS, "obrigatorio", "formulario"],
     },
     {
-      id: "foto",
-      rotulo: "Foto",
-      propriedades: [...COMUNS, "obrigatorio", "maximo", "compartilhado"],
+      id: "localizacao",
+      rotulo: "Localização",
+      propriedades: [...COMUNS, "obrigatorio", "compartilhado"],
     },
     { id: "secao", rotulo: "Seção", propriedades: [...COMUNS] },
   ],
@@ -88,7 +88,7 @@ describe("Construtor: montagem da definição", () => {
       "Seleção",
       "Calculado",
       "Referência",
-      "Foto",
+      "Localização",
       "Seção",
     ]);
   });
@@ -120,14 +120,14 @@ describe("Construtor: montagem da definição", () => {
     renderizar();
     await adicionar("Texto");
     await adicionar("Número");
-    await adicionar("Foto");
+    await adicionar("Localização");
 
-    await userEvent.click(screen.getByRole("button", { name: "Mover Foto para cima" }));
-    expect(nomesDosCampos()).toEqual(["Texto", "Foto", "Número"]);
+    await userEvent.click(screen.getByRole("button", { name: "Mover Localização para cima" }));
+    expect(nomesDosCampos()).toEqual(["Texto", "Localização", "Número"]);
     await userEvent.click(screen.getByRole("button", { name: "Mover Texto para baixo" }));
-    expect(nomesDosCampos()).toEqual(["Foto", "Texto", "Número"]);
+    expect(nomesDosCampos()).toEqual(["Localização", "Texto", "Número"]);
 
-    expect(screen.getByRole("button", { name: "Mover Foto para cima" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Mover Localização para cima" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Mover Número para baixo" })).toBeDisabled();
   });
 
@@ -159,7 +159,7 @@ describe("Construtor: painel de propriedades guiado pelo catálogo", () => {
     expect(screen.queryByLabelText(/Opções/)).not.toBeInTheDocument();
   });
 
-  it("número tem unidade e casas decimais; seleção tem opções; foto tem máximo", async () => {
+  it("número tem unidade e casas decimais; seleção tem opções", async () => {
     renderizar();
     await adicionar("Número");
     expect(screen.getByLabelText("Unidade")).toBeInTheDocument();
@@ -167,9 +167,6 @@ describe("Construtor: painel de propriedades guiado pelo catálogo", () => {
 
     await adicionar("Seleção");
     expect(screen.getByLabelText(/Opções/)).toBeInTheDocument();
-
-    await adicionar("Foto");
-    expect(screen.getByLabelText("Máximo de fotos")).toBeInTheDocument();
   });
 
   it("trocar o tipo troca as propriedades oferecidas", async () => {
@@ -489,11 +486,10 @@ describe("Construtor: editar um formulário (nova versão)", () => {
   it("carrega a versão atual e avisa que publicar cria a próxima", async () => {
     renderizar({ tipo: "editar", formularioId: 5 }, { obterFormulario: async () => formulario });
 
-    expect(
-      await screen.findByRole("heading", { name: "Editar · Corpo de prova" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^Corpo de prova/ })).toBeInTheDocument();
+    expect(screen.getByText("rascunho da v3")).toBeInTheDocument();
     expect(nomesDosCampos()).toEqual(["fck", "Dobro"]);
-    expect(screen.getByText(/cria a versão 3/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publicar versão 3" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Nome do formulário")).not.toBeInTheDocument();
   });
 
@@ -507,7 +503,7 @@ describe("Construtor: editar um formulário (nova versão)", () => {
     );
     await adicionar("Texto");
 
-    await userEvent.click(screen.getByRole("button", { name: "Publicar nova versão" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Publicar versão \d+$/ }));
 
     await waitFor(() => expect(navegar).toHaveBeenCalledWith({ nome: "formularios" }));
     const [id, definicao] = publicarVersao.mock.calls[0] ?? [];
@@ -532,7 +528,7 @@ describe("Construtor: editar um formulário (nova versão)", () => {
       { tipo: "editar", formularioId: 5 },
       { obterFormulario: async () => formulario, publicarVersao },
     );
-    await userEvent.click(await screen.findByRole("button", { name: "Publicar nova versão" }));
+    await userEvent.click(await screen.findByRole("button", { name: /^Publicar versão \d+$/ }));
 
     await userEvent.click(await screen.findByRole("button", { name: "Selecionar o campo fck" }));
 
@@ -581,7 +577,7 @@ describe("Construtor: criar com IA", () => {
       },
     );
 
-    await screen.findByRole("button", { name: "Publicar nova versão" });
+    await screen.findByRole("button", { name: /^Publicar versão \d+$/ });
     expect(screen.queryByRole("button", { name: "Criar com IA" })).not.toBeInTheDocument();
   });
 });

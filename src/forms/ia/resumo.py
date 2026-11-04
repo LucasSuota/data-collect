@@ -5,13 +5,13 @@ deles e nunca calcula. Registros e textos livres nunca vão ao LLM, só os agreg
 """
 
 import json
-import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
 from forms import servico
+from forms.banco import Conexao
 from forms.exportacao import Coluna
 from forms.formulas import TipoFormula
 from forms.ia.cliente import ClienteDeLLM
@@ -107,7 +107,7 @@ class ResumoGerado:
 
 
 def calcular_agregados(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     formulario_id: int,
     *,
     versao_id: int | None = None,
@@ -138,7 +138,7 @@ def calcular_agregados(
 
 
 def resumir(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     cliente: ClienteDeLLM,
     formulario_id: int,
     *,
@@ -174,7 +174,7 @@ def _agregar(coluna: Coluna, registros: list[Registro]) -> AgregadoDeColuna | No
         coluna.tipo is TipoCampo.CALCULADO and coluna.tipo_na_formula is TipoFormula.BOOLEANO
     )
     if not numerica and not categorica:
-        return None  # texto livre, data, foto, localização, referência: nada vai ao LLM
+        return None  # texto livre, data, localização, referência: nada vai ao LLM
 
     valores: list[object] = []
     vazios = erros = 0

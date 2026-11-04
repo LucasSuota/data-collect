@@ -43,8 +43,14 @@ def descobrir_extensoes(modulos: Sequence[str] = MODULOS_OPCIONAIS) -> tuple[Ext
 
 
 def resposta_de_erro(
-    status: int, detalhe: str, erros: list[ErroDeCampoSaida] | None = None
+    status: int,
+    detalhe: str,
+    erros: list[ErroDeCampoSaida] | None = None,
+    codigo: str | None = None,
 ) -> JSONResponse:
     """O formato uniforme de erro (§5.3), usado pelo app e pelas extensões."""
-    corpo = ErroSaida(detalhe=detalhe, erros=erros or [])
-    return JSONResponse(status_code=status, content=corpo.model_dump(mode="json"))
+    corpo = ErroSaida(detalhe=detalhe, erros=erros or [], codigo=codigo)
+    conteudo = corpo.model_dump(mode="json")
+    if conteudo["codigo"] is None:
+        del conteudo["codigo"]  # só aparece quando o front precisa agir (`token_expirado`...)
+    return JSONResponse(status_code=status, content=conteudo)

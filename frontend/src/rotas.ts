@@ -5,7 +5,20 @@ import { useCallback, useEffect, useState } from "react";
  * `index.html` (uma rota de caminho precisaria de fallback no servidor).
  */
 export type Rota =
+  | { nome: "inicio" }
   | { nome: "formularios" }
+  | { nome: "registrosRecentes" }
+  | { nome: "equipe" }
+  | { nome: "cargos" }
+  | { nome: "ia" }
+  | { nome: "ajuda"; guia?: string }
+  | { nome: "chat" }
+  | { nome: "perfil" }
+  | { nome: "exemplos" }
+  | { nome: "busca"; termo: string }
+  | { nome: "termos" }
+  | { nome: "privacidade" }
+  | { nome: "convite"; token: string }
   | { nome: "mapa" }
   | { nome: "registros"; formularioId: number }
   | { nome: "novoRegistro"; formularioId: number }
@@ -21,8 +34,34 @@ const NAO_ENCONTRADA: Rota = { nome: "naoEncontrada" };
 
 export function lerRota(hash: string): Rota {
   const caminho = hash.replace(/^#\/?/, "");
-  if (caminho === "") return { nome: "formularios" };
+  if (caminho === "") return { nome: "inicio" };
   const partes = caminho.split("/");
+
+  if (partes.length === 1) {
+    const simples: Record<string, Rota> = {
+      formularios: { nome: "formularios" },
+      registros: { nome: "registrosRecentes" },
+      equipe: { nome: "equipe" },
+      cargos: { nome: "cargos" },
+      ia: { nome: "ia" },
+      ajuda: { nome: "ajuda" },
+      chat: { nome: "chat" },
+      perfil: { nome: "perfil" },
+      exemplos: { nome: "exemplos" },
+      termos: { nome: "termos" },
+      privacidade: { nome: "privacidade" },
+    };
+    const achada = simples[partes[0] ?? ""];
+    if (achada) return achada;
+  }
+  if (partes.length === 2 && partes[1]) {
+    const argumento = decodificar(partes[1]);
+    if (argumento !== null) {
+      if (partes[0] === "ajuda") return { nome: "ajuda", guia: argumento };
+      if (partes[0] === "busca") return { nome: "busca", termo: argumento };
+      if (partes[0] === "convite") return { nome: "convite", token: argumento };
+    }
+  }
 
   if (partes[0] === "mapa" && partes.length === 1) return { nome: "mapa" };
   if (partes[0] === "construtor" && partes.length === 1) return { nome: "novoFormulario" };
@@ -51,8 +90,27 @@ export function lerRota(hash: string): Rota {
 
 export function caminhoDe(rota: Rota): string {
   switch (rota.nome) {
-    case "formularios":
+    case "inicio":
       return "#/";
+    case "formularios":
+      return "#/formularios";
+    case "registrosRecentes":
+      return "#/registros";
+    case "equipe":
+    case "cargos":
+    case "ia":
+    case "chat":
+    case "perfil":
+    case "exemplos":
+    case "termos":
+    case "privacidade":
+      return `#/${rota.nome}`;
+    case "ajuda":
+      return rota.guia === undefined ? "#/ajuda" : `#/ajuda/${encodeURIComponent(rota.guia)}`;
+    case "busca":
+      return `#/busca/${encodeURIComponent(rota.termo)}`;
+    case "convite":
+      return `#/convite/${encodeURIComponent(rota.token)}`;
     case "mapa":
       return "#/mapa";
     case "registros":
@@ -85,6 +143,14 @@ export function useRota(): [Rota, (rota: Rota) => void] {
     window.location.hash = caminhoDe(destino);
   }, []);
   return [rota, navegar];
+}
+
+function decodificar(texto: string): string | null {
+  try {
+    return decodeURIComponent(texto);
+  } catch {
+    return null; // `%` solto na URL: rota inválida, não erro
+  }
 }
 
 function ehId(texto: string | undefined): texto is string {

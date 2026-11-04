@@ -1,55 +1,83 @@
-"""A API HTTP: monta o FastAPI, o token por execução, o CORS e o formato de erro uniforme.
+"""A API HTTP: monta o FastAPI, a autenticação, o CORS e o formato de erro uniforme.
 
-Ponto de entrada: `uv run uvicorn forms.api:app --host 127.0.0.1 --port 8000` (AGENTS.md §4).
-Pydantic e HTTP só existem aqui e em `api_esquemas.py`/`api_rotas.py`; toda regra de negócio
-fica em `servico.py` e abaixo.
+Ponto de entrada: `uvicorn forms.api:app_do_ambiente --factory` (AGENTS.md §4.1). Pydantic e HTTP
+só existem aqui e em `api_*.py`; toda regra de negócio fica em `servico*.py` e abaixo.
 """
 
+import asyncio
 import logging
 import os
-import secrets
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager, closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
-from fastapi.staticfiles import StaticFiles
+from psycopg_pool import ConnectionPool
 from starlette.exceptions import HTTPException as ExcecaoHttp
-from starlette.routing import BaseRoute, Match
 
-from forms import servico
+from forms import banco, servico_equipes
+from forms.api_equipes import roteador as roteador_equipes
+from forms.api_equipes import roteador_publico
 from forms.api_esquemas import ErroDeCampoSaida
 from forms.api_extensoes import Extensao, descobrir_extensoes, resposta_de_erro
-from forms.api_rotas import CABECALHO_DO_TOKEN, roteador
+from forms.api_extras import roteador as roteador_extras
+from forms.api_extras import roteador_aberto
+from forms.api_permissoes import verificar_matriz
+from forms.api_rotas import roteador
+from forms.api_seguranca import (
+    AcrescentarCabecalhosDeSeguranca,
+    LimitadorDeTaxa,
+    LimitarCorpo,
+    RegistrarAcessos,
+)
+from forms.auth import ValidadorDeToken, validador_do_ambiente
+from forms.logto import ClienteLogto, GestorDeIdentidade, IdentidadeIndisponivel
 from forms.models import (
+    CargoInvalido,
+    ConflitoDeRevisao,
     DefinicaoInvalida,
     ErroDeDominio,
     ExclusaoBloqueada,
-    FotoInvalida,
+    LimiteExcedido,
     LoteInvalido,
+    NaoAutenticado,
     NaoEncontrado,
     PastaInvalida,
     RegistroInvalido,
+    SemAcessoAEquipe,
+    SemPermissao,
+    TermosPendentes,
     ValorInvalido,
 )
 
 ORIGENS_PADRAO = ("http://localhost:5173", "http://127.0.0.1:5173")
+DSN_PADRAO = "postgresql://forms_app:forms_app@127.0.0.1:5433/forms"
+CABECALHOS_PERMITIDOS = ["Authorization", "Content-Type", "X-Equipe", "If-Match"]
 
 
 @dataclass(frozen=True)
 class Configuracao:
-    banco: Path
-    pasta_de_dados: Path
-    # Token por execução (§4.1). Sem token e sem dispensa, a API recusa tudo (falha fechada).
-    token: str | None
-    dispensar_token: bool
+    dsn: str
     origens_cors: tuple[str, ...]
+    # Logto auto-hospedado (§2.12). Sem eles a API recusa todo pedido autenticado (falha fechada).
+    logto_endpoint: str | None = None
+    # Endereço do Logto na rede interna (JWKS e Management API); o `iss` do token continua sendo o
+    # endereço público acima. Sem ele, usa o público.
+    logto_interno: str | None = None
+    logto_audiencia: str | None = None
+    # Aplicativo M2M do Logto: lê o perfil de quem entra e apaga contas (§2.15).
+    logto_m2m_id: str | None = None
+    logto_m2m_segredo: str | None = None
+    # Quem migra o esquema (o dono do banco); vazio = não migra ao iniciar.
+    dsn_de_migracao: str | None = None
+    producao: bool = False
+    primeiro_administrador: str | None = None
+    nome_da_primeira_equipe: str = "Minha equipe"
 
     def __post_init__(self) -> None:
         if "*" in self.origens_cors:
@@ -59,106 +87,153 @@ class Configuracao:
 
     @classmethod
     def do_ambiente(cls, ambiente: Mapping[str, str] | None = None) -> "Configuracao":
-        """Lê `FORMS_DB_PATH`, `FORMS_DATA_DIR`, `FORMS_TOKEN`, `FORMS_SKIP_TOKEN`
-        e `FORMS_CORS_ORIGINS`."""
+        """Lê `FORMS_DATABASE_URL`, `FORMS_MIGRATION_URL`, `FORMS_CORS_ORIGINS`, `LOGTO_ENDPOINT`,
+        `LOGTO_INTERNO`, `LOGTO_API_RESOURCE`, `FORMS_AMBIENTE`, `FORMS_ADMIN_EMAIL` e
+        `FORMS_EQUIPE_INICIAL`."""
         if ambiente is None:
             load_dotenv()  # o `.env` (fora do git) complementa o ambiente real
             ambiente = os.environ
-        banco = Path(ambiente.get("FORMS_DB_PATH") or "forms.db")
-        pasta = Path(ambiente.get("FORMS_DATA_DIR") or banco.resolve().parent)
         origens = tuple(
             o.strip() for o in (ambiente.get("FORMS_CORS_ORIGINS") or "").split(",") if o.strip()
         )
         return cls(
-            banco=banco,
-            pasta_de_dados=pasta,
-            token=ambiente.get("FORMS_TOKEN") or None,
-            dispensar_token=(ambiente.get("FORMS_SKIP_TOKEN") or "").strip().lower()
-            in {"1", "true", "sim"},
+            dsn=ambiente.get("FORMS_DATABASE_URL") or DSN_PADRAO,
             origens_cors=origens or ORIGENS_PADRAO,
+            logto_endpoint=ambiente.get("LOGTO_ENDPOINT") or None,
+            logto_interno=ambiente.get("LOGTO_INTERNO") or None,
+            logto_audiencia=ambiente.get("LOGTO_API_RESOURCE") or None,
+            logto_m2m_id=ambiente.get("LOGTO_M2M_ID") or None,
+            logto_m2m_segredo=ambiente.get("LOGTO_M2M_SECRET") or None,
+            dsn_de_migracao=ambiente.get("FORMS_MIGRATION_URL") or None,
+            producao=(ambiente.get("FORMS_AMBIENTE") or "").strip().lower() == "producao",
+            primeiro_administrador=ambiente.get("FORMS_ADMIN_EMAIL") or None,
+            nome_da_primeira_equipe=ambiente.get("FORMS_EQUIPE_INICIAL") or "Minha equipe",
         )
 
 
 def criar_app(
     configuracao: Configuracao,
-    pasta_do_front: Path | None = None,
     extensoes: Sequence[Extensao] = (),
+    pool: ConnectionPool[banco.Conexao] | None = None,
+    validador: ValidadorDeToken | None = None,
+    gestor: GestorDeIdentidade | None = None,
 ) -> FastAPI:
-    """Monta a aplicação. Nada abre banco aqui: a conexão é aberta por requisição.
-
-    Com `pasta_do_front` (o `frontend/dist`), serve o front na mesma origem da API (app
-    instalado, §4.1): então não há CORS, e a página e os arquivos estáticos não pedem token (o
-    navegador não manda cabeçalho ao carregar o `index.html`). Toda rota da API continua exigindo.
-
-    `extensoes` são as rotas dos módulos opcionais (`ia/`, `rag/`); sem elas o app é o mesmo, só
-    sem essas rotas. Elas entram antes do front e do token, então também exigem o token.
-    """
+    """Monta a aplicação. `pool` e `validador` podem ser injetados (testes); sem eles, saem da
+    configuração. Sem Logto configurado, `validador` fica vazio e a API recusa todo pedido
+    autenticado."""
 
     @asynccontextmanager
     async def ciclo_de_vida(app: FastAPI) -> AsyncIterator[None]:
-        _limpar_anexos_orfaos(configuracao)
-        yield
+        if configuracao.dsn_de_migracao:
+            with closing(banco.abrir_conexao(configuracao.dsn_de_migracao)) as conexao:
+                banco.migrar(conexao)
+        proprio = pool is None
+        app.state.pool = (
+            pool
+            if pool is not None
+            else banco.criar_pool(configuracao.dsn, tamanho_maximo=banco.TAMANHO_DO_POOL)
+        )
+        try:
+            _bootstrap(app, configuracao)
+            yield
+        finally:
+            if proprio:
+                app.state.pool.close()
 
+    documentacao = None if configuracao.producao else "/docs"
     app = FastAPI(
         title="data-collect",
-        version="0.1.0",
+        version="0.2.0",
         description=(
-            "API local. Todo erro tem o formato `{detalhe, erros: [{campo, mensagem}]}`. "
-            f"Envie o token no cabeçalho `{CABECALHO_DO_TOKEN}`."
+            "API do data-collect. Todo erro tem o formato `{detalhe, erros: [{campo, mensagem}]}`. "
+            "Envie `Authorization: Bearer <token do Logto>` e, se estiver em mais de uma equipe, "
+            "`X-Equipe: <id>`."
         ),
         lifespan=ciclo_de_vida,
+        docs_url=documentacao,
+        redoc_url=None,
+        openapi_url=None if configuracao.producao else "/openapi.json",
     )
     app.state.configuracao = configuracao
+    app.state.validador = validador or _validador_da_configuracao(configuracao)
+    app.state.gestor = gestor or _gestor_da_configuracao(configuracao)
+    app.state.limitador = LimitadorDeTaxa()
+    app.state.limite_do_pool = asyncio.Semaphore(_tamanho_do_pool(pool, configuracao))
+    if pool is not None:
+        app.state.pool = pool
+    app.include_router(roteador_publico)
+    app.include_router(roteador_aberto)
+    # `/registros/recentes` vem antes de `/registros/{registro_id}`, senão este a captura.
+    app.include_router(roteador_extras)
     app.include_router(roteador)
+    app.include_router(roteador_equipes)
     for extensao in extensoes:
         app.include_router(extensao.roteador)
         for tipo, tratador in extensao.tratadores.items():
             app.add_exception_handler(tipo, tratador)
-    # As rotas da API (e a documentação) ficam registradas ANTES do front, que vira a "sobra".
-    rotas_da_api = list(app.routes)
-    if pasta_do_front is not None:
-        app.mount("/", StaticFiles(directory=pasta_do_front, html=True), name="front")
+    verificar_matriz(app)  # rota sem decisão de permissão derruba a subida (falha fechada)
     _registrar_tratadores_de_erro(app)
 
-    # Ordem importa: o último adicionado fica por fora. O CORS vai por fora do token, para o
-    # preflight (OPTIONS, que não leva o token) passar e o 401 também receber os cabeçalhos CORS.
-    # O tratador de erro inesperado fica por dentro de ambos, pelo mesmo motivo: o 500 precisa
-    # passar pelo CORS, senão o navegador o esconde e o front acha que o servidor caiu.
+    # Ordem importa: o último adicionado fica por fora. O CORS vai por fora de tudo, para o
+    # preflight (OPTIONS, que não leva token) passar e o 401 também receber os cabeçalhos CORS.
+    # O tratador de erro inesperado fica por dentro: o 500 precisa passar pelo CORS, senão o
+    # navegador o esconde e o front acha que o servidor caiu.
     app.middleware("http")(_responder_erro_inesperado)
-    app.middleware("http")(_exigir_token(configuracao, rotas_da_api, pasta_do_front is not None))
+    app.add_middleware(AcrescentarCabecalhosDeSeguranca)
+    app.add_middleware(LimitarCorpo)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(configuracao.origens_cors),
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=[CABECALHO_DO_TOKEN, "Content-Type"],
-        expose_headers=["Content-Disposition"],
+        allow_headers=CABECALHOS_PERMITIDOS,
+        expose_headers=["Content-Disposition", "ETag", "X-Request-Id"],
         allow_credentials=False,
     )
+    # O mais externo de todos: registra também o que os outros recusam (413, 429, CORS).
+    app.add_middleware(RegistrarAcessos)
     return app
 
 
-# --- token ---
+def _tamanho_do_pool(pool: ConnectionPool[banco.Conexao] | None, configuracao: Configuracao) -> int:
+    return pool.max_size if pool is not None else banco.TAMANHO_DO_POOL
 
 
-def _exigir_token(
-    configuracao: Configuracao, rotas_da_api: list[BaseRoute], serve_o_front: bool
-) -> Callable:
-    def e_do_front(request: Request) -> bool:
-        """Só é "do front" o que nenhuma rota da API reconhece: nunca um caminho da API."""
-        return serve_o_front and not any(
-            rota.matches(request.scope)[0] != Match.NONE for rota in rotas_da_api
+def _gestor_da_configuracao(configuracao: Configuracao) -> GestorDeIdentidade | None:
+    if configuracao.logto_endpoint and configuracao.logto_m2m_id and configuracao.logto_m2m_segredo:
+        return ClienteLogto(
+            configuracao.logto_interno or configuracao.logto_endpoint,
+            configuracao.logto_m2m_id,
+            configuracao.logto_m2m_segredo,
         )
+    return None
 
-    async def middleware(request: Request, chamar_proximo: Callable) -> Response:
-        if request.method == "OPTIONS" or configuracao.dispensar_token or e_do_front(request):
-            return await chamar_proximo(request)
-        enviado = request.headers.get(CABECALHO_DO_TOKEN, "")
-        if configuracao.token and secrets.compare_digest(enviado, configuracao.token):
-            return await chamar_proximo(request)
-        # Mesma mensagem para ausente e errado: não ensina nada a quem tenta adivinhar.
-        return resposta_de_erro(401, "Token ausente ou inválido.")
 
-    return middleware
+def _validador_da_configuracao(configuracao: Configuracao) -> ValidadorDeToken | None:
+    if configuracao.logto_endpoint and configuracao.logto_audiencia:
+        return validador_do_ambiente(
+            configuracao.logto_endpoint, configuracao.logto_audiencia, configuracao.logto_interno
+        )
+    return None
+
+
+def _bootstrap(app: FastAPI, configuracao: Configuracao) -> None:
+    """Instalação vazia + `FORMS_ADMIN_EMAIL`: cria a equipe e o convite do primeiro
+    administrador, e mostra o link uma única vez (o banco guarda só o hash, §12)."""
+    if not configuracao.primeiro_administrador:
+        return
+    with app.state.pool.connection() as conexao:
+        token = servico_equipes.garantir_primeiro_administrador(
+            conexao,
+            configuracao.primeiro_administrador,
+            configuracao.nome_da_primeira_equipe,
+            datetime.now(UTC),
+        )
+    if token:
+        _registro.warning(
+            # Sem o e-mail: o log não carrega dado pessoal (§2.15); o link é de uso único.
+            "Primeiro administrador: abra /convite/%s no app para criar a conta.",
+            token,
+        )
 
 
 # --- erros: sempre {detalhe, erros} em português ---
@@ -209,11 +284,45 @@ def _registrar_tratadores_de_erro(app: FastAPI) -> None:
         ]
         return resposta_de_erro(422, "Há formulários inválidos no lote; nada foi criado.", erros)
 
-    @app.exception_handler(FotoInvalida)
-    async def _foto(_: Request, erro: FotoInvalida) -> JSONResponse:
+    @app.exception_handler(CargoInvalido)
+    async def _cargo(_: Request, erro: CargoInvalido) -> JSONResponse:
         return resposta_de_erro(
-            422, "Foto inválida.", [ErroDeCampoSaida(campo="arquivo", mensagem=str(erro))]
+            422, "Cargo inválido.", [ErroDeCampoSaida.de(e) for e in erro.erros]
         )
+
+    @app.exception_handler(NaoAutenticado)
+    async def _nao_autenticado(_: Request, erro: NaoAutenticado) -> JSONResponse:
+        return resposta_de_erro(401, str(erro), codigo=erro.codigo)
+
+    @app.exception_handler(LimiteExcedido)
+    async def _limite(_: Request, erro: LimiteExcedido) -> JSONResponse:
+        resposta = resposta_de_erro(429, str(erro), codigo="limite_excedido")
+        resposta.headers["Retry-After"] = str(erro.esperar_segundos)
+        return resposta
+
+    @app.exception_handler(TermosPendentes)
+    async def _termos(_: Request, erro: TermosPendentes) -> JSONResponse:
+        return resposta_de_erro(403, str(erro), codigo="termos_pendentes")
+
+    @app.exception_handler(SemPermissao)
+    async def _sem_permissao(_: Request, erro: SemPermissao) -> JSONResponse:
+        return resposta_de_erro(403, str(erro), codigo="sem_permissao")
+
+    @app.exception_handler(SemAcessoAEquipe)
+    async def _sem_equipe(_: Request, erro: SemAcessoAEquipe) -> JSONResponse:
+        return resposta_de_erro(403, str(erro), codigo="sem_equipe")
+
+    @app.exception_handler(ConflitoDeRevisao)
+    async def _conflito(_: Request, erro: ConflitoDeRevisao) -> JSONResponse:
+        return resposta_de_erro(409, str(erro), codigo="revisao_desatualizada")
+
+    @app.exception_handler(banco.EsquemaDesatualizado)
+    async def _desatualizado(_: Request, erro: banco.EsquemaDesatualizado) -> JSONResponse:
+        return resposta_de_erro(503, str(erro))
+
+    @app.exception_handler(IdentidadeIndisponivel)
+    async def _identidade(_: Request, erro: IdentidadeIndisponivel) -> JSONResponse:
+        return resposta_de_erro(502, str(erro))
 
     @app.exception_handler(ValorInvalido)
     async def _valor(_: Request, erro: ValorInvalido) -> JSONResponse:
@@ -246,7 +355,8 @@ def _registrar_tratadores_de_erro(app: FastAPI) -> None:
 _DETALHES_HTTP = {
     404: "Recurso não encontrado.",
     405: "Método não permitido.",
-    413: "Arquivo grande demais.",
+    413: "Requisição grande demais.",
+    429: "Muitas requisições. Tente de novo em instantes.",
 }
 
 _MENSAGENS_DO_PYDANTIC = {
@@ -282,16 +392,27 @@ def _erro_do_pydantic(erro: Mapping[str, object]) -> ErroDeCampoSaida:
     return ErroDeCampoSaida(campo=campo or "requisicao", mensagem=mensagem)
 
 
-# --- inicialização ---
+def _configurar_log() -> None:
+    """Manda os logs do app (`forms.*`) para a saída padrão, uma linha cada, sem dado pessoal.
+
+    O log de acesso do uvicorn fica desligado (`--no-access-log`): ele imprime o caminho real,
+    inclusive o token do convite. No lugar dele vale `forms.acesso` (`RegistrarAcessos`).
+    """
+    registro = logging.getLogger("forms")
+    if not registro.handlers:
+        manipulador = logging.StreamHandler()
+        manipulador.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        )
+        registro.addHandler(manipulador)
+        registro.setLevel(logging.INFO)
+        registro.propagate = False
 
 
-def _limpar_anexos_orfaos(configuracao: Configuracao) -> None:
-    """Na inicialização remove os anexos nunca vinculados há mais de 24 h (§2.8)."""
-    with closing(servico.abrir_banco(configuracao.banco)) as conexao:
-        servico.limpar_anexos_orfaos(conexao, configuracao.pasta_de_dados, datetime.now(UTC))
+def app_do_ambiente() -> FastAPI:
+    """Fábrica do uvicorn (`--factory`): importar o módulo não abre banco nem conexão."""
+    _configurar_log()
+    return criar_app(Configuracao.do_ambiente(), extensoes=descobrir_extensoes())
 
 
-# O `app` do uvicorn. Importar o módulo não abre banco nem cria arquivo.
-app = criar_app(Configuracao.do_ambiente(), extensoes=descobrir_extensoes())
-
-__all__ = ["Configuracao", "HTTPException", "app", "criar_app", "descobrir_extensoes"]
+__all__ = ["Configuracao", "HTTPException", "app_do_ambiente", "criar_app", "descobrir_extensoes"]

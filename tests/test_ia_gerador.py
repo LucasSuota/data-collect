@@ -2,6 +2,7 @@ import json
 from datetime import UTC, datetime
 
 import pytest
+from psycopg import pq
 
 from forms import servico
 from forms.ia.cliente import ClienteFalso, IaIndisponivel
@@ -11,7 +12,6 @@ from forms.ia.gerador import (
     gerar,
 )
 from forms.models import ValorInvalido
-from forms.repositorio import abrir_conexao
 from forms.servico import Rascunho
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
@@ -42,20 +42,12 @@ def _resposta(*formularios: tuple[str, dict]) -> str:
     return json.dumps({"formularios": [{"nome": n, "definicao": d} for n, d in formularios]})
 
 
-@pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
-
-
 def _linhas(conexao) -> tuple[int, ...]:
     tabelas = (
         "formularios",
         "versoes_formulario",
         "registros",
         "dependencias_formulario",
-        "anexos",
     )
     return tuple(conexao.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tabelas)
 
@@ -258,8 +250,8 @@ def test_nada_e_gravado_nem_com_proposta_valida(conexao):
     gerar(conexao, cliente, "dois formulários")
 
     # assert
-    assert _linhas(conexao) == antes == (0, 0, 0, 0, 0)
-    assert not conexao.in_transaction
+    assert _linhas(conexao) == antes == (0, 0, 0, 0)
+    assert conexao.info.transaction_status == pq.TransactionStatus.IDLE
 
 
 def test_nada_e_gravado_nem_com_proposta_invalida_ou_com_falha(conexao):
@@ -294,7 +286,7 @@ def test_o_prompt_leva_o_catalogo_e_os_formularios_existentes_com_seus_campos_co
 
     # assert
     sistema, mensagem = cliente.chamadas[0]
-    for tipo in ("numero", "selecao", "calculado", "referencia", "localizacao", "foto"):
+    for tipo in ("numero", "selecao", "calculado", "referencia", "localizacao"):
         assert tipo in sistema + mensagem
     assert "soma(a, b, ...)" in sistema + mensagem and "pi" in sistema + mensagem
     assert "ensaio" in mensagem and "umidade" in mensagem and "Data do ensaio" in mensagem

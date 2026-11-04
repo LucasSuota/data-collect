@@ -6,7 +6,7 @@ export interface CampoDeOrigem {
   rotulo: string;
 }
 
-/** Tipos de campo que uma fórmula pode usar (AGENTS.md §7): texto, seleção, localização e foto, não. */
+/** Tipos de campo que uma fórmula pode usar (AGENTS.md §7): texto, seleção e localização, não. */
 const TIPOS_USAVEIS_EM_FORMULA = ["numero", "data", "sim_nao", "calculado"];
 
 /**

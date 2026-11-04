@@ -1,26 +1,15 @@
-import io
 import json
-import random
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from PIL import Image
 
 from forms import servico
 from forms.models import DefinicaoInvalida, LoteInvalido, NaoEncontrado
-from forms.repositorio import abrir_conexao
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 TEMPLATES = Path(__file__).parent.parent / "templates"
-
-
-@pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
 
 
 @pytest.fixture
@@ -146,18 +135,9 @@ def test_campos_obrigatorios_do_template_sao_exigidos(conexao, corpo):
 # --- inspeção de obra (#40) ---
 
 
-def _foto_jpeg() -> bytes:
-    gerador = random.Random(3)
-    imagem = Image.frombytes("RGB", (200, 150), gerador.randbytes(200 * 150 * 3))
-    destino = io.BytesIO()
-    imagem.save(destino, "JPEG")
-    return destino.getvalue()
-
-
-def test_template_de_inspecao_publica_e_aceita_um_registro_de_exemplo(conexao, tmp_path):
+def test_template_de_inspecao_publica_e_aceita_um_registro_de_exemplo(conexao):
     # arrange
     criado = servico.importar_template(conexao, TEMPLATES / "inspecao_obra.json", AGORA)
-    foto = servico.guardar_anexo(conexao, tmp_path, _foto_jpeg(), AGORA)
 
     # act
     registro = _registro(
@@ -170,7 +150,6 @@ def test_template_de_inspecao_publica_e_aceita_um_registro_de_exemplo(conexao, t
             "situacao": "Conforme",
             "epi_utilizado": True,
             "area_isolada": True,
-            "fotos": [foto.id],
             "observacoes": "tudo certo",
         },
     )
@@ -178,16 +157,15 @@ def test_template_de_inspecao_publica_e_aceita_um_registro_de_exemplo(conexao, t
     # assert
     assert registro.dados["seguranca_ok"] == {"valor": True, "erro": None}
     assert registro.dados["local"] == {"latitude": "-23.550520", "longitude": "-46.633308"}
-    assert registro.dados["fotos"] == [foto.id]
 
 
-def test_inspecao_exercita_secao_selecao_sim_nao_localizacao_e_foto(conexao):
+def test_inspecao_exercita_secao_selecao_sim_nao_e_localizacao(conexao):
     # act
     criado = servico.importar_template(conexao, TEMPLATES / "inspecao_obra.json", AGORA)
 
     # assert
     tipos = {c.tipo.value for c in criado.versao.definicao.campos}
-    assert {"secao", "selecao", "sim_nao", "localizacao", "foto", "calculado"} <= tipos
+    assert {"secao", "selecao", "sim_nao", "localizacao", "calculado"} <= tipos
 
 
 def test_inspecao_seguranca_depende_dos_dois_sim_nao(conexao):
@@ -493,7 +471,7 @@ def test_corrigir_o_ensaio_de_umidade_recalcula_toda_a_cadeia(conexao, cadeia, t
     )
 
     # act: a umidade sobe para 30 %, e o γd de campo cai
-    servico.atualizar_registro(conexao, ensaio.id, {**base, "massa_umida_g": 130}, AGORA, tmp_path)
+    servico.atualizar_registro(conexao, ensaio.id, {**base, "massa_umida_g": 130}, AGORA)
 
     # assert
     depois = servico.obter_registro(conexao, insitu.id)

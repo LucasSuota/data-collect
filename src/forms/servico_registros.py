@@ -4,16 +4,16 @@ O servidor valida e recalcula sempre, contra a versão em que o registro nasceu.
 de cálculo (`formulas.calcular_campos`) serve ao salvar, à cascata e à prévia.
 """
 
-import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from pathlib import Path
 
-from forms import repositorio, validacao
+from forms import repositorio, repositorio_extras, servico_equipes, validacao
+from forms.banco import Conexao
 from forms.formulas import TipoFormula, Valor, ValorDeCampo, calcular_campos
 from forms.models import (
     Campo,
+    ConflitoDeRevisao,
     Definicao,
     ErroDeCampo,
     ExclusaoBloqueada,
@@ -21,13 +21,13 @@ from forms.models import (
     Registro,
     RegistroInvalido,
     ResultadoCalculado,
+    SemPermissao,
     TipoCampo,
     ValorInvalido,
     ValorJson,
     Versao,
 )
 from forms.repositorio import chave_do_nome
-from forms.servico_anexos import apagar_arquivos
 from forms.servico_base import (
     Cache,
     compartilhados_publicados,
@@ -57,13 +57,12 @@ class ResultadoDaPrevia:
 class _Preparado:
     dados: dict[str, ValorJson]
     referencias: dict[str, int]
-    fotos: dict[str, tuple[int, ...]]
 
 
 # --- leitura ---
 
 
-def obter_registro(conexao: sqlite3.Connection, registro_id: int) -> Registro:
+def obter_registro(conexao: Conexao, registro_id: int) -> Registro:
     return repositorio.obter_registro(conexao, registro_id)
 
 
@@ -71,7 +70,7 @@ def obter_registro(conexao: sqlite3.Connection, registro_id: int) -> Registro:
 
 
 def criar_registro(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     formulario_id: int,
     versao_id: int,
     dados: ValorJson,
@@ -85,37 +84,73 @@ def criar_registro(
             conexao, formulario_id, versao_id, preparado.dados, agora
         )
         repositorio.substituir_referencias(conexao, registro.id, preparado.referencias)
-        _sincronizar_fotos(conexao, registro.id, preparado.fotos)
+        repositorio.registrar_historico(conexao, registro.id, "criado", None, agora)
         return registro
 
 
 def atualizar_registro(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     registro_id: int,
     dados: ValorJson,
     agora: datetime,
-    pasta_de_dados: Path,
+    revisao: int | None = None,
 ) -> Registro:
     """Substitui todos os valores (sem PATCH), recalcula tudo e recalcula os dependentes.
 
-    O registro continua na versão de origem. Tudo, inclusive a cascata, numa transação só.
+    O registro continua na versão de origem. Tudo, inclusive a cascata e o histórico, numa
+    transação só. Com `revisao`, só grava se ninguém alterou o registro desde a leitura (§2.14).
     """
-    atual = repositorio.obter_registro(conexao, registro_id)
-    versao = repositorio.obter_versao(conexao, atual.versao_id)
+    lido = repositorio.obter_registro(conexao, registro_id)
+    _exigir_edicao(conexao, lido)
+    versao = repositorio.obter_versao(conexao, lido.versao_id)
     cache = Cache()
     with transacao(conexao):
+        # Trava a linha: duas edições simultâneas se enfileiram em vez de se sobrepor.
+        atual = repositorio.obter_registro(conexao, registro_id, travar=True)
+        if revisao is not None and atual.revisao != revisao:
+            raise ConflitoDeRevisao(_mensagem_do_conflito(conexao, atual))
         preparado = _preparar(conexao, versao, dados, atual=atual, cache=cache)
-        registro = repositorio.atualizar_registro(conexao, registro_id, preparado.dados, agora)
+        registro = repositorio.atualizar_registro(
+            conexao, registro_id, preparado.dados, agora, revisao_esperada=revisao
+        )
+        repositorio.registrar_historico(conexao, registro_id, "editado", atual.dados, agora)
         repositorio.substituir_referencias(conexao, registro_id, preparado.referencias)
-        removidos = _sincronizar_fotos(conexao, registro_id, preparado.fotos)
+        _avisar_edicao(conexao, atual, agora)
         for dependente_id in repositorio.registros_dependentes(conexao, registro_id):
-            _recalcular_dependente(conexao, dependente_id, agora, cache)
-    apagar_arquivos(pasta_de_dados, removidos)
+            _recalcular_dependente(conexao, dependente_id, agora, cache, origem_id=registro_id)
     return registro
 
 
-def excluir_registro(conexao: sqlite3.Connection, registro_id: int, pasta_de_dados: Path) -> None:
-    """Apaga de verdade (uso local, sem auditoria), exceto se outro registro o referencia."""
+def _exigir_edicao(conexao: Conexao, registro: Registro) -> None:
+    """`editar_todos` edita qualquer um; `editar_proprios` só o que a pessoa criou (§2.13)."""
+    contexto = conexao.contexto
+    if contexto is None:
+        raise SemPermissao("registros:editar_proprios")
+    if contexto.tem("registros:editar_todos"):
+        return
+    if contexto.tem("registros:editar_proprios") and registro.criado_por == contexto.usuario_id:
+        return
+    raise SemPermissao("registros:editar_proprios")
+
+
+def _mensagem_do_conflito(conexao: Conexao, atual: Registro) -> str:
+    por = atual.atualizado_por
+    nome = repositorio_extras.nomes_de_usuarios(conexao, [por] if por else []).get(por or 0)
+    quem = nome or "Outra pessoa"
+    return f"{quem} alterou este registro em {atual.atualizado_em}. Recarregue antes de salvar."
+
+
+def _avisar_edicao(conexao: Conexao, antes: Registro, agora: datetime) -> None:
+    """Quem criou o registro é avisado quando outra pessoa o edita (§2.18)."""
+    autor = antes.criado_por
+    if autor is not None and autor != conexao.usuario_id:
+        repositorio_extras.criar_notificacao(
+            conexao, autor, "registro_editado", {"registro_id": antes.id}, agora
+        )
+
+
+def excluir_registro(conexao: Conexao, registro_id: int, agora: datetime) -> None:
+    """Apaga de verdade, exceto se outro registro o referencia (§2.7)."""
     repositorio.obter_registro(conexao, registro_id)
     referenciadores = repositorio.registros_que_referenciam(conexao, registro_id)
     if referenciadores:
@@ -124,15 +159,14 @@ def excluir_registro(conexao: sqlite3.Connection, registro_id: int, pasta_de_dad
             f"O registro {registro_id} é referenciado pelos registros {lista} e não pode ser "
             "excluído."
         )
+    servico_equipes.exigir(conexao, "registros:excluir")
     with transacao(conexao):
-        anexos = repositorio.listar_anexos_do_registro(conexao, registro_id)
-        for anexo in anexos:
-            repositorio.apagar_anexo(conexao, anexo.id)
+        anterior = repositorio.obter_registro(conexao, registro_id, travar=True)
+        repositorio.registrar_historico(conexao, registro_id, "excluido", anterior.dados, agora)
         repositorio.excluir_registro(conexao, registro_id)
-    apagar_arquivos(pasta_de_dados, [anexo.caminho for anexo in anexos])
 
 
-def excluir_formulario(conexao: sqlite3.Connection, formulario_id: int) -> None:
+def excluir_formulario(conexao: Conexao, formulario_id: int) -> None:
     """Só se nenhum outro formulário depende dele (em qualquer versão) e ele não tem registros."""
     formulario = repositorio.obter_formulario(conexao, formulario_id)
     dependentes = repositorio.formularios_dependentes(conexao, formulario_id, transitivo=False)
@@ -154,9 +188,7 @@ def excluir_formulario(conexao: sqlite3.Connection, formulario_id: int) -> None:
 # --- prévia ---
 
 
-def previa(
-    conexao: sqlite3.Connection, definicao: ValorJson, valores: ValorJson
-) -> ResultadoDaPrevia:
+def previa(conexao: Conexao, definicao: ValorJson, valores: ValorJson) -> ResultadoDaPrevia:
     """Calcula os campos sem salvar nada, com a mesma função do salvar.
 
     Enquanto o usuário digita, o que falta ou está pela metade conta como vazio: a prévia não
@@ -190,7 +222,7 @@ def _entradas_tolerantes(definicao: Definicao, valores: ValorJson) -> dict[str, 
 
 
 def _preparar(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     versao: Versao,
     dados: ValorJson,
     atual: Registro | None,
@@ -201,7 +233,6 @@ def _preparar(
     erros = list(validado.erros)
     if not erros:
         erros += _erros_de_referencia(conexao, definicao, validado.valores)
-        erros += _erros_de_fotos(conexao, definicao, validado.valores, atual)
     if erros:
         raise RegistroInvalido(tuple(erros))
 
@@ -214,12 +245,6 @@ def _preparar(
             for campo in definicao.campos
             if campo.tipo is TipoCampo.REFERENCIA
             and isinstance(valor := validado.valores.get(campo.id), int)
-        },
-        fotos={
-            campo.id: valor
-            for campo in definicao.campos
-            if campo.tipo is TipoCampo.FOTO
-            and isinstance(valor := validado.valores.get(campo.id), tuple)
         },
     )
 
@@ -240,14 +265,14 @@ def _montar_dados(
 
 
 def _tipadas(valores: dict[str, ValorNormalizado]) -> dict[str, Valor]:
-    """Só `Decimal`, `date` e `bool` entram em fórmula; o resto (texto, foto...) nunca é usado."""
+    """Só `Decimal`, `date` e `bool` entram em fórmula; texto e localização nunca são usados."""
     return {
         nome: valor for nome, valor in valores.items() if isinstance(valor, Decimal | date | bool)
     }
 
 
 def _erros_de_referencia(
-    conexao: sqlite3.Connection, definicao: Definicao, valores: dict[str, ValorNormalizado]
+    conexao: Conexao, definicao: Definicao, valores: dict[str, ValorNormalizado]
 ) -> list[ErroDeCampo]:
     """A referência exige o id de um registro existente do formulário apontado (qualquer versão)."""
     erros = []
@@ -265,7 +290,7 @@ def _erros_de_referencia(
     return erros
 
 
-def _e_registro_do_formulario(conexao: sqlite3.Connection, registro_id: int, nome: str) -> bool:
+def _e_registro_do_formulario(conexao: Conexao, registro_id: int, nome: str) -> bool:
     try:
         registro = repositorio.obter_registro(conexao, registro_id)
     except NaoEncontrado:
@@ -274,70 +299,11 @@ def _e_registro_do_formulario(conexao: sqlite3.Connection, registro_id: int, nom
     return chave_do_nome(dono.nome) == chave_do_nome(nome)
 
 
-def _erros_de_fotos(
-    conexao: sqlite3.Connection,
-    definicao: Definicao,
-    valores: dict[str, ValorNormalizado],
-    atual: Registro | None,
-) -> list[ErroDeCampo]:
-    """Cada id precisa existir e não estar vinculado a outro registro ou campo (§2.8)."""
-    erros = []
-    usados: set[int] = set()
-    for campo in definicao.campos:
-        ids = valores.get(campo.id)
-        if campo.tipo is not TipoCampo.FOTO or not isinstance(ids, tuple):
-            continue
-        for anexo_id in ids:
-            problema = _problema_do_anexo(conexao, anexo_id, campo.id, atual, usados)
-            if problema is not None:
-                erros.append(ErroDeCampo(campo.id, problema))
-            usados.add(anexo_id)
-    return erros
-
-
-def _problema_do_anexo(
-    conexao: sqlite3.Connection,
-    anexo_id: int,
-    campo_id: str,
-    atual: Registro | None,
-    usados: set[int],
-) -> str | None:
-    try:
-        anexo = repositorio.obter_anexo(conexao, anexo_id)
-    except NaoEncontrado:
-        return f"A foto {anexo_id} não existe."
-    do_proprio_campo = (
-        atual is not None and anexo.registro_id == atual.id and anexo.campo_id == campo_id
-    )
-    if anexo_id in usados or (anexo.registro_id is not None and not do_proprio_campo):
-        return f"A foto {anexo_id} já está vinculada a outro registro ou campo."
-    return None
-
-
-def _sincronizar_fotos(
-    conexao: sqlite3.Connection, registro_id: int, fotos: dict[str, tuple[int, ...]]
-) -> list[str]:
-    """Vincula as fotos novas e apaga as retiradas; devolve os caminhos a apagar após o commit."""
-    desejadas = {anexo_id: campo for campo, ids in fotos.items() for anexo_id in ids}
-    removidos = []
-    vinculados = set()
-    for anexo in repositorio.listar_anexos_do_registro(conexao, registro_id):
-        if anexo.id in desejadas:
-            vinculados.add(anexo.id)
-        else:
-            repositorio.apagar_anexo(conexao, anexo.id)
-            removidos.append(anexo.caminho)
-    for anexo_id, campo in desejadas.items():
-        if anexo_id not in vinculados:
-            repositorio.vincular_anexo(conexao, anexo_id, registro_id, campo)
-    return removidos
-
-
 # --- campos compartilhados da origem ---
 
 
 def _compartilhados_do_registro(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     definicao: Definicao,
     valores: dict[str, ValorNormalizado],
     cache: Cache,
@@ -364,7 +330,7 @@ def _compartilhados_do_registro(
 
 
 def _valores_do_destino(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     id_da_referencia: str,
     destino: Registro,
     esperados: dict[str, CampoCompartilhado],
@@ -420,13 +386,13 @@ def _do_json(valor: ValorJson, tipo: TipoFormula) -> Valor:
 
 
 def _recalcular_dependente(
-    conexao: sqlite3.Connection, registro_id: int, agora: datetime, cache: Cache
+    conexao: Conexao, registro_id: int, agora: datetime, cache: Cache, origem_id: int
 ) -> None:
     """Recalcula só os campos calculados do dependente, contra a versão dele (§2.7).
 
     Erro de cálculo vira erro no campo; só o que não é cálculo (bug, banco) levanta e desfaz tudo.
     """
-    registro = repositorio.obter_registro(conexao, registro_id)
+    registro = repositorio.obter_registro(conexao, registro_id, travar=True)
     definicao = repositorio.obter_versao(conexao, registro.versao_id).definicao
     entradas = {
         campo.id: normalizar_valor(campo, registro.dados.get(campo.id))
@@ -439,5 +405,36 @@ def _recalcular_dependente(
     novos = dict(registro.dados)
     for id_do_campo, resultado in calculados.items():
         novos[id_do_campo] = {"valor": resultado.valor, "erro": resultado.erro}
-    if novos != registro.dados:  # não regrava (nem muda `atualizado_em`) quem não mudou
-        repositorio.atualizar_registro(conexao, registro_id, novos, agora)
+    if novos == registro.dados:  # não regrava (nem muda `atualizado_em`) quem não mudou
+        return
+    repositorio.atualizar_registro(conexao, registro_id, novos, agora)
+    repositorio.registrar_historico(
+        conexao,
+        registro_id,
+        "recalculado",
+        registro.dados,
+        agora,
+        motivo=f"recalculado por alteração em #{origem_id}",
+    )
+    _avisar_erro_em_cascata(conexao, registro, calculados, agora)
+
+
+def _avisar_erro_em_cascata(
+    conexao: Conexao,
+    registro: Registro,
+    calculados: dict[str, ResultadoCalculado],
+    agora: datetime,
+) -> None:
+    """Erro de cálculo novo num registro seu, causado por outra edição, vira aviso (§2.18)."""
+    autor = registro.criado_por
+    if autor is None or autor == conexao.usuario_id:
+        return
+    antes = {
+        id_: isinstance(v, dict) and v.get("erro") is not None
+        for id_, v in registro.dados.items()
+        if isinstance(v, dict) and "erro" in v
+    }
+    if any(r.erro is not None and not antes.get(id_, False) for id_, r in calculados.items()):
+        repositorio_extras.criar_notificacao(
+            conexao, autor, "erro_em_cascata", {"registro_id": registro.id}, agora
+        )

@@ -4,15 +4,23 @@ A listagem e a exportação passam pelo mesmo caminho (`_consultar`), então a m
 mesmos filtros valem nas duas.
 """
 
-import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
 
 from forms import repositorio
+from forms.banco import Conexao
 from forms.exportacao import Coluna, gerar_csv
 from forms.formulas import TipoFormula
-from forms.models import ErroDeCampo, Registro, RegistroInvalido, TipoCampo, Versao
+from forms.models import (
+    ErroDeCampo,
+    Exibicao,
+    Registro,
+    RegistroInvalido,
+    TipoCampo,
+    ValorJson,
+    Versao,
+)
 from forms.repositorio import FiltroDeIgualdade
 from forms.servico_base import Cache, tipos_calculados_da_versao
 
@@ -30,10 +38,12 @@ class ListagemDeRegistros:
     colunas: tuple[Coluna, ...]
     itens: tuple[Registro, ...]
     total: int
+    exibicao: Exibicao
+    campo_status: str | None
 
 
 def listar_registros(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     formulario_id: int,
     *,
     versao_id: int | None = None,
@@ -42,6 +52,7 @@ def listar_registros(
     criado_ate: date | None = None,
     limite: int = LIMITE_PADRAO,
     deslocamento: int = 0,
+    meus: bool = False,
 ) -> ListagemDeRegistros:
     """Registros de *uma versão* (padrão: a última), com as colunas vindas da definição dela."""
     _conferir_janela(limite, deslocamento)
@@ -54,18 +65,28 @@ def listar_registros(
         criado_ate,
         limite=limite,
         deslocamento=deslocamento,
+        meus=meus,
     )
-    return ListagemDeRegistros(versao.id, colunas, pagina.itens, pagina.total)
+    tipos = tipos_calculados_da_versao(conexao, versao, Cache())
+    return ListagemDeRegistros(
+        versao.id,
+        colunas,
+        pagina.itens,
+        pagina.total,
+        exibicao_efetiva(versao, tipos),
+        campo_de_status(versao, tipos),
+    )
 
 
 def exportar_csv(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     formulario_id: int,
     *,
     versao_id: int | None = None,
     filtros: Mapping[str, str | bool] | None = None,
     criado_de: date | None = None,
     criado_ate: date | None = None,
+    meus: bool = False,
 ) -> bytes:
     """CSV de todos os registros da versão que passam nos filtros (sem paginar)."""
     registros: list[Registro] = []
@@ -80,6 +101,7 @@ def exportar_csv(
             criado_ate,
             limite=LIMITE_MAXIMO,
             deslocamento=deslocamento,
+            meus=meus,
         )
         registros.extend(pagina.itens)
         deslocamento += LIMITE_MAXIMO
@@ -88,7 +110,7 @@ def exportar_csv(
 
 
 def _consultar(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     formulario_id: int,
     versao_id: int | None,
     filtros: Mapping[str, str | bool],
@@ -97,6 +119,7 @@ def _consultar(
     *,
     limite: int,
     deslocamento: int,
+    meus: bool = False,
 ) -> tuple[Versao, tuple[Coluna, ...], repositorio.PaginaDeRegistros]:
     versao = (
         repositorio.obter_versao_atual(conexao, formulario_id)
@@ -115,6 +138,7 @@ def _consultar(
         campos_permitidos=set(filtraveis),
         criado_de=None if criado_de is None else _inicio_do_dia(criado_de),
         criado_ate=None if criado_ate is None else _fim_do_dia(criado_ate),
+        criado_por=conexao.usuario_id if meus else None,
     )
     return versao, colunas, pagina
 
@@ -200,4 +224,115 @@ def _fim_do_dia(dia: date) -> str:
     return datetime.combine(dia, time(23, 59, 59), UTC).isoformat(timespec="seconds")
 
 
-__all__: Sequence[str] = ["ListagemDeRegistros", "exportar_csv", "listar_registros"]
+@dataclass(frozen=True)
+class Contagens:
+    """Registros por estado do campo de status (§2.3). `campo_status` vazio: a versão não tem
+    campo calculado booleano, e tudo conta como "aguardando"."""
+
+    campo_status: str | None
+    total: int
+    conforme: int
+    nao_conforme: int
+    erro: int
+    aguardando: int
+
+
+def contar_por_estado(
+    conexao: Conexao,
+    formulario_id: int,
+    *,
+    versao_id: int | None = None,
+    filtros: Mapping[str, str | bool] | None = None,
+    criado_de: date | None = None,
+    criado_ate: date | None = None,
+    meus: bool = False,
+) -> Contagens:
+    """Contagem por estado com os mesmos filtros da listagem. O estado é decidido aqui, no
+    servidor: `true` conforme, `false` não conforme, erro de cálculo, ou ainda sem dados."""
+    versao = (
+        repositorio.obter_versao_atual(conexao, formulario_id)
+        if versao_id is None
+        else repositorio.obter_versao(conexao, versao_id, formulario_id)
+    )
+    tipos_calculados = tipos_calculados_da_versao(conexao, versao, Cache())
+    filtraveis = _filtraveis(versao, tipos_calculados)
+    campo = campo_de_status(versao, tipos_calculados)
+    if campo is None:
+        total = repositorio.listar_registros(
+            conexao, versao.id, limite=1, deslocamento=0, criado_por=None
+        ).total
+        return Contagens(None, total, 0, 0, 0, total)
+    contagem = repositorio.contar_por_estado(
+        conexao,
+        versao.id,
+        campo,
+        filtros=_filtros_validados(filtros or {}, filtraveis),
+        campos_permitidos=set(filtraveis),
+        criado_de=None if criado_de is None else _inicio_do_dia(criado_de),
+        criado_ate=None if criado_ate is None else _fim_do_dia(criado_ate),
+        criado_por=conexao.usuario_id if meus else None,
+    )
+    return Contagens(
+        campo,
+        sum(contagem.values()),
+        contagem["conforme"],
+        contagem["nao_conforme"],
+        contagem["erro"],
+        contagem["aguardando"],
+    )
+
+
+def exibicao_efetiva(versao: Versao, tipos_calculados: Mapping[str, TipoFormula]) -> Exibicao:
+    """A `exibicao` da definição, com o que faltar preenchido pelo padrão (§5.2): o primeiro
+    calculado numérico em destaque e o primeiro calculado booleano como status."""
+    declarada = versao.definicao.exibicao or Exibicao()
+    destaque = declarada.destaque
+    if destaque is None:
+        destaque = next(
+            (
+                c.id
+                for c in versao.definicao.campos
+                if c.tipo is TipoCampo.CALCULADO
+                and tipos_calculados.get(c.id) is TipoFormula.NUMERO
+            ),
+            None,
+        )
+    return Exibicao(destaque, campo_de_status(versao, tipos_calculados), declarada.resumo)
+
+
+def estado_do_registro(dados: Mapping[str, ValorJson], campo_status: str | None) -> str:
+    """`conforme`, `nao_conforme`, `erro`, `aguardando` ou `sem_status`: decidido aqui, nunca
+    no front (§7). Calculado guarda `{"valor", "erro"}`."""
+    if campo_status is None:
+        return "sem_status"
+    guardado = dados.get(campo_status)
+    if not isinstance(guardado, dict):
+        return "aguardando"
+    if guardado.get("erro") is not None:
+        return "erro"
+    valor = guardado.get("valor")
+    return "aguardando" if valor is None else ("conforme" if valor else "nao_conforme")
+
+
+def campo_de_status(versao: Versao, tipos_calculados: Mapping[str, TipoFormula]) -> str | None:
+    """O campo de status da `exibicao`, ou o primeiro calculado booleano (§5.2)."""
+    exibicao = versao.definicao.exibicao
+    if exibicao is not None and exibicao.status is not None:
+        return exibicao.status
+    for campo in versao.definicao.campos:
+        if campo.tipo is TipoCampo.CALCULADO and (
+            tipos_calculados.get(campo.id) is TipoFormula.BOOLEANO
+        ):
+            return campo.id
+    return None
+
+
+__all__: Sequence[str] = [
+    "Contagens",
+    "ListagemDeRegistros",
+    "estado_do_registro",
+    "exibicao_efetiva",
+    "contar_por_estado",
+    "exportar_csv",
+    "listar_registros",
+]

@@ -20,7 +20,6 @@ class TipoCampo(StrEnum):
     SECAO = "secao"
     REFERENCIA = "referencia"
     LOCALIZACAO = "localizacao"
-    FOTO = "foto"
 
 
 @dataclass(frozen=True)
@@ -36,7 +35,8 @@ class Campo:
     formula: str | None = None
     formulario: str | None = None
     compartilhado: bool = False
-    maximo: int | None = None
+    # `False` = nunca vai à IA, nem em índice nem em prompt (§2.15).
+    ia: bool = True
 
     def para_json(self) -> dict[str, ValorJson]:
         """Forma canônica do contrato (§6): só o que não é padrão, na mesma ordem sempre."""
@@ -59,8 +59,8 @@ class Campo:
             dados["formulario"] = self.formulario
         if self.compartilhado:
             dados["compartilhado"] = True
-        if self.maximo is not None:
-            dados["maximo"] = self.maximo
+        if not self.ia:
+            dados["ia"] = False
         return dados
 
     @classmethod
@@ -77,7 +77,7 @@ class Campo:
             formula=_texto_ou_nulo(dados.get("formula")),
             formulario=_texto_ou_nulo(dados.get("formulario")),
             compartilhado=dados.get("compartilhado") is True,
-            maximo=_inteiro_ou_nulo(dados.get("maximo")),
+            ia=dados.get("ia") is not False,
         )
 
 
@@ -94,23 +94,68 @@ def _lista(valor: ValorJson) -> list[ValorJson]:
 
 
 @dataclass(frozen=True)
-class Definicao:
-    campos: tuple[Campo, ...]
+class Exibicao:
+    """Como o registro aparece em cartões e filtros (§2.3): campo em destaque, campo de status
+    (calculado booleano) e campos do resumo. Tudo opcional."""
+
+    destaque: str | None = None
+    status: str | None = None
+    resumo: tuple[str, ...] = ()
 
     def para_json(self) -> dict[str, ValorJson]:
-        return {"campos": [campo.para_json() for campo in self.campos]}
+        dados: dict[str, ValorJson] = {}
+        if self.destaque is not None:
+            dados["destaque"] = self.destaque
+        if self.status is not None:
+            dados["status"] = self.status
+        if self.resumo:
+            dados["resumo"] = list(self.resumo)
+        return dados
+
+
+@dataclass(frozen=True)
+class Definicao:
+    campos: tuple[Campo, ...]
+    exibicao: Exibicao | None = None
+
+    def para_json(self) -> dict[str, ValorJson]:
+        dados: dict[str, ValorJson] = {"campos": [campo.para_json() for campo in self.campos]}
+        if self.exibicao is not None:
+            dados["exibicao"] = self.exibicao.para_json()
+        return dados
 
     @classmethod
     def de_json(cls, dados: dict[str, ValorJson]) -> "Definicao":
         """Lê uma definição já validada (a guardada no banco); a entrada do usuário passa
         antes por `validacao.analisar_definicao`."""
+        bruta = dados.get("exibicao")
+        exibicao = None
+        if isinstance(bruta, dict):
+            exibicao = Exibicao(
+                destaque=_texto_ou_nulo(bruta.get("destaque")),
+                status=_texto_ou_nulo(bruta.get("status")),
+                resumo=tuple(str(c) for c in _lista(bruta.get("resumo"))),
+            )
         return cls(
             tuple(
                 Campo.de_json(campo)
                 for campo in _lista(dados.get("campos"))
                 if isinstance(campo, dict)
-            )
+            ),
+            exibicao,
         )
+
+
+@dataclass(frozen=True)
+class Contexto:
+    """Quem está chamando e de qual equipe (§2.13). Chega ao serviço pela conexão."""
+
+    grupo_id: int | None
+    usuario_id: int | None
+    permissoes: frozenset[str] = frozenset()
+
+    def tem(self, permissao: str) -> bool:
+        return permissao in self.permissoes
 
 
 @dataclass(frozen=True)
@@ -150,6 +195,9 @@ class Registro:
     dados: dict[str, ValorJson]
     criado_em: str
     atualizado_em: str
+    revisao: int = 1  # controle de concorrência otimista (§2.14)
+    criado_por: int | None = None
+    atualizado_por: int | None = None
 
 
 @dataclass(frozen=True)
@@ -251,13 +299,57 @@ class ValorInvalido(ErroDeDominio):
     """Um valor isolado não serve para o tipo do campo; quem chama sabe de qual campo veio."""
 
 
-class FotoInvalida(ErroDeDominio):
-    """A imagem enviada não pode ser aceita; a mensagem já diz o motivo ao usuário."""
-
-
 class NaoEncontrado(ErroDeDominio):
     pass
 
 
 class ExclusaoBloqueada(ErroDeDominio):
     pass
+
+
+class ConflitoDeRevisao(ErroDeDominio):
+    """Outra pessoa alterou o registro (ou rascunho) desde a leitura; 409 (§2.14)."""
+
+
+class CargoInvalido(ErroDeDominio):
+    """Cargo com nome repetido, permissão inexistente ou que deixaria a equipe sem administrador."""
+
+    def __init__(self, erros: tuple["ErroDeCampo", ...]) -> None:
+        super().__init__("; ".join(f"{erro.campo}: {erro.mensagem}" for erro in erros))
+        self.erros = erros
+
+
+class SemAcessoAEquipe(ErroDeDominio):
+    """A pessoa não é membro ativo da equipe pedida; 403."""
+
+
+class NaoAutenticado(ErroDeDominio):
+    """Sem token, token inválido ou expirado; 401. `codigo` deixa o front agir (renovar o token)."""
+
+    def __init__(self, mensagem: str, codigo: str = "token_invalido") -> None:
+        super().__init__(mensagem)
+        self.codigo = codigo
+
+
+class TermosPendentes(ErroDeDominio):
+    """A pessoa ainda não aceitou a versão vigente dos Termos e da Política; 403 (§2.15)."""
+
+    def __init__(self, documentos: tuple[str, ...]) -> None:
+        super().__init__("Aceite os Termos de Uso e a Política de Privacidade para continuar.")
+        self.documentos = documentos
+
+
+class LimiteExcedido(ErroDeDominio):
+    """Pedidos demais numa janela curta; 429 com `Retry-After` (§12)."""
+
+    def __init__(self, esperar_segundos: int) -> None:
+        super().__init__("Muitas requisições. Tente de novo em instantes.")
+        self.esperar_segundos = esperar_segundos
+
+
+class SemPermissao(ErroDeDominio):
+    """O cargo da pessoa não tem a permissão exigida; 403 (§2.13)."""
+
+    def __init__(self, permissao: str) -> None:
+        super().__init__("Seu cargo não tem permissão para esta ação.")
+        self.permissao = permissao

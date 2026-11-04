@@ -14,7 +14,6 @@ const NOME_DO_TIPO: Record<TipoDeCampo, string> = {
   secao: "Seção",
   referencia: "Referência",
   localizacao: "Localização",
-  foto: "Foto",
 };
 
 interface Props {

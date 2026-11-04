@@ -20,14 +20,22 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useApi } from "../api/contexto";
-import { ErroDaApi, type Esquemas, type FormularioDetalhe, type TipoDeCampo } from "../api/cliente";
+import {
+  ErroDaApi,
+  type Esquemas,
+  type FormularioDetalhe,
+  type Pasta,
+  type Rascunho as RascunhoDeVersao,
+  type TipoDeCampo,
+} from "../api/cliente";
+import { ComPermissao } from "../shell/permissoes";
 import type { Rascunho } from "../ia/rascunhos";
 import { EsqueletoDoConstrutor } from "../paginas/esqueletos";
 import { Falha, mensagemDe, useCarga } from "../paginas/Estado";
 import type { Rota } from "../rotas";
 import { useMovimentoReduzido } from "../lib/movimentoReduzido";
 import { CLASSE_DO_CONTROLE } from "../components/FormRenderer/Campo";
-import { Botao, Icone } from "../ui";
+import { Aviso, Botao, Icone, Selo } from "../ui";
 import {
   INSTRUCOES_DO_CONSTRUTOR,
   anunciosDoConstrutor,
@@ -84,6 +92,9 @@ interface Carregado {
   /** Os formulários que podem ser origem de uma referência (o próprio fica de fora). */
   origensPossiveis: { id: number; nome: string }[];
   formulario: FormularioDetalhe | null;
+  /** O rascunho da próxima versão, se a equipe já começou um (compartilhado por todos). */
+  rascunhoSalvo: RascunhoDeVersao | null;
+  pastas: Pasta[];
 }
 
 let proximaChave = 0;
@@ -100,10 +111,19 @@ export function Construtor({ modo, navegar, atrasoDaValidacaoMs = 500 }: Props) 
         : `rascunho-${modo.rascunho.chave}`;
 
   const carga = useCarga<Carregado>(async () => {
-    const [catalogo, formularios, formulario] = await Promise.all([
+    const [catalogo, formularios, formulario, rascunhoSalvo, pastas] = await Promise.all([
       cliente.catalogo(),
       cliente.listarFormularios(),
       modo.tipo === "editar" ? cliente.obterFormulario(modo.formularioId) : Promise.resolve(null),
+      // 404 = ainda não há rascunho; qualquer falha aqui só significa começar da versão atual.
+      modo.tipo === "editar"
+        ? Promise.resolve()
+            .then(() => cliente.obterRascunho(modo.formularioId))
+            .catch(() => null)
+        : Promise.resolve(null),
+      Promise.resolve()
+        .then(() => cliente.listarPastas())
+        .catch((): Pasta[] => []),
     ]);
     return {
       catalogo,
@@ -119,6 +139,8 @@ export function Construtor({ modo, navegar, atrasoDaValidacaoMs = 500 }: Props) 
         ]),
       ],
       formulario,
+      rascunhoSalvo,
+      pastas,
     };
   }, [cliente, chave]);
 
@@ -158,6 +180,9 @@ function Editor({
 
   const [nome, setNome] = useState(formulario?.nome ?? rascunho?.rascunho.nome ?? "");
   const [campos, setCampos] = useState<CampoEmEdicao[]>(() => {
+    // O rascunho da equipe, se existir, vale mais que a versão publicada.
+    if (formulario && carregado.rascunhoSalvo)
+      return deRascunho(carregado.rascunhoSalvo.definicao, gerarChave);
     if (formulario) return deDefinicao(formulario.versao_atual.definicao, gerarChave);
     return rascunho ? deRascunho(rascunho.rascunho.definicao, gerarChave) : [];
   });
@@ -180,6 +205,15 @@ function Editor({
   );
   const [falha, setFalha] = useState<string | null>(null);
   const [publicando, setPublicando] = useState(false);
+  const [resultadoDaValidacao, setResultadoDaValidacao] = useState<string | null>(null);
+  const [validando, setValidando] = useState(false);
+  // Rascunho compartilhado da próxima versão (AGENTS.md §2.2): salva sozinho, com `revisao`.
+  const revisaoDoRascunho = useRef<number | null>(carregado.rascunhoSalvo?.revisao ?? null);
+  const [statusDoRascunho, setStatusDoRascunho] = useState<
+    "parado" | "salvando" | "salvo" | "falhou" | "conflito"
+  >(carregado.rascunhoSalvo ? "salvo" : "parado");
+  const [temRascunho, setTemRascunho] = useState(carregado.rascunhoSalvo !== null);
+  const primeiraRenderizacao = useRef(true);
   // Os campos exatos para os quais o publicar falhou. Enquanto não houver edição, a validação
   // não roda: ela apagaria os erros que só o publicar conhece (contrato entre versões).
   const camposComErroDePublicacao = useRef<CampoEmEdicao[] | null>(null);
@@ -214,6 +248,71 @@ function Editor({
     // `aceitas` deriva do catálogo, que não muda depois de carregado
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente, campos, atrasoDaValidacaoMs]);
+
+  // Salva o rascunho depois de uma pausa na edição (só de formulário existente).
+  useEffect(() => {
+    if (primeiraRenderizacao.current) {
+      primeiraRenderizacao.current = false;
+      return;
+    }
+    if (!formulario) return;
+    const temporizador = setTimeout(() => {
+      setStatusDoRascunho("salvando");
+      cliente
+        .salvarRascunho(
+          formulario.id,
+          paraDefinicao(campos, aceitas),
+          revisaoDoRascunho.current ?? undefined,
+        )
+        .then(
+          (salvo) => {
+            revisaoDoRascunho.current = salvo.revisao;
+            setTemRascunho(true);
+            setStatusDoRascunho("salvo");
+          },
+          (erro: unknown) => {
+            if (erro instanceof ErroDaApi && erro.status === 409) {
+              setStatusDoRascunho("conflito");
+              setFalha(erro.message);
+            } else {
+              setStatusDoRascunho("falhou");
+            }
+          },
+        );
+    }, 1500);
+    return () => clearTimeout(temporizador);
+    // `aceitas` deriva do catálogo, que não muda depois de carregado
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cliente, campos]);
+
+  async function validar() {
+    setValidando(true);
+    setResultadoDaValidacao(null);
+    const instantaneo = campos.map(({ chave, id }) => ({ chave, id }));
+    try {
+      const resultado = await cliente.validarDefinicao(paraDefinicao(campos, aceitas));
+      setErros(mapearErros(resultado.erros, instantaneo));
+      setResultadoDaValidacao(
+        resultado.valida
+          ? "Definição válida: pode publicar."
+          : `${resultado.erros.length} ${resultado.erros.length === 1 ? "problema encontrado" : "problemas encontrados"}; veja nos campos.`,
+      );
+    } catch (erro) {
+      setFalha(mensagemDe(erro));
+    } finally {
+      setValidando(false);
+    }
+  }
+
+  async function descartarRascunho() {
+    if (!formulario) return;
+    try {
+      await cliente.descartarRascunho(formulario.id);
+      window.location.reload();
+    } catch (erro) {
+      setFalha(mensagemDe(erro));
+    }
+  }
 
   function aoPegar(evento: DragStartEvent) {
     setArrastado((evento.active.data.current as Arrastado | undefined) ?? null);
@@ -260,7 +359,16 @@ function Editor({
     const instantaneo = campos.map(({ chave, id }) => ({ chave, id }));
     const definicao = paraDefinicao(campos, aceitas);
     try {
-      if (formulario) {
+      if (formulario && revisaoDoRascunho.current !== null) {
+        // Há rascunho da equipe: grava o que está na tela e publica a partir dele.
+        const salvo = await cliente.salvarRascunho(
+          formulario.id,
+          definicao,
+          revisaoDoRascunho.current,
+        );
+        revisaoDoRascunho.current = salvo.revisao;
+        await cliente.publicarRascunho(formulario.id);
+      } else if (formulario) {
         await cliente.publicarVersao(formulario.id, definicao);
       } else {
         const pastaId = modo.tipo === "novo" ? modo.pastaId : undefined;
@@ -308,17 +416,34 @@ function Editor({
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
         <div className="mr-auto flex min-w-0 flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {editando
-              ? `Editar · ${formulario.nome}`
-              : rascunho
-                ? "Editar rascunho"
-                : "Novo formulário"}
+          {editando ? (
+            <nav
+              aria-label="Caminho"
+              className="flex flex-wrap items-center gap-1 text-sm text-pedra-600"
+            >
+              <a href="#/formularios" className="hover:text-pedra-900">
+                Formulários
+              </a>
+              {caminhoDaPasta(carregado.pastas, formulario.pasta_id ?? null).map((p) => (
+                <span key={p.id} className="inline-flex items-center gap-1">
+                  <Icone nome="seta" tamanho={12} />
+                  <a href={`#/pastas/${p.id}`} className="hover:text-pedra-900">
+                    {p.nome}
+                  </a>
+                </span>
+              ))}
+            </nav>
+          ) : null}
+          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold">
+            {editando ? formulario.nome : rascunho ? "Editar rascunho" : "Novo formulário"}
+            {editando ? <Selo>rascunho da v{formulario.versao_atual.numero + 1}</Selo> : null}
           </h1>
           {editando ? (
-            <p className="text-sm text-pedra-500">
-              Publicar cria a versão {formulario.versao_atual.numero + 1}; os registros antigos
-              continuam na versão deles.
+            <p className="text-sm text-pedra-500" aria-live="polite">
+              Os registros antigos continuam na versão deles.{" "}
+              {statusDoRascunho === "salvando" ? "Salvando rascunho…" : null}
+              {statusDoRascunho === "salvo" ? "Rascunho salvo para a equipe." : null}
+              {statusDoRascunho === "falhou" ? "Não foi possível salvar o rascunho agora." : null}
             </p>
           ) : null}
         </div>
@@ -352,18 +477,42 @@ function Editor({
         ) : (
           <>
             {!editando ? (
-              <Botao onClick={() => navegar({ nome: "criarComIa" })}>Criar com IA</Botao>
+              <ComPermissao permissao="ia:criar_formularios" bloqueado="Criar com IA">
+                <Botao onClick={() => navegar({ nome: "criarComIa" })}>
+                  <Icone nome="brilho" />
+                  Criar com IA
+                </Botao>
+              </ComPermissao>
             ) : null}
+            {editando && temRascunho ? (
+              <Botao variante="fantasma" onClick={() => void descartarRascunho()}>
+                Descartar rascunho
+              </Botao>
+            ) : null}
+            <Botao carregando={validando} onClick={() => void validar()}>
+              Validar
+            </Botao>
             <Botao variante="primario" carregando={publicando} onClick={() => void publicar()}>
               {publicando
                 ? "Publicando…"
                 : editando
-                  ? "Publicar nova versão"
+                  ? `Publicar versão ${formulario.versao_atual.numero + 1}`
                   : "Publicar formulário"}
             </Botao>
           </>
         )}
       </div>
+      {resultadoDaValidacao ? (
+        <Aviso
+          tom={
+            erros.globais.length === 0 && Object.keys(erros.porCampo).length === 0
+              ? "sucesso"
+              : "erro"
+          }
+        >
+          {resultadoDaValidacao}
+        </Aviso>
+      ) : null}
       {rascunho ? (
         <p className="text-sm text-pedra-500">
           A validação completa acontece ao publicar todos os rascunhos juntos, porque eles podem
@@ -388,7 +537,7 @@ function Editor({
           screenReaderInstructions: { draggable: INSTRUCOES_DO_CONSTRUTOR },
         }}
       >
-        <div className="grid gap-4 md:grid-cols-[13rem_1fr_22rem]">
+        <div className="grid gap-4 lg:grid-cols-[13rem_1fr_22rem]">
           <Paleta catalogo={catalogo} adicionar={adicionar} />
           <ListaDeCampos
             campos={campos}
@@ -439,6 +588,18 @@ function Editor({
       </DndContext>
     </section>
   );
+}
+
+/** Da raiz até a pasta do formulário, para o cabeçalho. */
+function caminhoDaPasta(pastas: Pasta[], pastaId: number | null): Pasta[] {
+  const caminho: Pasta[] = [];
+  let atual = pastas.find((p) => p.id === pastaId);
+  while (atual && caminho.length < 20) {
+    caminho.unshift(atual);
+    const paiId: number | null = atual.pasta_pai_id;
+    atual = paiId === null ? undefined : pastas.find((p) => p.id === paiId);
+  }
+  return caminho;
 }
 
 function Paleta({

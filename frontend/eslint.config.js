@@ -4,7 +4,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "src/api/esquema.d.ts"] },
+  { ignores: ["dist", "src/api/esquema.d.ts", "public"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

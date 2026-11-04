@@ -1,12 +1,11 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { configuracaoPadrao, criarCliente, type ClienteApi } from "./cliente";
+import { createContext, useContext, type ReactNode } from "react";
+import type { ClienteApi } from "./cliente";
 
 const ContextoDaApi = createContext<ClienteApi | null>(null);
 
 /** Injeta o cliente da API: os componentes não conhecem URL nem token, e os testes o trocam. */
-export function ApiProvider({ cliente, children }: { cliente?: ClienteApi; children: ReactNode }) {
-  const valor = useMemo(() => cliente ?? criarCliente(configuracaoPadrao()), [cliente]);
-  return <ContextoDaApi.Provider value={valor}>{children}</ContextoDaApi.Provider>;
+export function ApiProvider({ cliente, children }: { cliente: ClienteApi; children: ReactNode }) {
+  return <ContextoDaApi.Provider value={cliente}>{children}</ContextoDaApi.Provider>;
 }
 
 export function useApi(): ClienteApi {

@@ -17,3 +17,10 @@ node_modules/
 empacotamento/build/
 empacotamento/dist/
 empacotamento/instaladores/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+
+# Sessão guardada pelos testes e2e
+frontend/.auth/

@@ -347,6 +347,9 @@ describe("FormRenderer: referência", () => {
     formulario_id: 7,
     versao_id: 1,
     dados: { umidade },
+    revisao: 1,
+    criado_por: null,
+    atualizado_por: null,
     criado_em: "2026-11-02T10:00:00+00:00",
     atualizado_em: "x",
   });
@@ -381,6 +384,7 @@ describe("FormRenderer: referência", () => {
         versao_id: 1,
         total: 2,
         colunas: [coluna],
+        exibicao: { destaque: null, status: null, resumo: [] },
         itens: [registro(11, "12.34"), registro(12, "9.8")],
       }),
       ...extra,
@@ -470,7 +474,13 @@ describe("FormRenderer: referência", () => {
     renderizarComApi(
       <Controlado {...semPrevia} definicao={definicao} />,
       clienteDaOrigem({
-        listarRegistros: async () => ({ versao_id: 1, colunas: [], total: 0, itens: [] }),
+        listarRegistros: async () => ({
+          versao_id: 1,
+          colunas: [],
+          total: 0,
+          exibicao: { destaque: null, status: null, resumo: [] },
+          itens: [],
+        }),
       }),
     );
 
@@ -520,7 +530,7 @@ describe("FormRenderer: referência", () => {
       await userEvent.click(await screen.findByRole("button", { name: "Criar ensaio" }));
       const gaveta = await screen.findByRole("dialog", { name: /Novo registro · Ensaio/ });
       await userEvent.type(await within(gaveta).findByLabelText(/Umidade/), "7,5");
-      await userEvent.click(within(gaveta).getByRole("button", { name: "Salvar" }));
+      await userEvent.click(within(gaveta).getByRole("button", { name: "Salvar registro" }));
 
       await waitFor(() => expect(aoMudar).toHaveBeenLastCalledWith({ ensaio: 50 }));
       expect(criarRegistro).toHaveBeenCalledWith(7, 1, { umidade: "7.5" });
@@ -542,7 +552,7 @@ describe("FormRenderer: referência", () => {
       const gaveta = await screen.findByRole("dialog");
       await userEvent.type(await within(gaveta).findByLabelText(/Umidade/), "7,5");
 
-      await userEvent.click(within(gaveta).getByRole("button", { name: "Salvar" }));
+      await userEvent.click(within(gaveta).getByRole("button", { name: "Salvar registro" }));
 
       await waitFor(() => expect(criarRegistro).toHaveBeenCalled());
       expect(aoEnviar).not.toHaveBeenCalled();
@@ -596,9 +606,11 @@ describe("FormRenderer: referência", () => {
       const campo = await within(gaveta).findByLabelText(/Umidade/);
       await userEvent.clear(campo);
       await userEvent.type(campo, "20");
-      await userEvent.click(within(gaveta).getByRole("button", { name: "Salvar" }));
+      await userEvent.click(within(gaveta).getByRole("button", { name: "Salvar registro" }));
 
-      await waitFor(() => expect(atualizarRegistro).toHaveBeenCalledWith(11, { umidade: "20" }));
+      await waitFor(() =>
+        expect(atualizarRegistro).toHaveBeenCalledWith(11, { umidade: "20" }, expect.any(Number)),
+      );
       await waitFor(() => expect(aoMudar).toHaveBeenLastCalledWith({ ensaio: 11 }));
     });
   });
@@ -634,113 +646,6 @@ describe("FormRenderer: localização", () => {
 
     expect(screen.getByLabelText("Local: latitude")).toHaveAccessibleDescription(
       "Informe latitude e longitude juntas.",
-    );
-  });
-});
-
-describe("FormRenderer: foto", () => {
-  const definicao: Definicao = {
-    campos: [{ id: "fotos", tipo: "foto", rotulo: "Fotos", maximo: 2 }],
-  };
-  const arquivo = (nome = "a.jpg") =>
-    new File([new Uint8Array([1, 2])], nome, { type: "image/jpeg" });
-  const blob = new Blob([new Uint8Array([1])], { type: "image/webp" });
-
-  it("envia o arquivo, guarda só o id e mostra a miniatura", async () => {
-    const enviarAnexo = vi.fn(async () => ({ id: 41, largura: 10, altura: 10, tamanho_bytes: 99 }));
-    const obterAnexo = vi.fn(async () => blob);
-    const aoMudar = vi.fn();
-    renderizarComApi(
-      <Controlado {...semPrevia} definicao={definicao} aoMudar={aoMudar} />,
-      clienteFalso({ enviarAnexo, obterAnexo }),
-    );
-
-    await userEvent.upload(screen.getByLabelText("Fotos"), arquivo());
-
-    expect(enviarAnexo).toHaveBeenCalledTimes(1);
-    expect(aoMudar).toHaveBeenLastCalledWith({ fotos: [41] });
-    expect(await screen.findByRole("img", { name: "Fotos: foto 41" })).toHaveAttribute(
-      "src",
-      "blob:miniatura-de-teste",
-    );
-    expect(obterAnexo).toHaveBeenCalledWith(41);
-  });
-
-  it("remove uma foto sem apagar as outras", async () => {
-    const aoMudar = vi.fn();
-    renderizarComApi(
-      <Controlado
-        {...semPrevia}
-        definicao={definicao}
-        inicial={{ fotos: [1, 2] }}
-        aoMudar={aoMudar}
-      />,
-      clienteFalso({ obterAnexo: async () => blob }),
-    );
-
-    await userEvent.click(screen.getByRole("button", { name: "Remover foto 1" }));
-
-    expect(aoMudar).toHaveBeenLastCalledWith({ fotos: [2] });
-  });
-
-  it("respeita o máximo: ao atingir, bloqueia o envio e avisa", async () => {
-    renderizarComApi(
-      <Controlado {...semPrevia} definicao={definicao} inicial={{ fotos: [1, 2] }} />,
-      clienteFalso({ obterAnexo: async () => blob }),
-    );
-
-    expect(screen.getByLabelText("Fotos")).toBeDisabled();
-    expect(screen.getByText("Limite de 2 foto(s) atingido.")).toBeInTheDocument();
-  });
-
-  it("com vários arquivos de uma vez, para no máximo", async () => {
-    let proximo = 100;
-    const enviarAnexo = vi.fn(async () => ({
-      id: proximo++,
-      largura: 1,
-      altura: 1,
-      tamanho_bytes: 1,
-    }));
-    renderizarComApi(
-      <Controlado {...semPrevia} definicao={definicao} />,
-      clienteFalso({ enviarAnexo, obterAnexo: async () => blob }),
-    );
-
-    await userEvent.upload(screen.getByLabelText("Fotos"), [
-      arquivo("1.jpg"),
-      arquivo("2.jpg"),
-      arquivo("3.jpg"),
-    ]);
-
-    expect(enviarAnexo).toHaveBeenCalledTimes(2);
-  });
-
-  it("mostra o motivo em português quando o servidor recusa a foto", async () => {
-    const enviarAnexo = vi.fn(async () => {
-      throw new ErroDaApi(422, "Foto inválida.", [
-        { campo: "arquivo", mensagem: "Fotos em formato HEIC não são suportadas." },
-      ]);
-    });
-    const aoMudar = vi.fn();
-    renderizarComApi(
-      <Controlado {...semPrevia} definicao={definicao} aoMudar={aoMudar} />,
-      clienteFalso({ enviarAnexo }),
-    );
-
-    await userEvent.upload(screen.getByLabelText("Fotos"), arquivo("x.heic"));
-
-    expect(
-      await screen.findByText("Fotos em formato HEIC não são suportadas."),
-    ).toBeInTheDocument();
-    expect(aoMudar).not.toHaveBeenCalled();
-  });
-
-  it("só aceita os formatos que a API aceita no seletor de arquivo", () => {
-    renderizarComApi(<Controlado {...semPrevia} definicao={definicao} />, clienteFalso());
-
-    expect(screen.getByLabelText("Fotos")).toHaveAttribute(
-      "accept",
-      "image/jpeg,image/png,image/webp",
     );
   });
 });

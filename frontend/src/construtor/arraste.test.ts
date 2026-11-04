@@ -14,7 +14,6 @@ function campo(chave: string, rotulo: string): CampoEmEdicao {
     formula: "",
     formulario: "",
     compartilhado: false,
-    maximo: "",
   };
 }
 

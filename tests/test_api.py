@@ -1,9 +1,5 @@
-import io
-import random
-
 import pytest
 from fastapi.testclient import TestClient
-from PIL import Image
 
 CORPO = {
     "campos": [
@@ -48,13 +44,6 @@ def _registro(cliente: TestClient, formulario, dados=ENTRADA):
     return cliente.post(
         f"/formularios/{formulario['id']}/registros", json={"versao_id": versao_id, "dados": dados}
     )
-
-
-def _jpeg() -> bytes:
-    imagem = Image.frombytes("RGB", (300, 200), random.Random(1).randbytes(300 * 200 * 3))
-    destino = io.BytesIO()
-    imagem.save(destino, "JPEG")
-    return destino.getvalue()
 
 
 # --- formulários e versões ---
@@ -439,7 +428,7 @@ def test_catalogo_traz_tipos_funcoes_pi_e_nomes_reservados(cliente):
     catalogo = cliente.get("/catalogo").json()
 
     # assert
-    assert {t["id"] for t in catalogo["tipos"]} >= {"numero", "calculado", "foto"}
+    assert {t["id"] for t in catalogo["tipos"]} >= {"numero", "calculado", "localizacao"}
     assert {f["nome"] for f in catalogo["funcoes"]} == {"se", "min", "max", "media", "soma", "dias"}
     assert [c["nome"] for c in catalogo["constantes"]] == ["pi"]
     assert "pi" in catalogo["nomes_reservados"] and "dias" in catalogo["nomes_reservados"]
@@ -536,7 +525,10 @@ def test_obter_e_atualizar_registro_substitui_tudo_e_mantem_a_versao(cliente):
     registro = _registro(cliente, criado).json()
 
     # act
-    atualizado = cliente.put(f"/registros/{registro['id']}", json={"dados": {"fck_mpa": 30}})
+    atualizado = cliente.put(
+        f"/registros/{registro['id']}",
+        json={"dados": {"fck_mpa": 30}, "revisao": registro["revisao"]},
+    )
     lido = cliente.get(f"/registros/{registro['id']}")
 
     # assert
@@ -551,8 +543,12 @@ def test_obter_e_atualizar_registro_substitui_tudo_e_mantem_a_versao(cliente):
         "formulario_id",
         "versao_id",
         "dados",
+        "revisao",
+        "criado_por",
+        "atualizado_por",
         "criado_em",
         "atualizado_em",
+        "estado",
     }
 
 
@@ -564,7 +560,7 @@ def test_nao_existe_patch_de_registro(cliente):
 def test_atualizar_ou_obter_registro_inexistente_e_404(cliente):
     # act / assert
     assert cliente.get("/registros/999").status_code == 404
-    assert cliente.put("/registros/999", json={"dados": {}}).status_code == 404
+    assert cliente.put("/registros/999", json={"dados": {}, "revisao": 1}).status_code == 404
     assert cliente.delete("/registros/999").status_code == 404
 
 
@@ -619,7 +615,9 @@ def test_atualizar_a_origem_recalcula_o_dependente_na_resposta_seguinte(cliente)
     assert dependente["dados"]["seca"]["valor"] == "1.0"
 
     # act
-    cliente.put(f"/registros/{origem['id']}", json={"dados": {"umidade": "2"}})
+    cliente.put(
+        f"/registros/{origem['id']}", json={"dados": {"umidade": "2"}, "revisao": origem["revisao"]}
+    )
 
     # assert
     assert cliente.get(f"/registros/{dependente['id']}").json()["dados"]["seca"]["valor"] == "4"
@@ -642,7 +640,7 @@ def test_listagem_com_paginacao_total_e_versao(cliente):
     # assert
     assert pagina["total"] == 3 and len(pagina["itens"]) == 1
     assert pagina["versao_id"] == criado["versao_atual"]["id"]
-    assert set(pagina) == {"versao_id", "colunas", "itens", "total"}
+    assert set(pagina) == {"versao_id", "colunas", "itens", "total", "exibicao"}
 
 
 def test_filtro_por_campo_usa_filtro_campo_valor_repetivel(cliente):
@@ -771,140 +769,6 @@ def test_nome_do_arquivo_do_csv_nunca_leva_caracteres_perigosos(cliente):
 def test_exportar_formulario_inexistente_e_404(cliente):
     # act / assert
     assert cliente.get("/formularios/999/registros/exportar").status_code == 404
-
-
-# --- anexos ---
-
-
-def test_upload_de_foto_devolve_201_e_o_webp_volta_no_get(cliente):
-    # act
-    envio = cliente.post("/anexos", files={"arquivo": ("minha foto.jpg", _jpeg(), "image/jpeg")})
-    leitura = cliente.get(f"/anexos/{envio.json()['id']}")
-
-    # assert
-    assert envio.status_code == 201 and set(envio.json()) == {
-        "id",
-        "largura",
-        "altura",
-        "tamanho_bytes",
-    }
-    assert (envio.json()["largura"], envio.json()["altura"]) == (300, 200)
-    assert leitura.status_code == 200 and leitura.headers["content-type"] == "image/webp"
-    assert Image.open(io.BytesIO(leitura.content)).format == "WEBP"
-    assert leitura.headers["x-content-type-options"] == "nosniff"
-
-
-def test_nome_enviado_pelo_cliente_nunca_vai_para_o_disco(cliente, configuracao):
-    # act
-    cliente.post("/anexos", files={"arquivo": ("../../evil.jpg", _jpeg(), "image/jpeg")})
-
-    # assert
-    arquivos = list((configuracao.pasta_de_dados / "anexos").glob("*"))
-    assert len(arquivos) == 1 and "evil" not in arquivos[0].name and arquivos[0].suffix == ".webp"
-
-
-def test_formato_invalido_e_422_em_portugues_no_campo_arquivo(cliente):
-    # act
-    resposta = cliente.post("/anexos", files={"arquivo": ("x.txt", b"nao e imagem", "text/plain")})
-
-    # assert
-    assert resposta.status_code == 422
-    assert resposta.json()["erros"][0]["campo"] == "arquivo"
-    assert "JPEG, PNG ou WebP" in resposta.json()["erros"][0]["mensagem"]
-
-
-def test_heic_tem_mensagem_especifica(cliente):
-    # act
-    resposta = cliente.post(
-        "/anexos",
-        files={"arquivo": ("x.heic", b"\x00\x00\x00\x18ftypheic" + b"\x00" * 32, "image/heic")},
-    )
-
-    # assert
-    assert resposta.status_code == 422 and "HEIC" in resposta.json()["erros"][0]["mensagem"]
-
-
-def test_upload_sem_o_campo_arquivo_e_422(cliente):
-    # act
-    resposta = cliente.post("/anexos", files={"outro": ("x.jpg", _jpeg(), "image/jpeg")})
-
-    # assert
-    assert resposta.status_code == 422 and resposta.json()["erros"][0]["campo"] == "arquivo"
-
-
-def test_anexo_inexistente_e_404(cliente):
-    # act / assert
-    assert cliente.get("/anexos/999").status_code == 404
-
-
-def test_arquivo_acima_de_20_mb_e_recusado(cliente):
-    # arrange
-    grande = b"\x00" * (20 * 1024 * 1024 + 10)
-
-    # act
-    resposta = cliente.post("/anexos", files={"arquivo": ("g.jpg", grande, "image/jpeg")})
-
-    # assert
-    assert resposta.status_code == 422 and "20 MB" in resposta.json()["erros"][0]["mensagem"]
-
-
-def test_registro_com_foto_enviada_antes_e_vinculo_unico(cliente):
-    # arrange
-    formulario = _criar(
-        cliente, "obra", {"campos": [{"id": "fotos", "tipo": "foto", "rotulo": "F", "maximo": 2}]}
-    )
-    anexo = cliente.post("/anexos", files={"arquivo": ("a.jpg", _jpeg(), "image/jpeg")}).json()
-
-    # act
-    primeiro = _registro(cliente, formulario, {"fotos": [anexo["id"]]})
-    reaproveitado = _registro(cliente, formulario, {"fotos": [anexo["id"]]})
-
-    # assert
-    assert primeiro.status_code == 201 and primeiro.json()["dados"]["fotos"] == [anexo["id"]]
-    assert (
-        reaproveitado.status_code == 422
-        and "vinculada" in reaproveitado.json()["erros"][0]["mensagem"]
-    )
-
-
-def test_excluir_registro_apaga_a_foto_do_disco(cliente, configuracao):
-    # arrange
-    formulario = _criar(
-        cliente, "obra", {"campos": [{"id": "fotos", "tipo": "foto", "rotulo": "F"}]}
-    )
-    anexo = cliente.post("/anexos", files={"arquivo": ("a.jpg", _jpeg(), "image/jpeg")}).json()
-    registro = _registro(cliente, formulario, {"fotos": [anexo["id"]]}).json()
-
-    # act
-    cliente.delete(f"/registros/{registro['id']}")
-
-    # assert
-    assert list((configuracao.pasta_de_dados / "anexos").glob("*")) == []
-    assert cliente.get(f"/anexos/{anexo['id']}").status_code == 404
-
-
-def test_inicializacao_remove_so_os_anexos_orfaos_com_mais_de_24h(app, configuracao):
-    # arrange: um anexo enviado há dois dias e outro de agora, ambos nunca vinculados
-    from datetime import UTC, datetime, timedelta
-
-    from forms import servico
-
-    agora = datetime.now(UTC)
-    conexao = servico.abrir_banco(configuracao.banco)
-    velho = servico.guardar_anexo(
-        conexao, configuracao.pasta_de_dados, _jpeg(), agora - timedelta(days=2)
-    )
-    novo = servico.guardar_anexo(conexao, configuracao.pasta_de_dados, _jpeg(), agora)
-    conexao.close()
-
-    # act: o `with` dispara a inicialização do app
-    with TestClient(app, headers={"X-Forms-Token": "token-de-teste"}) as cliente:
-        velho_depois = cliente.get(f"/anexos/{velho.id}")
-        novo_depois = cliente.get(f"/anexos/{novo.id}")
-
-    # assert
-    assert velho_depois.status_code == 404 and novo_depois.status_code == 200
-    assert len(list((configuracao.pasta_de_dados / "anexos").glob("*"))) == 1
 
 
 def test_definicao_volta_como_foi_escrita_sem_campos_nulos_inventados(cliente):

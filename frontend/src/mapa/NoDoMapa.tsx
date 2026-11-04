@@ -10,6 +10,15 @@ interface Props {
   /** Fora da cadeia do nó selecionado: fica apagado para a cadeia saltar à vista. */
   esmaecido: boolean;
   aoSelecionar: () => void;
+  /** Só no mapa de formulários, para quem pode publicar: as portas viram botões de vínculo. */
+  vinculo?: {
+    /** Este nó é a origem escolhida (porta da direita acesa). */
+    origemAtiva: boolean;
+    /** Há uma origem escolhida: a porta da esquerda dos outros nós aceita o clique. */
+    esperandoDependente: boolean;
+    aoClicarNaDireita: () => void;
+    aoClicarNaEsquerda: () => void;
+  };
 }
 
 const ICONE_DA_LINHA: Partial<Record<LinhaDoNo["tipo"], NomeDoIcone>> = {
@@ -18,7 +27,7 @@ const ICONE_DA_LINHA: Partial<Record<LinhaDoNo["tipo"], NomeDoIcone>> = {
 };
 
 /** Um cartão do mapa: cabeçalho (o que é) e linhas (de onde vem, o que libera, os valores). */
-export function NoDoMapa({ no, x, y, selecionado, esmaecido, aoSelecionar }: Props) {
+export function NoDoMapa({ no, x, y, selecionado, esmaecido, aoSelecionar, vinculo }: Props) {
   const altura = alturaDoNo(no);
   const descricao =
     no.tipo === "formulario"
@@ -65,20 +74,65 @@ export function NoDoMapa({ no, x, y, selecionado, esmaecido, aoSelecionar }: Pro
           ) : null}
         </span>
       </button>
-      <Porta lado="esquerda" altura={altura} />
-      <Porta lado="direita" altura={altura} />
+      <Porta
+        lado="esquerda"
+        altura={altura}
+        rotulo={`Ligar a ${no.titulo} como dependente`}
+        ativa={false}
+        destacada={vinculo?.esperandoDependente === true && !vinculo.origemAtiva}
+        aoClicar={vinculo && !vinculo.origemAtiva ? vinculo.aoClicarNaEsquerda : undefined}
+      />
+      <Porta
+        lado="direita"
+        altura={altura}
+        rotulo={`Usar ${no.titulo} como origem do vínculo`}
+        ativa={vinculo?.origemAtiva === true}
+        destacada={false}
+        aoClicar={vinculo?.aoClicarNaDireita}
+      />
     </div>
   );
 }
 
-/** Os pontos de ligação, como as portas de um nó do n8n. */
-function Porta({ lado, altura }: { lado: "esquerda" | "direita"; altura: number }) {
+/**
+ * Os pontos de ligação, como as portas de um nó do n8n. Com `aoClicar` viram botões (alvo de
+ * toque de 44 px em volta do ponto); sem ele são só desenho.
+ */
+function Porta({
+  lado,
+  altura,
+  rotulo,
+  ativa,
+  destacada,
+  aoClicar,
+}: {
+  lado: "esquerda" | "direita";
+  altura: number;
+  rotulo: string;
+  ativa: boolean;
+  destacada: boolean;
+  aoClicar?: () => void;
+}) {
+  const ponto = `block size-3 rounded-full border-2 ${ativa || destacada ? "border-sinal-500 bg-sinal-500" : "border-pedra-500 bg-superficie"}`;
+  const posicao = { top: altura / 2 - 22, [lado === "esquerda" ? "left" : "right"]: -22 };
+  if (!aoClicar) {
+    return (
+      <span aria-hidden="true" className="absolute grid size-11 place-items-center" style={posicao}>
+        <span className={ponto} />
+      </span>
+    );
+  }
   return (
-    <span
-      aria-hidden="true"
-      className="absolute size-3 rounded-full border-2 border-pedra-500 bg-superficie"
-      style={{ top: altura / 2 - 6, [lado === "esquerda" ? "left" : "right"]: -6 }}
-    />
+    <button
+      type="button"
+      aria-label={rotulo}
+      aria-pressed={ativa}
+      onClick={aoClicar}
+      className="absolute grid size-11 cursor-crosshair place-items-center rounded-full"
+      style={posicao}
+    >
+      <span className={`${ponto} ${destacada ? "animate-brilho" : ""}`} />
+    </button>
   );
 }
 

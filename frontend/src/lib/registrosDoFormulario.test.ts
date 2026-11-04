@@ -9,6 +9,9 @@ const registro = (id: number, versao_id: number): Registro => ({
   formulario_id: 7,
   versao_id,
   dados: {},
+  revisao: 1,
+  criado_por: null,
+  atualizado_por: null,
   criado_em: "2026-11-02T10:00:00+00:00",
   atualizado_em: "2026-11-02T10:00:00+00:00",
 });
@@ -19,8 +22,20 @@ describe("carregarRegistrosDoFormulario", () => {
   it("junta os registros de todas as versões, do mais novo ao mais antigo", async () => {
     const listarRegistros = vi.fn(async (_id: number, p: { versaoId?: number } = {}) =>
       p.versaoId === 10
-        ? { versao_id: 10, colunas, total: 2, itens: [registro(1, 10), registro(2, 10)] }
-        : { versao_id: 11, colunas, total: 1, itens: [registro(3, 11)] },
+        ? {
+            versao_id: 10,
+            colunas,
+            total: 2,
+            exibicao: { destaque: null, status: null, resumo: [] },
+            itens: [registro(1, 10), registro(2, 10)],
+          }
+        : {
+            versao_id: 11,
+            colunas,
+            total: 1,
+            exibicao: { destaque: null, status: null, resumo: [] },
+            itens: [registro(3, 11)],
+          },
     );
     const cliente = clienteFalso({
       listarVersoes: async () => [
@@ -47,6 +62,7 @@ describe("carregarRegistrosDoFormulario", () => {
         versao_id: 10,
         colunas: colunasV1,
         total: 1,
+        exibicao: { destaque: null, status: null, resumo: [] },
         itens: [registro(1, 10)],
       }),
     });
@@ -63,6 +79,7 @@ describe("carregarRegistrosDoFormulario", () => {
         versao_id: 10,
         colunas,
         total: 120,
+        exibicao: { destaque: null, status: null, resumo: [] },
         itens: [registro(1, 10)],
       }),
     });

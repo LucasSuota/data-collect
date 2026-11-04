@@ -17,17 +17,46 @@ export type ResultadoValidacao = Esquemas["ValidarSaida"];
 export type ResultadoPrevia = Esquemas["PreviaSaida"];
 export type ResultadoCalculado = Esquemas["ResultadoCalculadoSaida"];
 export type Catalogo = Esquemas["CatalogoSaida"];
-export type Anexo = Esquemas["AnexoSaida"];
 export type RascunhoGerado = Esquemas["RascunhoGeradoSaida"];
 export type PropostaDaIa = Esquemas["GerarSaida"];
-
-export const CABECALHO_DO_TOKEN = "X-Forms-Token";
-const URL_LOCAL_PADRAO = "http://127.0.0.1:8000";
+export type Eu = Esquemas["EuSaida"];
+export type EquipeDaPessoa = Esquemas["EquipeDaPessoaSaida"];
+export type Membro = Esquemas["MembroSaida"];
+export type Convite = Esquemas["ConviteSaida"];
+export type ConviteCriado = Esquemas["ConviteCriadoSaida"];
+export type Cargo = Esquemas["CargoSaida"];
+export type EntradaDeCargo = Esquemas["CargoEntrada"];
+export type Permissao = Esquemas["PermissaoSaida"];
+export type Notificacoes = Esquemas["NotificacoesSaida"];
+export type Notificacao = Esquemas["NotificacaoSaida"];
+export type Progresso = Esquemas["ProgressoSaida"];
+export type ConfigDaIa = Esquemas["ConfigSaida"];
+export type EntradaDaConfigDaIa = Esquemas["ConfigEntrada"];
+export type UsoDaIa = Esquemas["UsoSaida"];
+export type Contagens = Esquemas["ContagensSaida"];
+export type RegistroRecente = Esquemas["RegistroRecenteSaida"];
+export type EstadoDoRegistro = RegistroRecente["estado"];
+export type Busca = Esquemas["BuscaSaida"];
+export type Rascunho = Esquemas["RascunhoSaida"];
+export type Historico = Esquemas["HistoricoSaida"];
+export type Guia = Esquemas["GuiaSaida"];
+export type DocumentoLegal = Esquemas["DocumentoLegalSaida"];
+export type Consentimentos = Esquemas["ConsentimentosSaida"];
+export type Exemplo = Esquemas["ExemploSaida"];
+export type Conversa = Esquemas["ConversaSaida"];
+export type ConversaComMensagens = Esquemas["ConversaComMensagensSaida"];
+export type RespostaDoAssistente = Esquemas["RespostaSaida"];
+export type ResumoDaIa = Esquemas["ResumoSaida"];
 
 export interface Configuracao {
-  /** Vazio quando o front é servido pelo próprio backend (app instalado). */
+  /** Vazio quando o front é servido pela mesma origem do proxy (`/api` entra em `urlBase`). */
   urlBase: string;
-  token: string | null;
+  /** Token de acesso do Logto (10 minutos); o SDK o renova sozinho (AGENTS.md §2.12). */
+  obterToken?: () => Promise<string | null>;
+  /** Descarta o token em cache e pede outro: usado uma vez, quando o servidor diz `token_expirado`. */
+  renovarToken?: () => Promise<string | null>;
+  /** A equipe ativa; o servidor confere a pertença a cada requisição. */
+  equipeId?: () => number | null;
   fetch?: typeof fetch;
 }
 
@@ -35,12 +64,20 @@ export interface Configuracao {
 export class ErroDaApi extends Error {
   readonly status: number;
   readonly erros: ErroDeCampo[];
+  /** Código estável para o front decidir o que fazer (`token_expirado`, `termos_pendentes`...). */
+  readonly codigo: string | null;
 
-  constructor(status: number, detalhe: string, erros: ErroDeCampo[] = []) {
+  constructor(
+    status: number,
+    detalhe: string,
+    erros: ErroDeCampo[] = [],
+    codigo: string | null = null,
+  ) {
     super(detalhe);
     this.name = "ErroDaApi";
     this.status = status;
     this.erros = erros;
+    this.codigo = codigo;
   }
 
   /** As mensagens agrupadas pelo `id` do campo, para mostrar cada uma no lugar certo. */
@@ -59,6 +96,8 @@ export interface ParametrosDeConsulta {
   criadoAte?: string;
   /** Igualdade por campo; a API recebe `filtro=campo:valor`, repetido. */
   filtros?: Record<string, string>;
+  /** Só os registros que a própria pessoa criou. */
+  meus?: boolean;
 }
 
 export interface ParametrosDeListagem extends ParametrosDeConsulta {
@@ -71,51 +110,61 @@ export interface ArquivoBaixado {
   nome: string;
 }
 
-/** A configuração do ambiente atual: preload do Electron, variáveis do Vite ou o padrão local. */
-export function configuracaoPadrao(): Configuracao {
-  const preload = window.formsApi;
-  if (preload) {
-    return { urlBase: preload.urlBase ?? "", token: preload.token };
-  }
-  return {
-    urlBase: import.meta.env.VITE_API_URL || URL_LOCAL_PADRAO,
-    token: import.meta.env.VITE_FORMS_TOKEN || null,
-  };
-}
-
 interface Opcoes {
   corpo?: unknown;
-  formulario?: FormData;
   consulta?: URLSearchParams;
 }
+
+/** Um evento do `POST /chat` (SSE): a conversa, pedaços de texto e o fim com as citações. */
+export type EventoDoChat =
+  | { tipo: "conversa"; conversa_id: number }
+  | { tipo: "texto"; texto: string }
+  | {
+      tipo: "fim";
+      encontrou: boolean;
+      usou_ia: boolean;
+      ia_disponivel: boolean;
+      citacoes: Record<string, unknown>[];
+    };
 
 export function criarCliente(configuracao: Configuracao) {
   const base = configuracao.urlBase.replace(/\/+$/, "");
   const chamarFetch = configuracao.fetch ?? ((...argumentos) => fetch(...argumentos));
 
-  async function enviar(metodo: string, caminho: string, opcoes: Opcoes = {}): Promise<Response> {
+  async function tentar(metodo: string, caminho: string, opcoes: Opcoes, token: string | null) {
     const consulta = opcoes.consulta?.toString();
     const url = `${base}${caminho}${consulta ? `?${consulta}` : ""}`;
     const cabecalhos = new Headers({ Accept: "application/json" });
-    if (configuracao.token) cabecalhos.set(CABECALHO_DO_TOKEN, configuracao.token);
+    if (token) cabecalhos.set("Authorization", `Bearer ${token}`);
+    const equipe = configuracao.equipeId?.();
+    if (equipe != null) cabecalhos.set("X-Equipe", String(equipe));
 
     let corpo: BodyInit | undefined;
-    if (opcoes.formulario) {
-      // Sem Content-Type: o navegador o gera com o `boundary` do multipart.
-      corpo = opcoes.formulario;
-    } else if (opcoes.corpo !== undefined) {
+    if (opcoes.corpo !== undefined) {
       cabecalhos.set("Content-Type", "application/json");
       corpo = JSON.stringify(opcoes.corpo);
     }
-
-    let resposta: Response;
     try {
-      resposta = await chamarFetch(url, { method: metodo, headers: cabecalhos, body: corpo });
+      return await chamarFetch(url, { method: metodo, headers: cabecalhos, body: corpo });
     } catch {
-      throw new ErroDaApi(
-        0,
-        "Não foi possível conectar à API. Verifique se o servidor está em execução.",
-      );
+      throw new ErroDaApi(0, "Não foi possível conectar ao servidor. Verifique sua conexão.");
+    }
+  }
+
+  async function enviar(metodo: string, caminho: string, opcoes: Opcoes = {}): Promise<Response> {
+    let resposta = await tentar(
+      metodo,
+      caminho,
+      opcoes,
+      (await configuracao.obterToken?.()) ?? null,
+    );
+    if (resposta.status === 401 && configuracao.renovarToken) {
+      const erro = await erroDaResposta(resposta.clone());
+      if (erro.codigo === "token_expirado") {
+        // Uma renovação só, depois repete: se falhar de novo, a sessão acabou de verdade.
+        const novo = await configuracao.renovarToken();
+        if (novo) resposta = await tentar(metodo, caminho, opcoes, novo);
+      }
     }
     if (!resposta.ok) throw await erroDaResposta(resposta);
     return resposta;
@@ -126,8 +175,8 @@ export function criarCliente(configuracao: Configuracao) {
     return (await resposta.json()) as T;
   }
 
-  async function semCorpo(metodo: string, caminho: string): Promise<void> {
-    await enviar(metodo, caminho);
+  async function semCorpo(metodo: string, caminho: string, corpo?: unknown): Promise<void> {
+    await enviar(metodo, caminho, corpo === undefined ? {} : { corpo });
   }
 
   return {
@@ -187,8 +236,9 @@ export function criarCliente(configuracao: Configuracao) {
       json<Registro>("POST", `/formularios/${formularioId}/registros`, {
         corpo: { versao_id: versaoId, dados },
       }),
-    atualizarRegistro: (registroId: number, dados: unknown) =>
-      json<Registro>("PUT", `/registros/${registroId}`, { corpo: { dados } }),
+    /** A `revisao` é a que a tela leu: se outra pessoa salvou antes, o servidor responde 409. */
+    atualizarRegistro: (registroId: number, dados: unknown, revisao: number) =>
+      json<Registro>("PUT", `/registros/${registroId}`, { corpo: { dados, revisao } }),
     obterRegistro: (registroId: number) => json<Registro>("GET", `/registros/${registroId}`),
     excluirRegistro: (registroId: number) => semCorpo("DELETE", `/registros/${registroId}`),
     listarRegistros: (formularioId: number, parametros: ParametrosDeListagem = {}) =>
@@ -208,15 +258,123 @@ export function criarCliente(configuracao: Configuracao) {
       };
     },
 
-    // anexos (fotos)
-    enviarAnexo: (arquivo: File) => {
-      const formulario = new FormData();
-      formulario.append("arquivo", arquivo);
-      return json<Anexo>("POST", "/anexos", { formulario });
+    // identidade, equipe e cargos (§2.12, §2.13)
+    eu: () => json<Eu>("GET", "/eu"),
+    aceitarConvite: (token: string) =>
+      json<Esquemas["AceitarConviteSaida"]>(
+        "POST",
+        `/convites/${encodeURIComponent(token)}/aceitar`,
+      ),
+    consentimentos: () => json<Consentimentos>("GET", "/consentimentos"),
+    aceitarTermos: (documentos?: string[]) =>
+      json<Consentimentos>("POST", "/consentimentos", {
+        corpo: { documentos: documentos ?? null },
+      }),
+    sairDaEquipe: () => semCorpo("POST", "/equipe/sair"),
+    renomearEquipe: (nome: string) =>
+      json<Esquemas["EquipeSaida"]>("PUT", "/equipe", { corpo: { nome } }),
+    listarMembros: () => json<Membro[]>("GET", "/membros"),
+    trocarCargo: (usuarioId: number, cargoId: number) =>
+      semCorpo("PUT", `/membros/${usuarioId}/cargo`, { cargo_id: cargoId }),
+    desativarMembro: (usuarioId: number) => semCorpo("POST", `/membros/${usuarioId}/desativar`),
+    reativarMembro: (usuarioId: number) => semCorpo("POST", `/membros/${usuarioId}/reativar`),
+    listarConvites: () => json<Convite[]>("GET", "/convites"),
+    criarConvite: (email: string, cargoId: number) =>
+      json<ConviteCriado>("POST", "/convites", { corpo: { email, cargo_id: cargoId } }),
+    revogarConvite: (conviteId: number) => semCorpo("DELETE", `/convites/${conviteId}`),
+    listarCargos: () => json<Cargo[]>("GET", "/cargos"),
+    criarCargo: (entrada: EntradaDeCargo) => json<Cargo>("POST", "/cargos", { corpo: entrada }),
+    atualizarCargo: (cargoId: number, entrada: EntradaDeCargo) =>
+      json<Cargo>("PUT", `/cargos/${cargoId}`, { corpo: entrada }),
+    excluirCargo: (cargoId: number) => semCorpo("DELETE", `/cargos/${cargoId}`),
+    catalogoDePermissoes: () =>
+      json<Esquemas["CatalogoDePermissoesSaida"]>("GET", "/catalogo/permissoes"),
+
+    // LGPD (§2.15)
+    exportarMeusDados: async (): Promise<ArquivoBaixado> => {
+      const resposta = await enviar("GET", "/eu/exportar");
+      return {
+        blob: await resposta.blob(),
+        nome: nomeDoArquivo(resposta.headers.get("Content-Disposition")) ?? "meus-dados.json",
+      };
     },
-    /** A foto como Blob: um `<img src>` não consegue mandar o cabeçalho do token. */
-    obterAnexo: async (anexoId: number): Promise<Blob> =>
-      (await enviar("GET", `/anexos/${anexoId}`)).blob(),
+    excluirMinhaConta: () => semCorpo("DELETE", "/eu"),
+
+    // início, busca e avisos (§2.18)
+    registrosRecentes: (limite = 5) =>
+      json<RegistroRecente[]>("GET", "/registros/recentes", {
+        consulta: new URLSearchParams({ limite: String(limite) }),
+      }),
+    buscar: (q: string) => json<Busca>("GET", "/busca", { consulta: new URLSearchParams({ q }) }),
+    notificacoes: () => json<Notificacoes>("GET", "/notificacoes"),
+    marcarNotificacaoLida: (id: number) => semCorpo("POST", `/notificacoes/${id}/lida`),
+
+    // introdução e ajuda (§2.16)
+    progresso: () => json<Progresso>("GET", "/eu/onboarding"),
+    salvarProgresso: (entrada: Progresso) =>
+      json<Progresso>("PUT", "/eu/onboarding", { corpo: entrada }),
+    exemplos: () => json<Exemplo[]>("GET", "/templates"),
+    importarExemplos: (nomes: string[]) =>
+      json<Esquemas["ExemplosImportadosSaida"]>("POST", "/templates/importar", {
+        corpo: { nomes },
+      }),
+    guias: () => json<Esquemas["GuiasSaida"]>("GET", "/ajuda"),
+    documentosLegais: () => json<Esquemas["DocumentosLegaisSaida"]>("GET", "/legal"),
+
+    // rascunho de versão (§2.2) e histórico (§2.14)
+    obterRascunho: (formularioId: number) =>
+      json<Rascunho>("GET", `/formularios/${formularioId}/rascunho`),
+    salvarRascunho: (formularioId: number, definicao: unknown, revisao?: number) =>
+      json<Rascunho>("PUT", `/formularios/${formularioId}/rascunho`, {
+        corpo: { definicao, revisao: revisao ?? null },
+      }),
+    descartarRascunho: (formularioId: number) =>
+      semCorpo("DELETE", `/formularios/${formularioId}/rascunho`),
+    publicarRascunho: (formularioId: number) =>
+      json<Versao>("POST", `/formularios/${formularioId}/rascunho/publicar`),
+    historicoDoRegistro: (registroId: number) =>
+      json<Historico[]>("GET", `/registros/${registroId}/historico`),
+    contagens: (formularioId: number, parametros: ParametrosDeConsulta = {}) =>
+      json<Contagens>("GET", `/formularios/${formularioId}/registros/contagens`, {
+        consulta: montarConsulta(parametros),
+      }),
+
+    // IA (§2.5): configuração por equipe, assistente, resumo e chat
+    configDaIa: () => json<ConfigDaIa>("GET", "/ia"),
+    salvarConfigDaIa: (entrada: EntradaDaConfigDaIa) =>
+      json<ConfigDaIa>("PUT", "/ia", { corpo: entrada }),
+    testarIa: () => json<Esquemas["TesteSaida"]>("POST", "/ia/testar"),
+    reindexarIa: () => json<Esquemas["ReindexacaoSaida"]>("POST", "/ia/reindexar"),
+    usoDaIa: () => json<UsoDaIa>("GET", "/ia/uso"),
+    resumir: (formularioId: number, parametros: ParametrosDeConsulta = {}) =>
+      json<ResumoDaIa>("POST", `/formularios/${formularioId}/resumo`, {
+        consulta: montarConsulta(parametros),
+      }),
+    listarConversas: () => json<Conversa[]>("GET", "/chat/conversas"),
+    obterConversa: (id: number) => json<ConversaComMensagens>("GET", `/chat/conversas/${id}`),
+    apagarConversa: (id: number) => semCorpo("DELETE", `/chat/conversas/${id}`),
+    /** Conversa por SSE: chama `aoEvento` a cada evento e resolve quando o fluxo termina. */
+    conversar: async (
+      entrada: { mensagem: string; conversa_id?: number | null },
+      aoEvento: (evento: EventoDoChat) => void,
+    ): Promise<void> => {
+      const resposta = await enviar("POST", "/chat", { corpo: entrada });
+      const leitor = resposta.body?.getReader();
+      if (!leitor) throw new ErroDaApi(0, "O servidor não enviou a resposta.");
+      const decodificador = new TextDecoder();
+      let pendente = "";
+      for (;;) {
+        const { done, value } = await leitor.read();
+        if (done) break;
+        pendente += decodificador.decode(value, { stream: true });
+        const quadros = pendente.split("\n\n");
+        pendente = quadros.pop() ?? "";
+        for (const quadro of quadros) {
+          const linha = quadro.split("\n").find((l) => l.startsWith("data: "));
+          if (linha) aoEvento(JSON.parse(linha.slice(6)) as EventoDoChat);
+        }
+      }
+    },
   };
 }
 
@@ -231,6 +389,7 @@ function montarConsulta(parametros: ParametrosDeListagem): URLSearchParams {
   }
   if (parametros.criadoDe) consulta.set("criado_de", parametros.criadoDe);
   if (parametros.criadoAte) consulta.set("criado_ate", parametros.criadoAte);
+  if (parametros.meus) consulta.set("meus", "true");
   for (const [campo, valor] of Object.entries(parametros.filtros ?? {})) {
     consulta.append("filtro", `${campo}:${valor}`);
   }
@@ -241,7 +400,7 @@ async function erroDaResposta(resposta: Response): Promise<ErroDaApi> {
   try {
     const corpo: unknown = await resposta.json();
     if (ehErroUniforme(corpo)) {
-      return new ErroDaApi(resposta.status, corpo.detalhe, corpo.erros ?? []);
+      return new ErroDaApi(resposta.status, corpo.detalhe, corpo.erros ?? [], corpo.codigo ?? null);
     }
   } catch {
     // corpo que não é JSON (por exemplo, a página de erro de um proxy): cai na mensagem genérica

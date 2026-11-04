@@ -21,8 +21,6 @@ export function formatarCelula(coluna: Coluna, guardado: unknown): string {
       return `#${String(guardado)}`;
     case "localizacao":
       return formatarLocalizacao(guardado);
-    case "foto":
-      return Array.isArray(guardado) ? `${guardado.length} foto(s)` : "";
     default:
       return String(guardado);
   }

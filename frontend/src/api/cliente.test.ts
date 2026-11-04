@@ -1,4 +1,4 @@
-import { ErroDaApi, configuracaoPadrao, criarCliente } from "./cliente";
+import { ErroDaApi, criarCliente } from "./cliente";
 
 type Resposta = { status?: number; corpo?: unknown; texto?: string; cabecalhos?: HeadersInit };
 
@@ -10,13 +10,22 @@ function respostaDe({ status = 200, corpo, texto, cabecalhos }: Resposta = {}): 
   });
 }
 
-function clienteCom(resposta: Response | Error, token: string | null = "segredo") {
+function clienteCom(
+  resposta: Response | Error,
+  token: string | null = "segredo",
+  extra: { equipeId?: () => number | null } = {},
+) {
   const fetchFalso = vi.fn<typeof fetch>(async () => {
     if (resposta instanceof Error) throw resposta;
     // Um Response só pode ser lido uma vez; cada chamada recebe a sua cópia.
     return resposta.clone();
   });
-  const cliente = criarCliente({ urlBase: "http://127.0.0.1:8000", token, fetch: fetchFalso });
+  const cliente = criarCliente({
+    urlBase: "http://127.0.0.1:8000",
+    obterToken: async () => token,
+    fetch: fetchFalso,
+    ...extra,
+  });
   return { cliente, fetchFalso };
 }
 
@@ -27,20 +36,30 @@ function ultimaChamada(fetchFalso: ReturnType<typeof vi.fn<typeof fetch>>) {
 
 describe("criarCliente", () => {
   describe("cabeçalhos", () => {
-    it("envia o token da execução no X-Forms-Token", async () => {
+    it("envia o token de acesso como Bearer", async () => {
       const { cliente, fetchFalso } = clienteCom(respostaDe({ corpo: [] }));
 
       await cliente.listarFormularios();
 
-      expect(ultimaChamada(fetchFalso).cabecalhos.get("X-Forms-Token")).toBe("segredo");
+      expect(ultimaChamada(fetchFalso).cabecalhos.get("Authorization")).toBe("Bearer segredo");
     });
 
-    it("não manda o cabeçalho quando não há token (desenvolvimento)", async () => {
+    it("não manda Authorization quando não há token (páginas públicas)", async () => {
       const { cliente, fetchFalso } = clienteCom(respostaDe({ corpo: [] }), null);
+
+      await cliente.documentosLegais();
+
+      expect(ultimaChamada(fetchFalso).cabecalhos.has("Authorization")).toBe(false);
+    });
+
+    it("manda a equipe ativa em X-Equipe, para o servidor conferir a pertença", async () => {
+      const { cliente, fetchFalso } = clienteCom(respostaDe({ corpo: [] }), "t", {
+        equipeId: () => 4,
+      });
 
       await cliente.listarFormularios();
 
-      expect(ultimaChamada(fetchFalso).cabecalhos.has("X-Forms-Token")).toBe(false);
+      expect(ultimaChamada(fetchFalso).cabecalhos.get("X-Equipe")).toBe("4");
     });
 
     it("manda JSON com Content-Type quando há corpo", async () => {
@@ -59,7 +78,7 @@ describe("criarCliente", () => {
   describe("URL", () => {
     it("ignora a barra final da URL base", async () => {
       const fetchFalso = vi.fn<typeof fetch>(async () => respostaDe({ corpo: [] }));
-      const cliente = criarCliente({ urlBase: "http://x.test/", token: null, fetch: fetchFalso });
+      const cliente = criarCliente({ urlBase: "http://x.test/", fetch: fetchFalso });
 
       await cliente.listarFormularios();
 
@@ -68,7 +87,7 @@ describe("criarCliente", () => {
 
     it("com URL base vazia usa caminhos relativos (front servido pelo backend)", async () => {
       const fetchFalso = vi.fn<typeof fetch>(async () => respostaDe({ corpo: [] }));
-      const cliente = criarCliente({ urlBase: "", token: null, fetch: fetchFalso });
+      const cliente = criarCliente({ urlBase: "", fetch: fetchFalso });
 
       await cliente.listarFormularios();
 
@@ -269,34 +288,6 @@ describe("criarCliente", () => {
 
       expect((await cliente.exportarRegistros(1)).nome).toBe("registros.csv");
     });
-
-    it("lê a foto como Blob (a imagem não pode ir num <img src> porque não leva o token)", async () => {
-      const { cliente, fetchFalso } = clienteCom(
-        new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Type": "image/webp" } }),
-      );
-
-      const blob = await cliente.obterAnexo(5);
-
-      expect(blob.type).toBe("image/webp");
-      expect(ultimaChamada(fetchFalso).url).toBe("http://127.0.0.1:8000/anexos/5");
-      expect(ultimaChamada(fetchFalso).cabecalhos.get("X-Forms-Token")).toBe("segredo");
-    });
-
-    it("envia a foto como multipart no campo `arquivo`, sem fixar o Content-Type", async () => {
-      const { cliente, fetchFalso } = clienteCom(
-        respostaDe({ status: 201, corpo: { id: 1, largura: 10, altura: 10, tamanho_bytes: 100 } }),
-      );
-      const foto = new File([new Uint8Array([1])], "minha foto.jpg", { type: "image/jpeg" });
-
-      const anexo = await cliente.enviarAnexo(foto);
-
-      const { init, cabecalhos } = ultimaChamada(fetchFalso);
-      expect(anexo.id).toBe(1);
-      expect(init.body).toBeInstanceOf(FormData);
-      expect((init.body as FormData).get("arquivo")).toBeInstanceOf(File);
-      // O navegador precisa gerar o Content-Type com o `boundary` do multipart.
-      expect(cabecalhos.has("Content-Type")).toBe(false);
-    });
   });
 
   describe("endpoints", () => {
@@ -349,7 +340,7 @@ describe("criarCliente", () => {
       await cliente.validarDefinicao({ campos: [] });
       await cliente.previa({ campos: [] }, { a: 1 });
       await cliente.criarRegistro(1, 5, { a: 1 });
-      await cliente.atualizarRegistro(8, { a: 2 });
+      await cliente.atualizarRegistro(8, { a: 2 }, 3);
       await cliente.criarFormulariosEmLote([{ nome: "a", definicao: {} }]);
 
       const chamadas = fetchFalso.mock.calls.map(([url, init]) => [
@@ -362,7 +353,7 @@ describe("criarCliente", () => {
         ["POST", "/definicoes/validar", { definicao: { campos: [] } }],
         ["POST", "/definicoes/previa", { definicao: { campos: [] }, valores: { a: 1 } }],
         ["POST", "/formularios/1/registros", { versao_id: 5, dados: { a: 1 } }],
-        ["PUT", "/registros/8", { dados: { a: 2 } }],
+        ["PUT", "/registros/8", { dados: { a: 2 }, revisao: 3 }],
         ["POST", "/formularios/lote", { formularios: [{ nome: "a", definicao: {} }] }],
       ]);
     });
@@ -511,41 +502,75 @@ describe("gerarFormularios", () => {
   });
 });
 
-describe("configuracaoPadrao", () => {
-  afterEach(() => {
-    delete window.formsApi;
-    vi.unstubAllEnvs();
-  });
-
-  it("usa o token e a URL do preload quando o Electron os expõe", () => {
-    window.formsApi = { token: "do-preload", urlBase: "http://127.0.0.1:5555" };
-
-    expect(configuracaoPadrao()).toMatchObject({
-      token: "do-preload",
-      urlBase: "http://127.0.0.1:5555",
+describe("renovação do token", () => {
+  const expirado = () =>
+    respostaDe({
+      status: 401,
+      corpo: { detalhe: "Sua sessão expirou.", erros: [], codigo: "token_expirado" },
     });
-  });
 
-  it("no instalado o front é servido pelo backend: sem URL no preload, caminhos relativos", () => {
-    window.formsApi = { token: "do-preload" };
-
-    expect(configuracaoPadrao()).toMatchObject({ token: "do-preload", urlBase: "" });
-  });
-
-  it("em desenvolvimento usa as variáveis do Vite", () => {
-    vi.stubEnv("VITE_API_URL", "http://127.0.0.1:9000");
-    vi.stubEnv("VITE_FORMS_TOKEN", "do-dev");
-
-    expect(configuracaoPadrao()).toMatchObject({
-      token: "do-dev",
-      urlBase: "http://127.0.0.1:9000",
+  it("renova uma vez ao receber token_expirado e repete a chamada com o token novo", async () => {
+    const respostas = [expirado(), respostaDe({ corpo: [] })];
+    const fetchFalso = vi.fn<typeof fetch>(async () => respostas.shift()!);
+    const renovarToken = vi.fn(async () => "novo");
+    const cliente = criarCliente({
+      urlBase: "http://x.test",
+      obterToken: async () => "velho",
+      renovarToken,
+      fetch: fetchFalso,
     });
+
+    await cliente.listarFormularios();
+
+    expect(renovarToken).toHaveBeenCalledTimes(1);
+    expect(fetchFalso).toHaveBeenCalledTimes(2);
+    expect(new Headers(fetchFalso.mock.calls[1]?.[1]?.headers).get("Authorization")).toBe(
+      "Bearer novo",
+    );
   });
 
-  it("sem nada configurado aponta para a API local e não manda token", () => {
-    vi.stubEnv("VITE_API_URL", "");
-    vi.stubEnv("VITE_FORMS_TOKEN", "");
+  it("não insiste: se o token novo também for recusado, o erro sobe", async () => {
+    const fetchFalso = vi.fn<typeof fetch>(async () => expirado());
+    const cliente = criarCliente({
+      urlBase: "http://x.test",
+      obterToken: async () => "velho",
+      renovarToken: async () => "novo",
+      fetch: fetchFalso,
+    });
 
-    expect(configuracaoPadrao()).toMatchObject({ token: null, urlBase: "http://127.0.0.1:8000" });
+    await expect(cliente.listarFormularios()).rejects.toMatchObject({
+      status: 401,
+      codigo: "token_expirado",
+    });
+    expect(fetchFalso).toHaveBeenCalledTimes(2);
+  });
+
+  it("401 que não é de expiração não renova", async () => {
+    const renovarToken = vi.fn(async () => "novo");
+    const cliente = criarCliente({
+      urlBase: "http://x.test",
+      obterToken: async () => "t",
+      renovarToken,
+      fetch: vi.fn<typeof fetch>(async () =>
+        respostaDe({
+          status: 401,
+          corpo: { detalhe: "Token inválido.", erros: [], codigo: "token_invalido" },
+        }),
+      ),
+    });
+
+    await expect(cliente.listarFormularios()).rejects.toBeInstanceOf(ErroDaApi);
+    expect(renovarToken).not.toHaveBeenCalled();
+  });
+
+  it("guarda o código do erro para a tela decidir (ex.: termos pendentes)", async () => {
+    const { cliente } = clienteCom(
+      respostaDe({
+        status: 403,
+        corpo: { detalhe: "Aceite os termos.", erros: [], codigo: "termos_pendentes" },
+      }),
+    );
+
+    await expect(cliente.eu()).rejects.toMatchObject({ status: 403, codigo: "termos_pendentes" });
   });
 });

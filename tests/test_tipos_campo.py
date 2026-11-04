@@ -17,8 +17,8 @@ from forms.tipos_campo import (
 D = Decimal
 
 
-def _campo(tipo: TipoCampo, opcoes: tuple[str, ...] = (), maximo: int | None = None) -> Campo:
-    return Campo(id="c", tipo=tipo, rotulo="C", opcoes=opcoes, maximo=maximo)
+def _campo(tipo: TipoCampo, opcoes: tuple[str, ...] = ()) -> Campo:
+    return Campo(id="c", tipo=tipo, rotulo="C", opcoes=opcoes)
 
 
 # --- regra única de "vazio" ---
@@ -46,7 +46,6 @@ def test_zero_falso_e_espaco_nao_sao_vazios(valor: object):
         TipoCampo.SIM_NAO,
         TipoCampo.REFERENCIA,
         TipoCampo.LOCALIZACAO,
-        TipoCampo.FOTO,
     ],
 )
 @pytest.mark.parametrize("vazio", [None, ""])
@@ -279,7 +278,6 @@ def test_propriedades_exclusivas_de_cada_tipo():
     assert "opcoes" in especificacao_do_tipo("selecao").propriedades
     assert "formula" in especificacao_do_tipo("calculado").propriedades
     assert "formulario" in especificacao_do_tipo("referencia").propriedades
-    assert "maximo" in especificacao_do_tipo("foto").propriedades
     assert "opcoes" not in especificacao_do_tipo("texto").propriedades
 
 
@@ -386,40 +384,6 @@ def test_localizacao_que_nao_e_um_par_latitude_longitude_e_rejeitada(valor: obje
     # act / assert
     with pytest.raises(ValorInvalido):
         normalizar_valor(_campo(TipoCampo.LOCALIZACAO), valor)
-
-
-# --- foto ---
-
-
-def test_foto_aceita_lista_de_ids_de_anexo():
-    # act
-    resultado = normalizar_valor(_campo(TipoCampo.FOTO), [3, 1, 2])
-
-    # assert
-    assert resultado == (3, 1, 2)
-    assert valor_para_json(resultado) == [3, 1, 2]
-
-
-def test_foto_com_lista_vazia_e_vazia():
-    # act / assert
-    assert normalizar_valor(_campo(TipoCampo.FOTO), []) is None
-
-
-def test_foto_respeita_o_maximo():
-    # arrange
-    campo = _campo(TipoCampo.FOTO, maximo=2)
-
-    # act / assert
-    assert normalizar_valor(campo, [1, 2]) == (1, 2)
-    with pytest.raises(ValorInvalido, match="no máximo 2"):
-        normalizar_valor(campo, [1, 2, 3])
-
-
-@pytest.mark.parametrize("valor", ["1", 1, [1, "2"], [0], [-1], [True], [1.5], [1, 1], {"a": 1}])
-def test_foto_exige_lista_de_ids_inteiros_positivos_sem_repeticao(valor: object):
-    # act / assert
-    with pytest.raises(ValorInvalido):
-        normalizar_valor(_campo(TipoCampo.FOTO), valor)
 
 
 # --- referencia ---

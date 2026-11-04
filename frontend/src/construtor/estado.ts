@@ -19,7 +19,6 @@ export interface CampoEmEdicao {
   formula: string;
   formulario: string;
   compartilhado: boolean;
-  maximo: string;
 }
 
 /** Propriedades que cada tipo aceita, como o catálogo da API informa (`GET /catalogo`). */
@@ -44,7 +43,6 @@ export function adicionarCampo(
     formula: "",
     formulario: "",
     compartilhado: false,
-    maximo: "",
   };
   const indice =
     posicao === undefined ? campos.length : Math.max(0, Math.min(posicao, campos.length));
@@ -107,7 +105,6 @@ export function paraDefinicao(
       if (campo.formulario.trim() && aceita("formulario"))
         saida["formulario"] = campo.formulario.trim();
       if (campo.compartilhado && aceita("compartilhado")) saida["compartilhado"] = true;
-      if (campo.maximo.trim() && aceita("maximo")) saida["maximo"] = numeroOuTexto(campo.maximo);
       return saida;
     }),
   };
@@ -127,7 +124,6 @@ export function deDefinicao(definicao: Definicao, gerarChave: () => string): Cam
     formula: campo.formula ?? "",
     formulario: campo.formulario ?? "",
     compartilhado: campo.compartilhado ?? false,
-    maximo: campo.maximo == null ? "" : String(campo.maximo),
   }));
 }
 
@@ -153,7 +149,6 @@ export function deRascunho(definicao: unknown, gerarChave: () => string): CampoE
       formula: texto(campo["formula"]),
       formulario: texto(campo["formulario"]),
       compartilhado: campo["compartilhado"] === true,
-      maximo: textoOuNumero(campo["maximo"]),
     };
   });
 }
@@ -166,7 +161,7 @@ function texto(valor: unknown): string {
   return typeof valor === "string" ? valor : "";
 }
 
-/** `casas_decimais` e `maximo` chegam como número ou como texto digitado. */
+/** `casas_decimais` chega como número ou como texto digitado. */
 function textoOuNumero(valor: unknown): string {
   return typeof valor === "string" || typeof valor === "number" ? String(valor) : "";
 }

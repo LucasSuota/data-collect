@@ -36,16 +36,27 @@ jobs:
       - name: Formatação
         run: uv run ruff format --check .
 
-  # O app é instalável nos três sistemas; quebras de caminho e de fim de linha
-  # só aparecem fora do Linux (AGENTS.md §4.1)
+  # Os testes rodam contra um PostgreSQL de verdade, com pgvector (AGENTS.md §8). Só Linux: o
+  # produto é auto-hospedado em contêiner, não há mais instalável para Windows e macOS.
   testes:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      # Sem fail-fast, para ver o resultado dos três sistemas mesmo se um falhar
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: forms
+          POSTGRES_PASSWORD: forms
+          POSTGRES_DB: forms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forms -d forms_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      FORMS_TEST_DSN: postgresql://forms:forms@127.0.0.1:5432/forms_test
     steps:
       - uses: actions/checkout@v4
 
@@ -55,10 +66,38 @@ jobs:
           enable-cache: true
 
       - name: Instalar dependências
-        run: uv sync --locked
+        run: uv sync --locked --extra ia
+
+      # O papel do aplicativo (sem BYPASSRLS) é o que prova o isolamento por equipe; no compose ele
+      # nasce em docker/postgres/01-init.sh.
+      - name: Preparar o banco de teste
+        env:
+          PGPASSWORD: forms
+        run: |
+          psql -h 127.0.0.1 -U forms -d forms_test -c "CREATE ROLE forms_app LOGIN PASSWORD 'forms_app'"
+          psql -h 127.0.0.1 -U forms -d forms_test -c "CREATE EXTENSION IF NOT EXISTS vector"
 
       - name: Testes
         run: uv run pytest
+
+  # As imagens têm de construir: a da API e a do proxy (que também compila o front)
+  imagens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      POSTGRES_PASSWORD: ci
+      FORMS_APP_PASSWORD: ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar o compose
+        run: docker compose config -q
+
+      - name: Construir as imagens
+        run: docker compose build api web
+
+      - name: Validar o Caddyfile
+        run: docker run --rm -e APP_HOST=localhost -e AUTH_HOST=auth.localhost data-collect-web:local caddy validate --config /etc/caddy/Caddyfile
 
   # O front tem job próprio (AGENTS.md §14): lint, formatação, typecheck, testes e build
   frontend:
@@ -113,39 +152,53 @@ jobs:
       - name: Build
         run: npm run build
 
-  # A janela Electron: a lógica pura é testada; a janela em si é verificada à mão (AGENTS.md §8)
-  desktop:
+  # Ponta a ponta contra a pilha REAL (AGENTS.md §8): sobe o compose, pega o link do primeiro convite
+  # no log da API e roda o Playwright (celular e desktop) com acessibilidade e orçamento de JS.
+  e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     env:
-      # Os testes não abrem janela: não precisam do binário do Electron (~100 MB)
-      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-    defaults:
-      run:
-        working-directory: desktop
+      POSTGRES_PASSWORD: ci-postgres
+      FORMS_APP_PASSWORD: ci-app
+      FORMS_ADMIN_EMAIL: admin@exemplo.com
     steps:
       - uses: actions/checkout@v4
+
+      - name: Subir a pilha
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 60); do
+            docker compose ps web --format '{{.Status}}' | grep -q '^Up' && break
+            sleep 5
+          done
+
+      - name: Pegar o link do primeiro convite
+        run: |
+          sleep 10
+          echo "E2E_INVITE_URL=$(docker compose logs api --no-log-prefix | grep -o '/convite/[A-Za-z0-9_-]*' | tail -1)" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Instalar dependências
-        run: npm ci
+      - name: Instalar dependências e o navegador
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
 
-      - name: Lint
-        run: npm run lint
+      - name: Testes ponta a ponta
+        working-directory: frontend
+        run: npx playwright test
 
-      - name: Formatação
-        run: npm run format:check
+      - name: Logs da pilha, se falhou
+        if: failure()
+        run: docker compose logs --no-color --tail 200
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Testes
-        run: npm test
-
-      - name: Build
-        run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-resultados
+          path: frontend/test-results

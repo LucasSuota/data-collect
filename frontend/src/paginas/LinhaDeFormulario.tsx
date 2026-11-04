@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { useApi } from "../api/contexto";
 import { ErroDaApi, type ResumoDeFormulario } from "../api/cliente";
 import type { Rota } from "../rotas";
+import { ComPermissao } from "../shell/permissoes";
 import { Botao, CampoDeTexto, Icone, Selecao, Selo } from "../ui";
 import { mensagemDe, mensagemDetalhada } from "./Estado";
 import { idDeArraste, type Destino } from "./pastas";
@@ -124,14 +125,16 @@ export function LinhaDeFormulario({
           </div>
         </div>
         <div className="col-start-2 flex flex-wrap items-center gap-1.5 @3xl:col-start-3">
-          <Botao
-            variante="primario"
-            tamanho="pequeno"
-            aria-label={`Novo registro em ${formulario.nome}`}
-            onClick={() => navegar({ nome: "novoRegistro", formularioId: formulario.id })}
-          >
-            Novo registro
-          </Botao>
+          <ComPermissao permissao="registros:criar">
+            <Botao
+              variante="primario"
+              tamanho="pequeno"
+              aria-label={`Novo registro em ${formulario.nome}`}
+              onClick={() => navegar({ nome: "novoRegistro", formularioId: formulario.id })}
+            >
+              Novo registro
+            </Botao>
+          </ComPermissao>
           <Botao
             tamanho="pequeno"
             aria-label={`Ver registros de ${formulario.nome}`}
@@ -140,61 +143,69 @@ export function LinhaDeFormulario({
             Registros
           </Botao>
           <span aria-hidden="true" className="mx-1 h-4 w-px bg-pedra-200" />
-          <Botao
-            variante="fantasma"
-            tamanho="pequeno"
-            aria-label={`Editar o formulário ${formulario.nome}`}
-            title="Editar"
-            onClick={() => navegar({ nome: "editarFormulario", formularioId: formulario.id })}
-          >
-            <Icone nome="editar" />
-            <span className="hidden @4xl:inline">Editar</span>
-          </Botao>
-          <Botao
-            variante="fantasma"
-            tamanho="pequeno"
-            aria-label={`Duplicar o formulário ${formulario.nome}`}
-            title="Duplicar"
-            onClick={() => {
-              setDuplicando(true);
-              setNomeDaCopia("");
-              setErrosDaCopia([]);
-            }}
-          >
-            <Icone nome="copiar" />
-            <span className="hidden @4xl:inline">Duplicar</span>
-          </Botao>
-          <Selecao
-            rotulo={`Mover ${formulario.nome} para`}
-            ocultarRotulo
-            className="w-36"
-            value=""
-            onChange={(evento) => void mover(evento.target.value)}
-          >
-            <option value="">Mover para…</option>
-            {formulario.pasta_id != null ? <option value="raiz">Raiz (sem pasta)</option> : null}
-            {destinos.map((destino) => (
-              <option key={destino.id} value={destino.id}>
-                {destino.rotulo}
-              </option>
-            ))}
-          </Selecao>
-          {confirmando ? (
-            <Botao variante="perigoSolido" tamanho="pequeno" onClick={() => void excluir()}>
-              Confirmar exclusão de {formulario.nome}
-            </Botao>
-          ) : (
+          <ComPermissao permissao="formularios:publicar">
             <Botao
-              variante="perigo"
+              variante="fantasma"
               tamanho="pequeno"
-              aria-label={`Excluir o formulário ${formulario.nome}`}
-              title="Excluir"
-              onClick={() => setConfirmando(true)}
+              aria-label={`Editar o formulário ${formulario.nome}`}
+              title="Editar"
+              onClick={() => navegar({ nome: "editarFormulario", formularioId: formulario.id })}
             >
-              <Icone nome="lixeira" />
-              <span className="hidden @4xl:inline">Excluir</span>
+              <Icone nome="editar" />
+              <span className="hidden @4xl:inline">Editar</span>
             </Botao>
-          )}
+          </ComPermissao>
+          <ComPermissao permissao="formularios:publicar">
+            <Botao
+              variante="fantasma"
+              tamanho="pequeno"
+              aria-label={`Duplicar o formulário ${formulario.nome}`}
+              title="Duplicar"
+              onClick={() => {
+                setDuplicando(true);
+                setNomeDaCopia("");
+                setErrosDaCopia([]);
+              }}
+            >
+              <Icone nome="copiar" />
+              <span className="hidden @4xl:inline">Duplicar</span>
+            </Botao>
+          </ComPermissao>
+          <ComPermissao permissao="formularios:organizar">
+            <Selecao
+              rotulo={`Mover ${formulario.nome} para`}
+              ocultarRotulo
+              className="w-36"
+              value=""
+              onChange={(evento) => void mover(evento.target.value)}
+            >
+              <option value="">Mover para…</option>
+              {formulario.pasta_id != null ? <option value="raiz">Raiz (sem pasta)</option> : null}
+              {destinos.map((destino) => (
+                <option key={destino.id} value={destino.id}>
+                  {destino.rotulo}
+                </option>
+              ))}
+            </Selecao>
+          </ComPermissao>
+          <ComPermissao permissao="formularios:excluir">
+            {confirmando ? (
+              <Botao variante="perigoSolido" tamanho="pequeno" onClick={() => void excluir()}>
+                Confirmar exclusão de {formulario.nome}
+              </Botao>
+            ) : (
+              <Botao
+                variante="perigo"
+                tamanho="pequeno"
+                aria-label={`Excluir o formulário ${formulario.nome}`}
+                title="Excluir"
+                onClick={() => setConfirmando(true)}
+              >
+                <Icone nome="lixeira" />
+                <span className="hidden @4xl:inline">Excluir</span>
+              </Botao>
+            )}
+          </ComPermissao>
         </div>
       </div>
       {duplicando ? (

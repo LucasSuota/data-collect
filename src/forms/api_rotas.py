@@ -4,32 +4,36 @@ Cada rota chama uma função de `servico` e converte o resultado em modelo de re
 de domínio viram o status HTTP certo em `api.py`.
 """
 
+import dataclasses
 import re
-from collections.abc import Iterator
-from datetime import UTC, date, datetime
-from pathlib import Path
+from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
-from fastapi.security import APIKeyHeader
+from fastapi import APIRouter, Depends, Query, Response
 
-from forms import fotos, servico
+from forms import servico
+from forms.api_dependencias import DepAgora, DepConexao, autorizar
 from forms.api_esquemas import (
-    AnexoSaida,
     CatalogoSaida,
+    ContagensSaida,
     DuplicarEntrada,
     ErroDeCampoSaida,
     ErroSaida,
+    ExibicaoSaida,
     FormularioDetalheSaida,
     FormularioEntrada,
+    HistoricoSaida,
     ListagemDeRegistrosSaida,
     LoteEntrada,
     MoverFormularioEntrada,
     PastaAtualizacao,
     PastaEntrada,
     PastaSaida,
+    PessoaResumoSaida,
     PreviaEntrada,
     PreviaSaida,
+    RascunhoEntrada,
+    RascunhoSaida,
     RegistroAtualizacao,
     RegistroEntrada,
     RegistroSaida,
@@ -42,49 +46,24 @@ from forms.api_esquemas import (
     VersaoSaida,
     coluna_de,
 )
-from forms.models import ErroDeCampo, Formulario, RegistroInvalido, Versao
-from forms.servico import Conexao, Rascunho
-
-CABECALHO_DO_TOKEN = "X-Forms-Token"
-
-# O token é conferido pelo middleware; este esquema só o descreve no OpenAPI (botão "Authorize").
-esquema_do_token = APIKeyHeader(
-    name=CABECALHO_DO_TOKEN, auto_error=False, scheme_name="TokenDaExecucao"
-)
+from forms.banco import Conexao
+from forms.models import ErroDeCampo, Formulario, Registro, RegistroInvalido, Versao
+from forms.repositorio import RascunhoGuardado
+from forms.servico import Rascunho
 
 # Erros comuns a (quase) todo endpoint, para o OpenAPI mostrar o formato uniforme.
 ERROS_COMUNS = {
-    401: {"model": ErroSaida, "description": "Token ausente ou inválido."},
+    401: {"model": ErroSaida, "description": "Sem token, token inválido ou expirado."},
+    403: {"model": ErroSaida, "description": "Sem permissão, sem equipe ou termos pendentes."},
     404: {"model": ErroSaida, "description": "Recurso inexistente."},
     422: {"model": ErroSaida, "description": "Dados inválidos, com os erros por campo."},
 }
 _ERRO_409 = {409: {"model": ErroSaida, "description": "Exclusão bloqueada por vínculo."}}
 
-roteador = APIRouter(dependencies=[Depends(esquema_do_token)], responses=ERROS_COMUNS)
+roteador = APIRouter(dependencies=[Depends(autorizar)], responses=ERROS_COMUNS)
 
 
 # --- dependências (injetadas por parâmetro, nunca globais) ---
-
-
-def obter_conexao(request: Request) -> Iterator[Conexao]:
-    conexao = servico.abrir_banco(request.app.state.configuracao.banco)
-    try:
-        yield conexao
-    finally:
-        conexao.close()
-
-
-def obter_agora() -> datetime:
-    return datetime.now(UTC)
-
-
-def obter_pasta_de_dados(request: Request) -> Path:
-    return request.app.state.configuracao.pasta_de_dados
-
-
-DepConexao = Annotated[Conexao, Depends(obter_conexao)]
-DepAgora = Annotated[datetime, Depends(obter_agora)]
-DepPasta = Annotated[Path, Depends(obter_pasta_de_dados)]
 
 
 # --- formulários e versões ---
@@ -236,6 +215,74 @@ def obter_versao(formulario_id: int, versao_id: int, conexao: DepConexao) -> Ver
     return VersaoSaida.de(servico.obter_versao(conexao, formulario_id, versao_id))
 
 
+# --- rascunho de versão ---
+
+
+def _rascunho_saida(conexao: Conexao, rascunho: RascunhoGuardado) -> RascunhoSaida:
+    nomes = servico.nomes_de_pessoas(conexao, [rascunho.atualizado_por])
+    por = rascunho.atualizado_por
+    return RascunhoSaida(
+        formulario_id=rascunho.formulario_id,
+        definicao=rascunho.definicao,
+        base_versao_id=rascunho.base_versao_id,
+        revisao=rascunho.revisao,
+        atualizado_por=None
+        if por is None or por not in nomes
+        else PessoaResumoSaida(id=por, nome=nomes[por]),
+        atualizado_em=rascunho.atualizado_em,
+    )
+
+
+@roteador.get(
+    "/formularios/{formulario_id}/rascunho",
+    response_model=RascunhoSaida,
+    tags=["rascunho"],
+    summary="O rascunho da próxima versão (404 se não há)",
+)
+def obter_rascunho(formulario_id: int, conexao: DepConexao) -> RascunhoSaida:
+    return _rascunho_saida(conexao, servico.obter_rascunho(conexao, formulario_id))
+
+
+@roteador.put(
+    "/formularios/{formulario_id}/rascunho",
+    response_model=RascunhoSaida,
+    tags=["rascunho"],
+    summary="Cria ou substitui o rascunho (aceita definição incompleta)",
+    responses={409: {"model": ErroSaida, "description": "Outra pessoa alterou o rascunho."}},
+)
+def salvar_rascunho(
+    formulario_id: int, entrada: RascunhoEntrada, conexao: DepConexao, agora: DepAgora
+) -> RascunhoSaida:
+    salvo = servico.salvar_rascunho(
+        conexao, formulario_id, entrada.definicao, entrada.revisao, agora
+    )
+    return _rascunho_saida(conexao, salvo)
+
+
+@roteador.delete(
+    "/formularios/{formulario_id}/rascunho",
+    status_code=204,
+    response_class=Response,
+    tags=["rascunho"],
+    summary="Descarta o rascunho",
+)
+def descartar_rascunho(formulario_id: int, conexao: DepConexao) -> Response:
+    servico.descartar_rascunho(conexao, formulario_id)
+    return Response(status_code=204)
+
+
+@roteador.post(
+    "/formularios/{formulario_id}/rascunho/publicar",
+    status_code=201,
+    response_model=VersaoSaida,
+    tags=["rascunho"],
+    summary="Valida o rascunho e publica a versão N+1",
+    description="Definição inválida → 422 com os erros e o rascunho continua.",
+)
+def publicar_rascunho(formulario_id: int, conexao: DepConexao, agora: DepAgora) -> VersaoSaida:
+    return VersaoSaida.de(servico.publicar_rascunho(conexao, formulario_id, agora))
+
+
 # --- pastas ---
 
 
@@ -363,7 +410,7 @@ def criar_registro(
     registro = servico.criar_registro(
         conexao, formulario_id, entrada.versao_id, entrada.dados, agora
     )
-    return RegistroSaida.de(registro)
+    return _saida_do_registro(conexao, registro)
 
 
 @roteador.get(
@@ -385,6 +432,7 @@ def listar_registros(
     deslocamento: Annotated[int, Query(ge=0)] = 0,
     criado_de: date | None = None,
     criado_ate: date | None = None,
+    meus: Annotated[bool, Query(description="Só os registros que eu criei.")] = False,
     filtro: Annotated[list[str] | None, Query(description="`campo:valor`, repetível.")] = None,
 ) -> ListagemDeRegistrosSaida:
     listagem = servico.listar_registros(
@@ -396,13 +444,53 @@ def listar_registros(
         criado_ate=criado_ate,
         limite=limite,
         deslocamento=deslocamento,
+        meus=meus,
+    )
+    nomes = servico.nomes_de_pessoas(
+        conexao, [i for r in listagem.itens for i in (r.criado_por, r.atualizado_por)]
     )
     return ListagemDeRegistrosSaida(
         versao_id=listagem.versao_id,
         colunas=[coluna_de(c) for c in listagem.colunas],
-        itens=[RegistroSaida.de(r) for r in listagem.itens],
+        itens=[
+            RegistroSaida.de(r, nomes, servico.estado_do_registro(r.dados, listagem.campo_status))
+            for r in listagem.itens
+        ],
         total=listagem.total,
+        exibicao=ExibicaoSaida(
+            destaque=listagem.exibicao.destaque,
+            status=listagem.exibicao.status,
+            resumo=list(listagem.exibicao.resumo),
+        ),
     )
+
+
+@roteador.get(
+    "/formularios/{formulario_id}/registros/contagens",
+    response_model=ContagensSaida,
+    tags=["registros"],
+    summary="Registros por estado (conforme, não conforme, erro, aguardando)",
+    description="Mesma versão e mesmos filtros da listagem; o estado é decidido pelo servidor.",
+)
+def contar_registros(
+    formulario_id: int,
+    conexao: DepConexao,
+    versao_id: int | None = None,
+    criado_de: date | None = None,
+    criado_ate: date | None = None,
+    meus: bool = False,
+    filtro: Annotated[list[str] | None, Query(description="`campo:valor`, repetível.")] = None,
+) -> ContagensSaida:
+    contagens = servico.contar_por_estado(
+        conexao,
+        formulario_id,
+        versao_id=versao_id,
+        filtros=ler_filtros(filtro or []),
+        criado_de=criado_de,
+        criado_ate=criado_ate,
+        meus=meus,
+    )
+    return ContagensSaida(**dataclasses.asdict(contagens))
 
 
 @roteador.get(
@@ -422,6 +510,7 @@ def exportar_registros(
     versao_id: int | None = None,
     criado_de: date | None = None,
     criado_ate: date | None = None,
+    meus: bool = False,
     filtro: Annotated[list[str] | None, Query(description="`campo:valor`, repetível.")] = None,
 ) -> Response:
     nome = servico.obter_formulario(conexao, formulario_id).formulario.nome
@@ -432,6 +521,7 @@ def exportar_registros(
         filtros=ler_filtros(filtro or []),
         criado_de=criado_de,
         criado_ate=criado_ate,
+        meus=meus,
     )
     return Response(
         content=conteudo,
@@ -450,7 +540,7 @@ def exportar_registros(
     summary="Um registro; o `versao_id` dele aponta a definição certa",
 )
 def obter_registro(registro_id: int, conexao: DepConexao) -> RegistroSaida:
-    return RegistroSaida.de(servico.obter_registro(conexao, registro_id))
+    return _saida_do_registro(conexao, servico.obter_registro(conexao, registro_id))
 
 
 @roteador.put(
@@ -468,11 +558,11 @@ def atualizar_registro(
     entrada: RegistroAtualizacao,
     conexao: DepConexao,
     agora: DepAgora,
-    pasta: DepPasta,
 ) -> RegistroSaida:
-    return RegistroSaida.de(
-        servico.atualizar_registro(conexao, registro_id, entrada.dados, agora, pasta)
+    registro = servico.atualizar_registro(
+        conexao, registro_id, entrada.dados, agora, entrada.revisao
     )
+    return _saida_do_registro(conexao, registro)
 
 
 @roteador.delete(
@@ -484,58 +574,38 @@ def atualizar_registro(
     description="409 se outro registro o referencia.",
     responses=_ERRO_409,
 )
-def excluir_registro(registro_id: int, conexao: DepConexao, pasta: DepPasta) -> Response:
-    servico.excluir_registro(conexao, registro_id, pasta)
+def excluir_registro(registro_id: int, conexao: DepConexao, agora: DepAgora) -> Response:
+    servico.excluir_registro(conexao, registro_id, agora)
     return Response(status_code=204)
 
 
-# --- anexos (fotos) ---
-
-
-@roteador.post(
-    "/anexos",
-    status_code=201,
-    response_model=AnexoSaida,
-    tags=["anexos"],
-    summary="Envia uma foto (multipart, campo `arquivo`)",
-    description=(
-        "JPEG, PNG ou WebP até 20 MB; vira WebP sem metadados. O registro guarda a lista de `id`s. "
-        "O nome do arquivo enviado nunca é usado."
-    ),
-)
-def enviar_anexo(
-    conexao: DepConexao,
-    agora: DepAgora,
-    pasta: DepPasta,
-    arquivo: Annotated[UploadFile, File(description="A imagem.")],
-) -> AnexoSaida:
-    # Lê um byte além do limite: basta para `fotos` recusar sem carregar um arquivo gigante.
-    conteudo = arquivo.file.read(fotos.TAMANHO_MAXIMO_ENTRADA + 1)
-    anexo = servico.guardar_anexo(conexao, pasta, conteudo, agora)
-    return AnexoSaida(
-        id=anexo.id, largura=anexo.largura, altura=anexo.altura, tamanho_bytes=anexo.tamanho_bytes
-    )
-
-
 @roteador.get(
-    "/anexos/{anexo_id}",
-    response_class=Response,
-    responses={200: {"content": {"image/webp": {}}, "description": "A foto em WebP."}},
-    tags=["anexos"],
-    summary="A foto em WebP",
+    "/registros/{registro_id}/historico",
+    response_model=list[HistoricoSaida],
+    tags=["registros"],
+    summary="Histórico de alterações do registro (quem, quando, o que havia antes)",
 )
-def obter_anexo(anexo_id: int, conexao: DepConexao, pasta: DepPasta) -> Response:
-    return Response(
-        content=servico.ler_anexo(conexao, pasta, anexo_id),
-        media_type="image/webp",
-        headers={
-            "Cache-Control": "private, max-age=31536000, immutable",
-            "X-Content-Type-Options": "nosniff",
-        },
-    )
+def historico_do_registro(registro_id: int, conexao: DepConexao) -> list[HistoricoSaida]:
+    return [
+        HistoricoSaida(
+            id=e.id,
+            usuario_id=e.usuario_id,
+            pessoa=nome,
+            quando=e.quando,
+            acao=e.acao,
+            valores_anteriores=e.valores_anteriores,
+            motivo=e.motivo,
+        )
+        for e, nome in servico.historico_do_registro(conexao, registro_id)
+    ]
 
 
 # --- apoio ---
+
+
+def _saida_do_registro(conexao: Conexao, registro: Registro) -> RegistroSaida:
+    nomes = servico.nomes_de_pessoas(conexao, [registro.criado_por, registro.atualizado_por])
+    return RegistroSaida.de(registro, nomes)
 
 
 def _detalhe(formulario: Formulario, versao: Versao) -> FormularioDetalheSaida:

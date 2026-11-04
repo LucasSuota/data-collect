@@ -12,6 +12,7 @@ import { useState, type FormEvent } from "react";
 import { useApi } from "../api/contexto";
 import { ErroDaApi, type ResumoDeFormulario } from "../api/cliente";
 import type { Rota } from "../rotas";
+import { ComPermissao } from "../shell/permissoes";
 import {
   Aviso,
   Botao,
@@ -120,7 +121,7 @@ export function PaginaDeFormularios({ navegar, pastaId = null }: Props) {
       <Moldura>
         <Aviso tom="erro">
           Pasta não encontrada.{" "}
-          <a href="#/" className="underline decoration-sinal-500 underline-offset-2">
+          <a href="#/formularios" className="underline decoration-sinal-500 underline-offset-2">
             Voltar aos formulários
           </a>
         </Aviso>
@@ -520,7 +521,7 @@ function Cabecalho({
     <header className="flex flex-col gap-3">
       <nav aria-label="Caminho da pasta" className="flex flex-wrap items-center gap-1 text-sm">
         <a
-          href="#/"
+          href="#/formularios"
           className="rounded-controle text-pedra-600 hover:text-pedra-900"
           onClick={(e) => {
             e.preventDefault();
@@ -555,28 +556,34 @@ function Cabecalho({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{atual?.nome ?? "Formulários"}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Botao
-            onClick={() => {
-              setCriando(true);
-              setRenomeando(false);
-              setNome("");
-              setErros([]);
-            }}
-          >
-            <Icone nome="pasta" />
-            Nova pasta
-          </Botao>
-          <Botao
-            variante="primario"
-            onClick={() =>
-              navegar(
-                atual ? { nome: "novoFormulario", pastaId: atual.id } : { nome: "novoFormulario" },
-              )
-            }
-          >
-            <Icone nome="mais" />
-            Novo formulário
-          </Botao>
+          <ComPermissao permissao="formularios:organizar">
+            <Botao
+              onClick={() => {
+                setCriando(true);
+                setRenomeando(false);
+                setNome("");
+                setErros([]);
+              }}
+            >
+              <Icone nome="pasta" />
+              Nova pasta
+            </Botao>
+          </ComPermissao>
+          <ComPermissao permissao="formularios:publicar" bloqueado="Novo formulário">
+            <Botao
+              variante="primario"
+              onClick={() =>
+                navegar(
+                  atual
+                    ? { nome: "novoFormulario", pastaId: atual.id }
+                    : { nome: "novoFormulario" },
+                )
+              }
+            >
+              <Icone nome="mais" />
+              Novo formulário
+            </Botao>
+          </ComPermissao>
         </div>
       </div>
 

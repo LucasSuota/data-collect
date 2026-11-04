@@ -24,11 +24,6 @@ export function valoresDoRegistro(definicao: Definicao, dados: Dados): Valores {
       case "referencia":
         if (typeof valor === "number") valores[campo.id] = valor;
         break;
-      case "foto":
-        if (Array.isArray(valor) && valor.every((id) => typeof id === "number")) {
-          valores[campo.id] = valor as number[];
-        }
-        break;
       case "localizacao":
         if (ehCoordenadas(valor)) valores[campo.id] = valor;
         break;

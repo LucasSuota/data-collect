@@ -40,6 +40,9 @@ const registro = (id: number, formulario_id: number, dados: Record<string, unkno
   formulario_id,
   versao_id: formulario_id * 10,
   dados,
+  revisao: 1,
+  criado_por: null,
+  atualizado_por: null,
   criado_em: "2026-11-02T10:00:00+00:00",
   atualizado_em: "x",
 });
@@ -64,6 +67,7 @@ function cliente(extra = {}) {
             versao_id: 10,
             total: 1,
             colunas: [coluna("umidade", "numero", { rotulo: "Umidade", unidade: "%" })],
+            exibicao: { destaque: null, status: null, resumo: [] },
             itens: [registro(5, 1, { umidade: "12.4" })],
           }
         : {
@@ -73,6 +77,7 @@ function cliente(extra = {}) {
               coluna("ensaio", "referencia", { rotulo: "Ensaio de origem" }),
               coluna("ok", "calculado", { rotulo: "Conforme?", resultado: "booleano" }),
             ],
+            exibicao: { destaque: null, status: null, resumo: [] },
             itens: [registro(8, 2, { ensaio: 5, ok: { valor: false, erro: null } })],
           },
     ...extra,
@@ -144,12 +149,14 @@ describe("PaginaDoMapa", () => {
                 versao_id: 10,
                 total: 2,
                 colunas: [coluna("umidade", "numero")],
+                exibicao: { destaque: null, status: null, resumo: [] },
                 itens: [registro(5, 1, { umidade: "1" }), registro(6, 1, { umidade: "2" })],
               }
             : {
                 versao_id: 20,
                 total: 1,
                 colunas: [coluna("ensaio", "referencia")],
+                exibicao: { destaque: null, status: null, resumo: [] },
                 itens: [registro(8, 2, { ensaio: 5 })],
               },
       }),
@@ -198,6 +205,7 @@ describe("PaginaDoMapa", () => {
           versao_id: 10,
           total: 999,
           colunas: [],
+          exibicao: { destaque: null, status: null, resumo: [] },
           itens: [registro(5, 1, {})],
         }),
       }),

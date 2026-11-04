@@ -8,7 +8,6 @@ const DEFINICAO: Definicao = {
     { id: "fck", tipo: "numero", rotulo: "fck" },
     { id: "ok", tipo: "sim_nao", rotulo: "Ok" },
     { id: "local", tipo: "localizacao", rotulo: "Local" },
-    { id: "fotos", tipo: "foto", rotulo: "Fotos" },
     { id: "ensaio", tipo: "referencia", rotulo: "Ensaio", formulario: "ensaio" },
     { id: "dobro", tipo: "calculado", rotulo: "Dobro", formula: "fck * 2" },
   ],
@@ -21,7 +20,6 @@ describe("valoresDoRegistro", () => {
       fck: "25.5",
       ok: false,
       local: { latitude: "-23.5", longitude: "-46.6" },
-      fotos: [3, 4],
       ensaio: 12,
       dobro: { valor: "51", erro: null },
     };
@@ -31,7 +29,6 @@ describe("valoresDoRegistro", () => {
       fck: "25.5",
       ok: false,
       local: { latitude: "-23.5", longitude: "-46.6" },
-      fotos: [3, 4],
       ensaio: 12,
     });
   });
@@ -41,7 +38,7 @@ describe("valoresDoRegistro", () => {
   });
 
   it("ignora valor de tipo inesperado em vez de quebrar", () => {
-    expect(valoresDoRegistro(DEFINICAO, { fck: 5, ok: "sim", fotos: "x", local: 3 })).toEqual({});
+    expect(valoresDoRegistro(DEFINICAO, { fck: 5, ok: "sim", local: 3 })).toEqual({});
   });
 });
 

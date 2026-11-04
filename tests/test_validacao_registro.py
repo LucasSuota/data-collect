@@ -19,7 +19,6 @@ DEFINICAO = Definicao(
         Campo(id="ensaiado", tipo=TipoCampo.SIM_NAO, rotulo="Ensaiado?"),
         Campo(id="obs", tipo=TipoCampo.TEXTO, rotulo="Observação"),
         Campo(id="local", tipo=TipoCampo.LOCALIZACAO, rotulo="Local"),
-        Campo(id="fotos", tipo=TipoCampo.FOTO, rotulo="Fotos", maximo=2),
         Campo(id="ensaio", tipo=TipoCampo.REFERENCIA, rotulo="Ensaio", formulario="ensaio"),
         Campo(id="dobro", tipo=TipoCampo.CALCULADO, rotulo="Dobro", formula="fck * 2"),
     )
@@ -41,7 +40,6 @@ def test_registro_valido_nao_tem_erros_e_expoe_valores_normalizados():
         "ensaiado": True,
         "obs": "ok",
         "local": {"latitude": "-23.550520", "longitude": "-46.633308"},
-        "fotos": [1, 2],
         "ensaio": 7,
     }
 
@@ -58,7 +56,6 @@ def test_registro_valido_nao_tem_erros_e_expoe_valores_normalizados():
         "ensaiado": True,
         "obs": "ok",
         "local": Localizacao(D("-23.550520"), D("-46.633308")),
-        "fotos": (1, 2),
         "ensaio": 7,
     }
 
@@ -80,7 +77,6 @@ def test_campos_opcionais_ausentes_viram_none_nos_valores():
     assert resultado.erros == ()
     assert resultado.valores["diametro"] is None
     assert resultado.valores["moldagem"] is None
-    assert resultado.valores["fotos"] is None
 
 
 def test_valores_nao_incluem_calculado_nem_secao():
@@ -121,20 +117,17 @@ def test_obrigatorio_false_nao_e_vazio():
     assert _erros({"ok": False}, definicao) == {}
 
 
-def test_obrigatorio_vale_para_o_par_da_localizacao_e_para_a_lista_de_fotos():
+def test_obrigatorio_vale_para_o_par_da_localizacao():
     # arrange
     definicao = Definicao(
-        (
-            Campo(id="local", tipo=TipoCampo.LOCALIZACAO, rotulo="L", obrigatorio=True),
-            Campo(id="fotos", tipo=TipoCampo.FOTO, rotulo="F", obrigatorio=True),
-        )
+        (Campo(id="local", tipo=TipoCampo.LOCALIZACAO, rotulo="L", obrigatorio=True),)
     )
 
     # act
-    erros = _erros({"local": {"latitude": "", "longitude": None}, "fotos": []}, definicao)
+    erros = _erros({"local": {"latitude": "", "longitude": None}}, definicao)
 
     # assert
-    assert erros == {"local": "Campo obrigatório.", "fotos": "Campo obrigatório."}
+    assert erros == {"local": "Campo obrigatório."}
 
 
 # --- tipo errado e opção inválida ---
@@ -152,7 +145,6 @@ def test_obrigatorio_vale_para_o_par_da_localizacao_e_para_a_lista_de_fotos():
         ("ensaiado", "sim"),
         ("obs", 5),
         ("ensaio", "7"),
-        ("fotos", "1"),
         ("local", "-23,5 / -46,6"),
     ],
 )
@@ -229,18 +221,6 @@ def test_localizacao_vazia_e_aceita_quando_nao_obrigatoria():
     assert resultado.erros == () and resultado.valores["local"] is None
 
 
-# --- foto ---
-
-
-def test_foto_acima_do_maximo_e_erro():
-    # act
-    erros = _erros({"fck": "25", "fotos": [1, 2, 3]})
-
-    # assert
-    assert list(erros) == ["fotos"]
-    assert "no máximo 2" in erros["fotos"]
-
-
 # --- vários erros e forma dos dados ---
 
 
@@ -266,8 +246,8 @@ def test_dados_que_nao_sao_objeto_geram_erro_unico(dados: object):
 
 def test_validar_nao_altera_os_dados_recebidos():
     # arrange
-    dados = {"fck": 25.5, "fotos": [1, 2]}
-    copia = {"fck": 25.5, "fotos": [1, 2]}
+    dados = {"fck": 25.5, "obs": "x"}
+    copia = {"fck": 25.5, "obs": "x"}
 
     # act
     validar_registro(DEFINICAO, dados)

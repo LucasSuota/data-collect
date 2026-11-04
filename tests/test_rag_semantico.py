@@ -1,10 +1,10 @@
 import math
-import sqlite3
 import struct
 
 import pytest
 
 from forms import repositorio
+from forms.banco import Conexao
 from forms.ia.cliente import ClienteFalso, IaIndisponivel
 from forms.rag.chunker import Trecho
 from forms.rag.indice import IndiceBm25, ResultadoDeBusca
@@ -34,13 +34,6 @@ VETORES = {
     "irrigar a massa fresca": [0.9, 0.1, 0.0],
     "assunto sem nenhuma relação": [0.0, 0.0, 0.0],
 }
-
-
-@pytest.fixture
-def conexao():
-    conexao = repositorio.abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
 
 
 class ClienteContador(ClienteFalso):
@@ -378,7 +371,7 @@ def test_vetores_ficam_no_banco_como_blob(conexao):
     assert len(linha["chave"]) == 64  # sha256 em hexadecimal
 
 
-def test_repositorio_de_vetores_guarda_lista_e_apaga(conexao: sqlite3.Connection):
+def test_repositorio_de_vetores_guarda_lista_e_apaga(conexao: Conexao):
     # act
     repositorio.guardar_vetores(conexao, {"a": b"\x00\x00\x80?", "b": b"\x00\x00\x00@"})
     repositorio.guardar_vetores(conexao, {"a": b"\x00\x00\x00A"})  # substitui

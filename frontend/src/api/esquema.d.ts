@@ -4,6 +4,283 @@
  */
 
 export interface paths {
+    "/healthz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** O processo está vivo */
+        get: operations["saude_healthz_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/legal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Termos de Uso e Política vigentes */
+        get: operations["documentos_legais_legal_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/legal/{documento}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Um documento legal na versão vigente */
+        get: operations["documento_legal_legal__documento__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/catalogo/permissoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** As permissões que um cargo pode ter */
+        get: operations["catalogo_de_permissoes_catalogo_permissoes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ajuda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Os guias da central de ajuda */
+        get: operations["guias_de_ajuda_ajuda_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ajuda/{guia}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Um guia da central de ajuda */
+        get: operations["guia_de_ajuda_ajuda__guia__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/readyz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** O app está pronto: banco acessível e esquema migrado */
+        get: operations["pronto_readyz_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/busca": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Busca global: formulários e registros (sem IA)
+         * @description Nome de formulário, `#id` e texto/seleção dos registros; só o que o cargo vê.
+         */
+        get: operations["buscar_busca_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registros/recentes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Os últimos registros alterados, com estado e valor em destaque */
+        get: operations["registros_recentes_registros_recentes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notificacoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Minhas notificações (só dentro do app) */
+        get: operations["notificacoes_notificacoes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notificacoes/{notificacao_id}/lida": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Marca a notificação como lida */
+        post: operations["marcar_lida_notificacoes__notificacao_id__lida_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/eu/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Progresso do tour */
+        get: operations["obter_onboarding_eu_onboarding_get"];
+        /** Grava o progresso do tour (por pessoa, no servidor) */
+        put: operations["gravar_onboarding_eu_onboarding_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Os exemplos de formulário que vêm com o app */
+        get: operations["listar_exemplos_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates/importar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Importa exemplos escolhidos, na ordem das dependências */
+        post: operations["importar_exemplos_templates_importar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/eu/exportar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Exporta tudo que o sistema guarda sobre mim (JSON) */
+        get: operations["exportar_meus_dados_eu_exportar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/eu": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quem sou eu */
+        get: operations["quem_sou_eu_eu_get"];
+        put?: never;
+        post?: never;
+        /** Exclui minha conta (a autoria dos meus registros é anonimizada) */
+        delete: operations["excluir_minha_conta_eu_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/formularios": {
         parameters: {
             query?: never;
@@ -141,6 +418,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/formularios/{formulario_id}/rascunho": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** O rascunho da próxima versão (404 se não há) */
+        get: operations["obter_rascunho_formularios__formulario_id__rascunho_get"];
+        /** Cria ou substitui o rascunho (aceita definição incompleta) */
+        put: operations["salvar_rascunho_formularios__formulario_id__rascunho_put"];
+        post?: never;
+        /** Descarta o rascunho */
+        delete: operations["descartar_rascunho_formularios__formulario_id__rascunho_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/formularios/{formulario_id}/rascunho/publicar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Valida o rascunho e publica a versão N+1
+         * @description Definição inválida → 422 com os erros e o rascunho continua.
+         */
+        post: operations["publicar_rascunho_formularios__formulario_id__rascunho_publicar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pastas": {
         parameters: {
             query?: never;
@@ -264,6 +580,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/formularios/{formulario_id}/registros/contagens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Registros por estado (conforme, não conforme, erro, aguardando)
+         * @description Mesma versão e mesmos filtros da listagem; o estado é decidido pelo servidor.
+         */
+        get: operations["contar_registros_formularios__formulario_id__registros_contagens_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/formularios/{formulario_id}/registros/exportar": {
         parameters: {
             query?: never;
@@ -309,7 +645,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/anexos": {
+    "/registros/{registro_id}/historico": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Histórico de alterações do registro (quem, quando, o que havia antes) */
+        get: operations["historico_do_registro_registros__registro_id__historico_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/consentimentos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Meus aceites dos Termos e da Política */
+        get: operations["consentimentos_consentimentos_get"];
+        put?: never;
+        /** Aceito a versão vigente dos Termos e da Política */
+        post: operations["aceitar_termos_consentimentos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/convites/{token}/aceitar": {
         parameters: {
             query?: never;
             header?: never;
@@ -318,29 +689,183 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Envia uma foto (multipart, campo `arquivo`)
-         * @description JPEG, PNG ou WebP até 20 MB; vira WebP sem metadados. O registro guarda a lista de `id`s. O nome do arquivo enviado nunca é usado.
-         */
-        post: operations["enviar_anexo_anexos_post"];
+        /** Aceito um convite e entro na equipe */
+        post: operations["aceitar_convite_convites__token__aceitar_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/anexos/{anexo_id}": {
+    "/equipe": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** A foto em WebP */
-        get: operations["obter_anexo_anexos__anexo_id__get"];
+        /** A equipe ativa */
+        get: operations["equipe_ativa_equipe_get"];
+        /** Renomeia a equipe */
+        put: operations["renomear_equipe_equipe_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipe/sair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Saio da equipe */
+        post: operations["sair_da_equipe_equipe_sair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cargos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Os cargos da equipe */
+        get: operations["listar_cargos_cargos_get"];
+        put?: never;
+        /** Cria um cargo */
+        post: operations["criar_cargo_cargos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cargos/{cargo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Substitui nome, descrição e permissões do cargo */
+        put: operations["atualizar_cargo_cargos__cargo_id__put"];
+        post?: never;
+        /** Exclui o cargo (só sem pessoas) */
+        delete: operations["excluir_cargo_cargos__cargo_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/membros": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** As pessoas da equipe */
+        get: operations["listar_membros_membros_get"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/membros/{usuario_id}/cargo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Muda o cargo de uma pessoa */
+        put: operations["mudar_cargo_membros__usuario_id__cargo_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/membros/{usuario_id}/desativar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desativa a pessoa (perde o acesso na hora; os registros ficam) */
+        post: operations["desativar_membros__usuario_id__desativar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/membros/{usuario_id}/reativar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reativa a pessoa */
+        post: operations["reativar_membros__usuario_id__reativar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/convites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Convites pendentes */
+        get: operations["listar_convites_convites_get"];
+        put?: never;
+        /** Cria um convite (o token só aparece nesta resposta) */
+        post: operations["criar_convite_convites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/convites/{convite_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoga um convite pendente */
+        delete: operations["revogar_convite_convites__convite_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -386,6 +911,133 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Configuração da IA desta equipe (sem a chave) */
+        get: operations["obter_configuracao_ia_get"];
+        /**
+         * Liga, desliga ou configura a IA da equipe
+         * @description Ligar exige `aceite_do_aviso`. A chave é cifrada antes de ir ao banco e nunca volta.
+         */
+        put: operations["gravar_configuracao_ia_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ia/testar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Faz uma chamada mínima ao provedor para conferir a configuração */
+        post: operations["testar_configuracao_ia_testar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ia/reindexar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reindexa registros e definições da equipe para o assistente */
+        post: operations["reindexar_ia_reindexar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ia/uso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Uso da IA nas últimas 24 horas (só contagens) */
+        get: operations["uso_da_ia_ia_uso_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pergunta ao assistente (resposta em fluxo, SSE)
+         * @description Eventos `data: {json}`: `conversa`, vários `texto` e um `fim` com `encontrou`, `usou_ia` e `citacoes`. A resposta é redigida só com o que o código recuperou e todo número é conferido antes de ser mostrado.
+         */
+        post: operations["conversar_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat/conversas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Minhas conversas com o assistente */
+        get: operations["listar_conversas_chat_conversas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat/conversas/{conversa_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Uma conversa com as mensagens */
+        get: operations["obter_conversa_chat_conversas__conversa_id__get"];
+        put?: never;
+        post?: never;
+        /** Apaga uma conversa (LGPD) */
+        delete: operations["apagar_conversa_chat_conversas__conversa_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistente/perguntar": {
         parameters: {
             query?: never;
@@ -410,24 +1062,32 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AnexoSaida */
-        AnexoSaida: {
+        /** AceitarConviteSaida */
+        AceitarConviteSaida: {
+            equipe: components["schemas"]["EquipeSaida"];
+        };
+        /** BuscaFormularioSaida */
+        BuscaFormularioSaida: {
             /** Id */
             id: number;
-            /** Largura */
-            largura: number;
-            /** Altura */
-            altura: number;
-            /** Tamanho Bytes */
-            tamanho_bytes: number;
+            /** Nome */
+            nome: string;
         };
-        /** Body_enviar_anexo_anexos_post */
-        Body_enviar_anexo_anexos_post: {
-            /**
-             * Arquivo
-             * @description A imagem.
-             */
-            arquivo: string;
+        /** BuscaRegistroSaida */
+        BuscaRegistroSaida: {
+            /** Id */
+            id: number;
+            /** Formulario Id */
+            formulario_id: number;
+            /** Formulario */
+            formulario: string;
+        };
+        /** BuscaSaida */
+        BuscaSaida: {
+            /** Formularios */
+            formularios: components["schemas"]["BuscaFormularioSaida"][];
+            /** Registros */
+            registros: components["schemas"]["BuscaRegistroSaida"][];
         };
         /**
          * CampoSaida
@@ -440,7 +1100,7 @@ export interface components {
              * Tipo
              * @enum {string}
              */
-            tipo: "texto" | "numero" | "data" | "selecao" | "sim_nao" | "calculado" | "secao" | "referencia" | "localizacao" | "foto";
+            tipo: "texto" | "numero" | "data" | "selecao" | "sim_nao" | "calculado" | "secao" | "referencia" | "localizacao";
             /** Rotulo */
             rotulo: string;
             /** Obrigatorio */
@@ -457,8 +1117,50 @@ export interface components {
             formulario?: string | null;
             /** Compartilhado */
             compartilhado?: boolean | null;
-            /** Maximo */
-            maximo?: number | null;
+            /**
+             * Ia
+             * @description `false`: o campo nunca é enviado à IA (§2.15).
+             */
+            ia?: boolean | null;
+        };
+        /** CargoEntrada */
+        CargoEntrada: {
+            /** Nome */
+            nome: string;
+            /**
+             * Descricao
+             * @default
+             */
+            descricao: string;
+            /** Permissoes */
+            permissoes: string[];
+        };
+        /** CargoResumoSaida */
+        CargoResumoSaida: {
+            /** Id */
+            id: number;
+            /** Nome */
+            nome: string;
+        };
+        /** CargoSaida */
+        CargoSaida: {
+            /** Id */
+            id: number;
+            /** Nome */
+            nome: string;
+            /** Descricao */
+            descricao: string;
+            /** Padrao */
+            padrao: boolean;
+            /** Permissoes */
+            permissoes: string[];
+            /** Pessoas */
+            pessoas: number;
+        };
+        /** CatalogoDePermissoesSaida */
+        CatalogoDePermissoesSaida: {
+            /** Permissoes */
+            permissoes: components["schemas"]["PermissaoSaida"][];
         };
         /** CatalogoSaida */
         CatalogoSaida: {
@@ -470,6 +1172,16 @@ export interface components {
             constantes: components["schemas"]["ConstanteDoCatalogoSaida"][];
             /** Nomes Reservados */
             nomes_reservados: string[];
+        };
+        /** ChatEntrada */
+        ChatEntrada: {
+            /** Mensagem */
+            mensagem: string;
+            /**
+             * Conversa Id
+             * @description Omitida: começa uma conversa nova.
+             */
+            conversa_id?: number | null;
         };
         /**
          * ColunaSaida
@@ -486,7 +1198,7 @@ export interface components {
              * Tipo
              * @enum {string}
              */
-            tipo: "texto" | "numero" | "data" | "selecao" | "sim_nao" | "calculado" | "referencia" | "localizacao" | "foto";
+            tipo: "texto" | "numero" | "data" | "selecao" | "sim_nao" | "calculado" | "referencia" | "localizacao";
             /** Casas Decimais */
             casas_decimais: number | null;
             /**
@@ -505,6 +1217,87 @@ export interface components {
              */
             filtravel: boolean;
         };
+        /** ConfigEntrada */
+        ConfigEntrada: {
+            /** Ativa */
+            ativa: boolean;
+            /**
+             * Aceite Do Aviso
+             * @description Obrigatório ao ligar a IA: a pessoa leu para onde os dados vão (§2.15).
+             * @default false
+             */
+            aceite_do_aviso: boolean;
+            /**
+             * Provedor
+             * @enum {string}
+             */
+            provedor: "anthropic" | "openai_compativel";
+            /** Base Url */
+            base_url?: string | null;
+            /** Modelo */
+            modelo?: string | null;
+            /** Modelo Embeddings */
+            modelo_embeddings?: string | null;
+            /**
+             * Chave
+             * @description Omitida mantém a atual; vazia remove; preenchida troca. Nunca volta.
+             */
+            chave?: string | null;
+        };
+        /**
+         * ConfigSaida
+         * @description A configuração, sem a chave: só `chave_definida` (§12).
+         */
+        ConfigSaida: {
+            /** Ativa */
+            ativa: boolean;
+            /**
+             * Provedor
+             * @enum {string}
+             */
+            provedor: "anthropic" | "openai_compativel";
+            /** Base Url */
+            base_url: string | null;
+            /** Modelo */
+            modelo: string | null;
+            /** Modelo Embeddings */
+            modelo_embeddings: string | null;
+            /** Chave Definida */
+            chave_definida: boolean;
+            /** Consentimento Por */
+            consentimento_por: number | null;
+            /** Consentimento Em */
+            consentimento_em: string | null;
+            /**
+             * Modelos De Vetor Disponiveis
+             * @description Há um modelo de embeddings configurado (busca por vetores).
+             */
+            modelos_de_vetor_disponiveis: boolean;
+        };
+        /** ConsentimentoEntrada */
+        ConsentimentoEntrada: {
+            /**
+             * Documentos
+             * @description Documentos aceitos; omitido = todos os vigentes.
+             */
+            documentos?: string[] | null;
+        };
+        /** ConsentimentoSaida */
+        ConsentimentoSaida: {
+            /** Documento */
+            documento: string;
+            /** Versao */
+            versao: string;
+            /** Aceito Em */
+            aceito_em: string;
+        };
+        /** ConsentimentosSaida */
+        ConsentimentosSaida: {
+            /** Aceites */
+            aceites: components["schemas"]["ConsentimentoSaida"][];
+            /** Pendentes */
+            pendentes: string[];
+        };
         /** ConstanteDoCatalogoSaida */
         ConstanteDoCatalogoSaida: {
             /** Nome */
@@ -516,10 +1309,97 @@ export interface components {
             /** Descricao */
             descricao: string;
         };
+        /**
+         * ContagensSaida
+         * @description Registros por estado do campo de status, com os mesmos filtros da listagem.
+         */
+        ContagensSaida: {
+            /** Campo Status */
+            campo_status: string | null;
+            /** Total */
+            total: number;
+            /** Conforme */
+            conforme: number;
+            /** Nao Conforme */
+            nao_conforme: number;
+            /** Erro */
+            erro: number;
+            /** Aguardando */
+            aguardando: number;
+        };
+        /** ConversaComMensagensSaida */
+        ConversaComMensagensSaida: {
+            conversa: components["schemas"]["ConversaSaida"];
+            /** Mensagens */
+            mensagens: components["schemas"]["MensagemSaida"][];
+        };
+        /** ConversaSaida */
+        ConversaSaida: {
+            /** Id */
+            id: number;
+            /** Titulo */
+            titulo: string;
+            /** Criada Em */
+            criada_em: string;
+        };
+        /** ConviteCriadoSaida */
+        ConviteCriadoSaida: {
+            convite: components["schemas"]["ConviteSaida"];
+            /**
+             * Token
+             * @description O token do convite. Só aparece nesta resposta.
+             */
+            token: string;
+        };
+        /** ConviteEntrada */
+        ConviteEntrada: {
+            /** Email */
+            email: string;
+            /** Cargo Id */
+            cargo_id: number;
+        };
+        /** ConviteSaida */
+        ConviteSaida: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+            cargo: components["schemas"]["CargoResumoSaida"];
+            /** Criado Em */
+            criado_em: string;
+            /** Expira Em */
+            expira_em: string;
+        };
         /** DefinicaoSaida */
         DefinicaoSaida: {
             /** Campos */
             campos: components["schemas"]["CampoSaida"][];
+            exibicao?: components["schemas"]["ExibicaoSaida"] | null;
+        };
+        /** DestaqueSaida */
+        DestaqueSaida: {
+            /** Rotulo */
+            rotulo: string;
+            /** Valor */
+            valor: string | null;
+            /** Unidade */
+            unidade: string | null;
+        };
+        /** DocumentoLegalSaida */
+        DocumentoLegalSaida: {
+            /** Id */
+            id: string;
+            /** Titulo */
+            titulo: string;
+            /** Versao */
+            versao: string;
+            /** Markdown */
+            markdown: string;
+        };
+        /** DocumentosLegaisSaida */
+        DocumentosLegaisSaida: {
+            /** Documentos */
+            documentos: components["schemas"]["DocumentoLegalSaida"][];
         };
         /** DuplicarEntrada */
         DuplicarEntrada: {
@@ -528,6 +1408,36 @@ export interface components {
              * @description Nome da cópia. Sem ele, o padrão é "<nome> (cópia)", "(cópia 2)"…
              */
             nome?: string | null;
+        };
+        /** EquipeDaPessoaSaida */
+        EquipeDaPessoaSaida: {
+            /** Id */
+            id: number;
+            /** Nome */
+            nome: string;
+            /**
+             * Ativa
+             * @description Falso quando a pessoa foi desativada nesta equipe.
+             */
+            ativa: boolean;
+            cargo: components["schemas"]["CargoResumoSaida"];
+            /**
+             * Permissoes
+             * @description Ids das permissões do cargo (para o front).
+             */
+            permissoes: string[];
+        };
+        /** EquipeEntrada */
+        EquipeEntrada: {
+            /** Nome */
+            nome: string;
+        };
+        /** EquipeSaida */
+        EquipeSaida: {
+            /** Id */
+            id: number;
+            /** Nome */
+            nome: string;
         };
         /** ErroDeCampoSaida */
         ErroDeCampoSaida: {
@@ -549,6 +1459,62 @@ export interface components {
             detalhe: string;
             /** Erros */
             erros?: components["schemas"]["ErroDeCampoSaida"][];
+            /**
+             * Codigo
+             * @description Código estável para o front agir (`token_expirado`, `termos_pendentes`...).
+             */
+            codigo?: string | null;
+        };
+        /**
+         * EuSaida
+         * @description Quem sou eu: perfil, equipes com cargo e permissões, e os termos ainda por aceitar.
+         */
+        EuSaida: {
+            pessoa: components["schemas"]["PessoaSaida"];
+            /** Equipes */
+            equipes: components["schemas"]["EquipeDaPessoaSaida"][];
+            /** Termos Pendentes */
+            termos_pendentes: string[];
+        };
+        /** ExemploSaida */
+        ExemploSaida: {
+            /** Nome */
+            nome: string;
+            /** Descricao */
+            descricao: string;
+            /** Campos */
+            campos: number;
+            /**
+             * Depende De
+             * @description Nomes dos exemplos que este usa (importados juntos).
+             */
+            depende_de: string[];
+        };
+        /** ExemplosImportadosSaida */
+        ExemplosImportadosSaida: {
+            /** Formularios */
+            formularios: string[];
+        };
+        /**
+         * ExibicaoSaida
+         * @description Como o registro aparece em cartões e filtros; tudo opcional (§2.3).
+         */
+        ExibicaoSaida: {
+            /**
+             * Destaque
+             * @description Campo numérico em destaque.
+             */
+            destaque?: string | null;
+            /**
+             * Status
+             * @description Campo calculado booleano de status.
+             */
+            status?: string | null;
+            /**
+             * Resumo
+             * @description Campos do subtítulo.
+             */
+            resumo?: string[];
         };
         /** FormularioDetalheSaida */
         FormularioDetalheSaida: {
@@ -609,6 +1575,50 @@ export interface components {
             /** Formularios */
             formularios: components["schemas"]["RascunhoGeradoSaida"][];
         };
+        /** GuiaSaida */
+        GuiaSaida: {
+            /** Id */
+            id: string;
+            /** Titulo */
+            titulo: string;
+            /**
+             * Markdown
+             * @description Markdown para o front renderizar sem HTML cru.
+             */
+            markdown: string;
+        };
+        /** GuiasSaida */
+        GuiasSaida: {
+            /** Guias */
+            guias: components["schemas"]["GuiaSaida"][];
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HistoricoSaida */
+        HistoricoSaida: {
+            /** Id */
+            id: number;
+            /** Usuario Id */
+            usuario_id: number | null;
+            /** Pessoa */
+            pessoa: string | null;
+            /** Quando */
+            quando: string;
+            /** Acao */
+            acao: string;
+            /** Valores Anteriores */
+            valores_anteriores: unknown | null;
+            /** Motivo */
+            motivo: string | null;
+        };
+        /** ImportarExemplosEntrada */
+        ImportarExemplosEntrada: {
+            /** Nomes */
+            nomes: string[];
+        };
         /** ListagemDeRegistrosSaida */
         ListagemDeRegistrosSaida: {
             /**
@@ -622,11 +1632,45 @@ export interface components {
             itens: components["schemas"]["RegistroSaida"][];
             /** Total */
             total: number;
+            /** @description Destaque, status e resumo efetivos (a definição, com o padrão onde faltar). */
+            exibicao: components["schemas"]["ExibicaoSaida"];
         };
         /** LoteEntrada */
         LoteEntrada: {
             /** Formularios */
             formularios: components["schemas"]["FormularioEntrada"][];
+        };
+        /** MembroSaida */
+        MembroSaida: {
+            /** Usuario Id */
+            usuario_id: number;
+            /** Nome */
+            nome: string;
+            /** Email */
+            email: string | null;
+            cargo: components["schemas"]["CargoResumoSaida"];
+            /** Ativo */
+            ativo: boolean;
+            /** Entrou Em */
+            entrou_em: string;
+        };
+        /** MensagemSaida */
+        MensagemSaida: {
+            /** Id */
+            id: number;
+            /**
+             * Papel
+             * @enum {string}
+             */
+            papel: "pessoa" | "assistente";
+            /** Texto */
+            texto: string;
+            /** Citacoes */
+            citacoes: {
+                [key: string]: unknown;
+            }[];
+            /** Criada Em */
+            criada_em: string;
         };
         /** MoverFormularioEntrada */
         MoverFormularioEntrada: {
@@ -635,6 +1679,31 @@ export interface components {
              * @description Pasta de destino; nulo leva o formulário à raiz.
              */
             pasta_id: number | null;
+        };
+        /** NotificacaoSaida */
+        NotificacaoSaida: {
+            /** Id */
+            id: number;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "convite_aceito" | "cargo_alterado" | "registro_editado" | "erro_em_cascata";
+            /** Referencia */
+            referencia: {
+                [key: string]: unknown;
+            };
+            /** Lida */
+            lida: boolean;
+            /** Criada Em */
+            criada_em: string;
+        };
+        /** NotificacoesSaida */
+        NotificacoesSaida: {
+            /** Itens */
+            itens: components["schemas"]["NotificacaoSaida"][];
+            /** Nao Lidas */
+            nao_lidas: number;
         };
         /**
          * PastaAtualizacao
@@ -673,6 +1742,33 @@ export interface components {
             /** Pergunta */
             pergunta: string;
         };
+        /** PermissaoSaida */
+        PermissaoSaida: {
+            /** Id */
+            id: string;
+            /** Grupo */
+            grupo: string;
+            /** Rotulo */
+            rotulo: string;
+            /** Descricao */
+            descricao: string;
+        };
+        /** PessoaResumoSaida */
+        PessoaResumoSaida: {
+            /** Id */
+            id: number;
+            /** Nome */
+            nome: string;
+        };
+        /** PessoaSaida */
+        PessoaSaida: {
+            /** Id */
+            id: number;
+            /** Nome */
+            nome: string;
+            /** Email */
+            email: string | null;
+        };
         /**
          * PosicaoSaida
          * @description Trecho da fórmula (offsets em caracteres) para o front sublinhar.
@@ -704,6 +1800,50 @@ export interface components {
                 [key: string]: components["schemas"]["ResultadoCalculadoSaida"];
             };
         };
+        /** ProgressoEntrada */
+        ProgressoEntrada: {
+            /** Tour Concluido */
+            tour_concluido: boolean;
+            /** Passo */
+            passo: number;
+            /** Checklist Dispensado */
+            checklist_dispensado: boolean;
+        };
+        /** ProgressoSaida */
+        ProgressoSaida: {
+            /** Tour Concluido */
+            tour_concluido: boolean;
+            /** Passo */
+            passo: number;
+            /** Checklist Dispensado */
+            checklist_dispensado: boolean;
+        };
+        /** ProntoSaida */
+        ProntoSaida: {
+            /**
+             * Status
+             * @constant
+             */
+            status: "ok";
+            /**
+             * Migracao
+             * @description Último número de migração aplicado.
+             */
+            migracao: number;
+        };
+        /**
+         * RascunhoEntrada
+         * @description O rascunho aceita definição incompleta (como o `validar`); só publicar valida (§2.2).
+         */
+        RascunhoEntrada: {
+            /** Definicao */
+            definicao: unknown;
+            /**
+             * Revisao
+             * @description Omitida ao criar o rascunho; a `revisao` lida ao substituí-lo (senão 409).
+             */
+            revisao?: number | null;
+        };
         /** RascunhoGeradoSaida */
         RascunhoGeradoSaida: {
             /** Nome */
@@ -719,6 +1859,23 @@ export interface components {
              */
             erros: components["schemas"]["ErroDeCampoSaida"][];
         };
+        /** RascunhoSaida */
+        RascunhoSaida: {
+            /** Formulario Id */
+            formulario_id: number;
+            /** Definicao */
+            definicao: unknown;
+            /**
+             * Base Versao Id
+             * @description A versão atual quando o rascunho nasceu.
+             */
+            base_versao_id: number | null;
+            /** Revisao */
+            revisao: number;
+            atualizado_por: components["schemas"]["PessoaResumoSaida"] | null;
+            /** Atualizado Em */
+            atualizado_em: string;
+        };
         /**
          * RegistroAtualizacao
          * @description `PUT` substitui todos os valores (não há `PATCH`).
@@ -726,6 +1883,11 @@ export interface components {
         RegistroAtualizacao: {
             /** Dados */
             dados: unknown;
+            /**
+             * Revisao
+             * @description A `revisao` do registro lida antes de editar; diferente → 409 (§2.14).
+             */
+            revisao: number;
         };
         /** RegistroEntrada */
         RegistroEntrada: {
@@ -739,6 +1901,23 @@ export interface components {
              * @description Só campos de entrada. Número como número ou string.
              */
             dados: unknown;
+        };
+        /** RegistroRecenteSaida */
+        RegistroRecenteSaida: {
+            /** Id */
+            id: number;
+            /** Formulario Id */
+            formulario_id: number;
+            /** Formulario */
+            formulario: string;
+            /** Atualizado Em */
+            atualizado_em: string;
+            /**
+             * Estado
+             * @enum {string}
+             */
+            estado: "conforme" | "nao_conforme" | "erro" | "aguardando" | "sem_status";
+            destaque: components["schemas"]["DestaqueSaida"] | null;
         };
         /** RegistroSaida */
         RegistroSaida: {
@@ -755,10 +1934,34 @@ export interface components {
             dados: {
                 [key: string]: unknown;
             };
+            /**
+             * Revisao
+             * @description Mande de volta no `PUT` (concorrência otimista).
+             */
+            revisao: number;
+            /** @description Nulo se a pessoa excluiu a conta (autoria anonimizada). */
+            criado_por: components["schemas"]["PessoaResumoSaida"] | null;
+            atualizado_por: components["schemas"]["PessoaResumoSaida"] | null;
             /** Criado Em */
             criado_em: string;
             /** Atualizado Em */
             atualizado_em: string;
+            /**
+             * Estado
+             * @description Estado do campo de status, decidido pelo servidor (§7). Só na listagem.
+             */
+            estado?: ("conforme" | "nao_conforme" | "erro" | "aguardando" | "sem_status") | null;
+        };
+        /** ReindexacaoSaida */
+        ReindexacaoSaida: {
+            /** Gravados */
+            gravados: number;
+            /** Removidos */
+            removidos: number;
+            /** Iguais */
+            iguais: number;
+            /** Vetorizados */
+            vetorizados: number;
         };
         /** RespostaSaida */
         RespostaSaida: {
@@ -822,6 +2025,21 @@ export interface components {
              */
             total: number;
         };
+        /** SaudeSaida */
+        SaudeSaida: {
+            /**
+             * Status
+             * @constant
+             */
+            status: "ok";
+        };
+        /** TesteSaida */
+        TesteSaida: {
+            /** Ok */
+            ok: boolean;
+            /** Mensagem */
+            mensagem: string;
+        };
         /** TipoDoCatalogoSaida */
         TipoDoCatalogoSaida: {
             /** Id */
@@ -848,6 +2066,26 @@ export interface components {
             /** Pontuacao */
             pontuacao: number;
         };
+        /** TrocarCargoEntrada */
+        TrocarCargoEntrada: {
+            /** Cargo Id */
+            cargo_id: number;
+        };
+        /** UsoSaida */
+        UsoSaida: {
+            /** Chamadas Da Pessoa */
+            chamadas_da_pessoa: number;
+            /** Chamadas Da Equipe */
+            chamadas_da_equipe: number;
+            /** Tokens Da Equipe */
+            tokens_da_equipe: number;
+            /** Limite De Chamadas Por Pessoa */
+            limite_de_chamadas_por_pessoa: number;
+            /** Limite De Chamadas Por Equipe */
+            limite_de_chamadas_por_equipe: number;
+            /** Limite De Tokens Por Equipe */
+            limite_de_tokens_por_equipe: number;
+        };
         /** ValidarEntrada */
         ValidarEntrada: {
             /** Definicao */
@@ -862,6 +2100,19 @@ export interface components {
             valida: boolean;
             /** Erros */
             erros: components["schemas"]["ErroDeCampoSaida"][];
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
         /** VersaoEntrada */
         VersaoEntrada: {
@@ -889,7 +2140,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listar_formularios_formularios_get: {
+    saude_healthz_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -904,11 +2155,859 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["SaudeSaida"];
+                };
+            };
+        };
+    };
+    documentos_legais_legal_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentosLegaisSaida"];
+                };
+            };
+        };
+    };
+    documento_legal_legal__documento__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documento: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentoLegalSaida"];
+                };
+            };
+            /** @description Documento inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    catalogo_de_permissoes_catalogo_permissoes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogoDePermissoesSaida"];
+                };
+            };
+        };
+    };
+    guias_de_ajuda_ajuda_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuiasSaida"];
+                };
+            };
+        };
+    };
+    guia_de_ajuda_ajuda__guia__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guia: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuiaSaida"];
+                };
+            };
+            /** @description Guia inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pronto_readyz_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProntoSaida"];
+                };
+            };
+            /** @description Banco inacessível ou sem migração. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    buscar_busca_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuscaSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    registros_recentes_registros_recentes_get: {
+        parameters: {
+            query?: {
+                limite?: number;
+            };
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistroRecenteSaida"][];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    notificacoes_notificacoes_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificacoesSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    marcar_lida_notificacoes__notificacao_id__lida_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                notificacao_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    obter_onboarding_eu_onboarding_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressoSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    gravar_onboarding_eu_onboarding_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProgressoEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressoSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    listar_exemplos_templates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExemploSaida"][];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    importar_exemplos_templates_importar_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportarExemplosEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExemplosImportadosSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    exportar_meus_dados_eu_exportar_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Perfil, aceites, equipes e o que a pessoa criou. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    quem_sou_eu_eu_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EuSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    excluir_minha_conta_eu_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Única administradora de uma equipe. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    listar_formularios_formularios_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["ResumoDeFormularioSaida"][];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -939,7 +3038,9 @@ export interface operations {
     criar_formulario_formularios_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -958,8 +3059,17 @@ export interface operations {
                     "application/json": components["schemas"]["FormularioDetalheSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -990,7 +3100,9 @@ export interface operations {
     criar_formularios_em_lote_formularios_lote_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1009,8 +3121,17 @@ export interface operations {
                     "application/json": components["schemas"]["ResumoDeFormularioSaida"][];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1041,7 +3162,9 @@ export interface operations {
     obter_formulario_formularios__formulario_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
             };
@@ -1058,8 +3181,17 @@ export interface operations {
                     "application/json": components["schemas"]["FormularioDetalheSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1090,7 +3222,9 @@ export interface operations {
     excluir_formulario_formularios__formulario_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
             };
@@ -1105,8 +3239,17 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1146,7 +3289,9 @@ export interface operations {
     duplicar_formulario_formularios__formulario_id__duplicar_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
             };
@@ -1167,8 +3312,17 @@ export interface operations {
                     "application/json": components["schemas"]["FormularioDetalheSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1199,7 +3353,9 @@ export interface operations {
     mover_formulario_formularios__formulario_id__pasta_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
             };
@@ -1220,8 +3376,17 @@ export interface operations {
                     "application/json": components["schemas"]["ResumoDeFormularioSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1252,7 +3417,9 @@ export interface operations {
     listar_versoes_formularios__formulario_id__versoes_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
             };
@@ -1269,8 +3436,17 @@ export interface operations {
                     "application/json": components["schemas"]["ResumoDeVersaoSaida"][];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1301,7 +3477,9 @@ export interface operations {
     publicar_versao_formularios__formulario_id__versoes_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
             };
@@ -1322,8 +3500,17 @@ export interface operations {
                     "application/json": components["schemas"]["VersaoSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1354,7 +3541,9 @@ export interface operations {
     obter_versao_formularios__formulario_id__versoes__versao_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
                 versao_id: number;
@@ -1372,8 +3561,268 @@ export interface operations {
                     "application/json": components["schemas"]["VersaoSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    obter_rascunho_formularios__formulario_id__rascunho_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                formulario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RascunhoSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    salvar_rascunho_formularios__formulario_id__rascunho_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                formulario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RascunhoEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RascunhoSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Outra pessoa alterou o rascunho. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    descartar_rascunho_formularios__formulario_id__rascunho_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                formulario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    publicar_rascunho_formularios__formulario_id__rascunho_publicar_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                formulario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersaoSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1404,7 +3853,9 @@ export interface operations {
     listar_pastas_pastas_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1419,8 +3870,17 @@ export interface operations {
                     "application/json": components["schemas"]["PastaSaida"][];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1451,7 +3911,9 @@ export interface operations {
     criar_pasta_pastas_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1470,8 +3932,17 @@ export interface operations {
                     "application/json": components["schemas"]["PastaSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1502,7 +3973,9 @@ export interface operations {
     atualizar_pasta_pastas__pasta_id__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 pasta_id: number;
             };
@@ -1523,8 +3996,17 @@ export interface operations {
                     "application/json": components["schemas"]["PastaSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1555,7 +4037,9 @@ export interface operations {
     excluir_pasta_pastas__pasta_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 pasta_id: number;
             };
@@ -1570,8 +4054,17 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1611,7 +4104,9 @@ export interface operations {
     validar_definicao_definicoes_validar_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1630,8 +4125,17 @@ export interface operations {
                     "application/json": components["schemas"]["ValidarSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1662,7 +4166,9 @@ export interface operations {
     previa_definicoes_previa_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1681,8 +4187,17 @@ export interface operations {
                     "application/json": components["schemas"]["PreviaSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1713,7 +4228,9 @@ export interface operations {
     catalogo_catalogo_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1728,8 +4245,17 @@ export interface operations {
                     "application/json": components["schemas"]["CatalogoSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1765,10 +4291,14 @@ export interface operations {
                 deslocamento?: number;
                 criado_de?: string | null;
                 criado_ate?: string | null;
+                /** @description Só os registros que eu criei. */
+                meus?: boolean;
                 /** @description `campo:valor`, repetível. */
                 filtro?: string[] | null;
             };
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
             };
@@ -1785,8 +4315,17 @@ export interface operations {
                     "application/json": components["schemas"]["ListagemDeRegistrosSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1817,7 +4356,9 @@ export interface operations {
     criar_registro_formularios__formulario_id__registros_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
             };
@@ -1838,8 +4379,84 @@ export interface operations {
                     "application/json": components["schemas"]["RegistroSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    contar_registros_formularios__formulario_id__registros_contagens_get: {
+        parameters: {
+            query?: {
+                versao_id?: number | null;
+                criado_de?: string | null;
+                criado_ate?: string | null;
+                meus?: boolean;
+                /** @description `campo:valor`, repetível. */
+                filtro?: string[] | null;
+            };
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                formulario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContagensSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1873,10 +4490,13 @@ export interface operations {
                 versao_id?: number | null;
                 criado_de?: string | null;
                 criado_ate?: string | null;
+                meus?: boolean;
                 /** @description `campo:valor`, repetível. */
                 filtro?: string[] | null;
             };
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
             };
@@ -1893,8 +4513,17 @@ export interface operations {
                     "text/csv": unknown;
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1925,7 +4554,9 @@ export interface operations {
     obter_registro_registros__registro_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 registro_id: number;
             };
@@ -1942,8 +4573,17 @@ export interface operations {
                     "application/json": components["schemas"]["RegistroSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1974,7 +4614,9 @@ export interface operations {
     atualizar_registro_registros__registro_id__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 registro_id: number;
             };
@@ -1995,8 +4637,17 @@ export interface operations {
                     "application/json": components["schemas"]["RegistroSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2027,7 +4678,9 @@ export interface operations {
     excluir_registro_registros__registro_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 registro_id: number;
             };
@@ -2042,8 +4695,17 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2080,30 +4742,39 @@ export interface operations {
             };
         };
     };
-    enviar_anexo_anexos_post: {
+    historico_do_registro_registros__registro_id__historico_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                registro_id: number;
+            };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_enviar_anexo_anexos_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AnexoSaida"];
+                    "application/json": components["schemas"]["HistoricoSaida"][];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2131,28 +4802,991 @@ export interface operations {
             };
         };
     };
-    obter_anexo_anexos__anexo_id__get: {
+    consentimentos_consentimentos_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path: {
-                anexo_id: number;
+            header?: {
+                "X-Equipe"?: number | null;
             };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description A foto em WebP. */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "image/webp": unknown;
+                    "application/json": components["schemas"]["ConsentimentosSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    aceitar_termos_consentimentos_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentimentoEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentimentosSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    aceitar_convite_convites__token__aceitar_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AceitarConviteSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    equipe_ativa_equipe_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipeSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    renomear_equipe_equipe_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EquipeEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipeSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    sair_da_equipe_equipe_sair_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    listar_cargos_cargos_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CargoSaida"][];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    criar_cargo_cargos_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CargoEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CargoSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    atualizar_cargo_cargos__cargo_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                cargo_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CargoEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CargoSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    excluir_cargo_cargos__cargo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                cargo_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    listar_membros_membros_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembroSaida"][];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    mudar_cargo_membros__usuario_id__cargo_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                usuario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrocarCargoEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    desativar_membros__usuario_id__desativar_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                usuario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    reativar_membros__usuario_id__reativar_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                usuario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    listar_convites_convites_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConviteSaida"][];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    criar_convite_convites_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConviteEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConviteCriadoSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    revogar_convite_convites__convite_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                convite_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2183,7 +5817,9 @@ export interface operations {
     gerar_formularios_definicoes_gerar_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2202,8 +5838,17 @@ export interface operations {
                     "application/json": components["schemas"]["GerarSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2258,7 +5903,9 @@ export interface operations {
                 /** @description `campo:valor`, repetível. */
                 filtro?: string[] | null;
             };
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path: {
                 formulario_id: number;
             };
@@ -2275,8 +5922,711 @@ export interface operations {
                     "application/json": components["schemas"]["ResumoSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    obter_configuracao_ia_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    gravar_configuracao_ia_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    testar_configuracao_ia_testar_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TesteSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    reindexar_ia_reindexar_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReindexacaoSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    uso_da_ia_ia_uso_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsoSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    conversar_chat_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatEntrada"];
+            };
+        };
+        responses: {
+            /** @description Eventos SSE. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    listar_conversas_chat_conversas_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversaSaida"][];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    obter_conversa_chat_conversas__conversa_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                conversa_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversaComMensagensSaida"];
+                };
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Recurso inexistente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Dados inválidos, com os erros por campo. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description A IA respondeu, mas fora do formato esperado. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description IA indisponível (sem chave ou sem internet). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+        };
+    };
+    apagar_conversa_chat_conversas__conversa_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
+            path: {
+                conversa_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sem token, token inválido ou expirado. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2325,7 +6675,9 @@ export interface operations {
     perguntar_aos_procedimentos_assistente_perguntar_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Equipe"?: number | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2344,8 +6696,17 @@ export interface operations {
                     "application/json": components["schemas"]["RespostaSaida"];
                 };
             };
-            /** @description Token ausente ou inválido. */
+            /** @description Sem token, token inválido ou expirado. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErroSaida"];
+                };
+            };
+            /** @description Sem permissão, sem equipe ou termos pendentes. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

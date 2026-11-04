@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
+import { ErroDaApi } from "../api/cliente";
 import { useApi } from "../api/contexto";
+import { ContextoDaSessao } from "../auth/sessao";
 import type { Rota } from "../rotas";
 import { Aviso, EstadoVazio } from "../ui";
 import { Falha, useCarga } from "../paginas/Estado";
@@ -8,10 +10,12 @@ import { carregarMapa, type DadosDoMapa } from "./carregarMapa";
 import { detalheDoNo } from "./detalhe";
 import { cadeiaDe, montarGrafoDeFormularios, montarGrafoDeRegistros } from "./grafo";
 import { Inspetor } from "./Inspetor";
+import { ListaDoMapa } from "./ListaDoMapa";
 import { organizar } from "./layout";
 import { MEDIDAS_DO_MAPA, alturaDoNo } from "./medidas";
 import { NoDoMapa } from "./NoDoMapa";
 import { Quadro } from "./Quadro";
+import { adicionarReferencia } from "./vinculo";
 
 type Nivel = "estrutura" | "dados";
 
@@ -22,7 +26,8 @@ interface Props {
 /** O mapa de dependências: o que depende de quê, entre formulários e entre registros. */
 export function PaginaDoMapa({ navegar }: Props) {
   const cliente = useApi();
-  const carga = useCarga(() => carregarMapa(cliente), [cliente]);
+  const [versao, setVersao] = useState(0);
+  const carga = useCarga(() => carregarMapa(cliente), [cliente, versao]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -39,12 +44,33 @@ export function PaginaDoMapa({ navegar }: Props) {
         </p>
       ) : null}
       {carga.situacao === "erro" ? <Falha mensagem={carga.mensagem} /> : null}
-      {carga.situacao === "pronto" ? <Mapa dados={carga.dados} navegar={navegar} /> : null}
+      {carga.situacao === "pronto" ? (
+        <Mapa dados={carga.dados} navegar={navegar} aoVincular={() => setVersao((v) => v + 1)} />
+      ) : null}
     </section>
   );
 }
 
-function Mapa({ dados, navegar }: { dados: DadosDoMapa; navegar: Props["navegar"] }) {
+function Mapa({
+  dados,
+  navegar,
+  aoVincular,
+}: {
+  dados: DadosDoMapa;
+  navegar: Props["navegar"];
+  aoVincular: () => void;
+}) {
+  const cliente = useApi();
+  // Sem sessão (componente isolado, nos testes) tudo fica liberado; o servidor é quem barra.
+  const sessao = useContext(ContextoDaSessao);
+  const podeVincular = sessao?.pode("formularios:publicar") ?? true;
+  const [origemId, setOrigemId] = useState<string | null>(null);
+  const [resultado, setResultado] = useState<{
+    tom: "sucesso" | "erro";
+    texto: string;
+    formularioId?: number;
+  } | null>(null);
+
   const [nivel, setNivel] = useState<Nivel>("estrutura");
   const [incluirIsolados, setIncluirIsolados] = useState(false);
   // A seleção vale para o nível em que foi feita: trocar de nível a desfaz sem precisar de efeito.
@@ -63,6 +89,49 @@ function Mapa({ dados, navegar }: { dados: DadosDoMapa; navegar: Props["navegar"
   const cadeia = selecionadoId === null ? null : cadeiaDe(grafo, selecionadoId);
   const detalhe = selecionadoId === null ? null : detalheDoNo(dados, selecionadoId);
   const selecionar = (id: string) => setSelecao({ nivel, id });
+
+  /** Origem na porta da direita, dependente na da esquerda: o campo vai para o RASCUNHO do dependente. */
+  async function vincular(dependenteNoId: string) {
+    const origem = grafo.nos.find((n) => n.id === origemId);
+    const dependente = grafo.nos.find((n) => n.id === dependenteNoId);
+    setOrigemId(null);
+    if (!origem || !dependente || origem.id === dependente.id) return;
+    const nomeDaOrigem = dados.formularios.find((f) => f.id === origem.formularioId)?.nome;
+    const formularioDependente = dados.formularios.find((f) => f.id === dependente.formularioId);
+    if (!nomeDaOrigem || !formularioDependente) return;
+    try {
+      let rascunho = null;
+      try {
+        rascunho = await cliente.obterRascunho(formularioDependente.id);
+      } catch (erro) {
+        if (!(erro instanceof ErroDaApi && erro.status === 404)) throw erro;
+      }
+      const { definicao, jaExistia } = adicionarReferencia(
+        rascunho?.definicao ?? formularioDependente.definicao,
+        nomeDaOrigem,
+      );
+      if (jaExistia) {
+        setResultado({
+          tom: "erro",
+          texto: `${formularioDependente.nome} já aponta para ${nomeDaOrigem}.`,
+        });
+        return;
+      }
+      await cliente.salvarRascunho(formularioDependente.id, definicao, rascunho?.revisao);
+      setResultado({
+        tom: "sucesso",
+        texto: `Vínculo criado no rascunho da próxima versão de ${formularioDependente.nome}. Publique no construtor para valer.`,
+        formularioId: formularioDependente.id,
+      });
+      aoVincular();
+    } catch (erro) {
+      setResultado({
+        tom: "erro",
+        texto: erro instanceof ErroDaApi ? erro.message : "Não foi possível criar o vínculo.",
+      });
+    }
+  }
+  const vinculavel = nivel === "estrutura" && podeVincular;
 
   if (dados.formularios.length === 0) {
     return (
@@ -109,6 +178,36 @@ function Mapa({ dados, navegar }: { dados: DadosDoMapa; navegar: Props["navegar"
         </label>
       </div>
 
+      {vinculavel ? (
+        <Aviso tom="info">
+          {origemId
+            ? "Agora clique no ponto esquerdo do formulário dependente."
+            : "Clique no ponto direito de um formulário e depois no ponto esquerdo de outro para criar o vínculo."}{" "}
+          O servidor continua rejeitando ciclos ao publicar; versões publicadas nunca mudam.
+        </Aviso>
+      ) : null}
+      {nivel === "estrutura" && !podeVincular ? (
+        <p className="rounded-controle border border-dashed border-pedra-400 px-3 py-2 text-sm text-pedra-600">
+          Criar vínculos pelo mapa requer a permissão “Criar e publicar versões”.
+        </p>
+      ) : null}
+      {resultado ? (
+        <Aviso
+          tom={resultado.tom}
+          acoes={
+            resultado.formularioId !== undefined ? (
+              <a
+                href={`#/formularios/${resultado.formularioId}/editar`}
+                className="min-h-11 px-2 py-2 text-sm font-semibold underline"
+              >
+                Abrir no construtor
+              </a>
+            ) : undefined
+          }
+        >
+          {resultado.texto}
+        </Aviso>
+      ) : null}
       {dados.truncados.length > 0 ? (
         <Aviso tom="info">
           Mostrando só os registros mais recentes de {dados.truncados.join(", ")}: há mais do que o
@@ -123,7 +222,10 @@ function Mapa({ dados, navegar }: { dados: DadosDoMapa; navegar: Props["navegar"
         </Aviso>
       ) : null}
 
-      <div className="relative">
+      <div className="sm:hidden">
+        <ListaDoMapa grafo={grafo} aoAbrir={(no) => selecionar(no.id)} />
+      </div>
+      <div className="relative hidden sm:block">
         <Quadro
           rotulo={`Mapa de ${nivel === "estrutura" ? "formulários" : "registros"}`}
           chave={`${nivel}-${incluirIsolados}-${grafo.nos.length}`}
@@ -149,6 +251,17 @@ function Mapa({ dados, navegar }: { dados: DadosDoMapa; navegar: Props["navegar"
                 selecionado={no.id === selecionadoId}
                 esmaecido={cadeia !== null && !cadeia.nos.has(no.id)}
                 aoSelecionar={() => selecionar(no.id)}
+                vinculo={
+                  vinculavel
+                    ? {
+                        origemAtiva: origemId === no.id,
+                        esperandoDependente: origemId !== null,
+                        aoClicarNaDireita: () =>
+                          setOrigemId((atual) => (atual === no.id ? null : no.id)),
+                        aoClicarNaEsquerda: () => void vincular(no.id),
+                      }
+                    : undefined
+                }
               />
             );
           })}

@@ -29,7 +29,6 @@ function campo(
     formula: "",
     formulario: "",
     compartilhado: false,
-    maximo: "",
     ...parcial,
   };
 }
@@ -153,17 +152,15 @@ describe("paraDefinicao", () => {
     expect(definicao.campos[0]).toMatchObject({ opcoes: ["Aprovado", "Reprovado"] });
   });
 
-  it("fórmula, formulário de origem, compartilhado e máximo", () => {
+  it("fórmula, formulário de origem e compartilhado", () => {
     const definicao = paraDefinicao([
       campo({ id: "e", tipo: "referencia", formulario: "ensaio" }),
       campo({ id: "c", tipo: "calculado", formula: "a * 2", compartilhado: true }),
-      campo({ id: "f", tipo: "foto", maximo: "3" }),
     ]);
 
     expect(definicao.campos).toEqual([
       { id: "e", tipo: "referencia", rotulo: "e", formulario: "ensaio" },
       { id: "c", tipo: "calculado", rotulo: "c", formula: "a * 2", compartilhado: true },
-      { id: "f", tipo: "foto", rotulo: "f", maximo: 3 },
     ]);
   });
 
@@ -207,14 +204,13 @@ describe("deDefinicao", () => {
         },
         { id: "r", tipo: "selecao", rotulo: "R", opcoes: ["A", "B"] },
         { id: "c", tipo: "calculado", rotulo: "C", formula: "fck * 2", compartilhado: true },
-        { id: "f", tipo: "foto", rotulo: "F", maximo: 2 },
         { id: "e", tipo: "referencia", rotulo: "E", formulario: "ensaio" },
       ],
     };
 
     const campos = deDefinicao(original, gerarChave);
 
-    expect(campos.map((c) => c.chave)).toEqual(["k1", "k2", "k3", "k4", "k5"]);
+    expect(campos.map((c) => c.chave)).toEqual(["k1", "k2", "k3", "k4"]);
     expect(campos[1]).toMatchObject({ opcoes: "A\nB" });
     expect(campos[0]).toMatchObject({ casasDecimais: "1", unidade: "MPa", obrigatorio: true });
     expect(paraDefinicao(campos)).toEqual(original);
@@ -386,13 +382,13 @@ describe("aplicarArraste", () => {
   it("tipo sem rótulo no catálogo usa o próprio nome do tipo", () => {
     const novo = aplicarArraste(
       [],
-      { origem: "paleta", tipo: "foto" },
+      { origem: "paleta", tipo: "localizacao" },
       AREA_DA_LISTA,
       rotulos,
       gerarChave,
     );
 
-    expect(novo[0]).toMatchObject({ tipo: "foto", rotulo: "foto" });
+    expect(novo[0]).toMatchObject({ tipo: "localizacao", rotulo: "localizacao" });
   });
 });
 

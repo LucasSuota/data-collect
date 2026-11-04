@@ -9,8 +9,7 @@ Confirme se a área está isolada e sinalizada antes de iniciar a inspeção.
 
 ## Durante a inspeção
 
-Registre a localização da inspeção pelo aplicativo e fotografe qualquer não conformidade.
-Cada campo de foto aceita até 5 fotos; prefira fotos nítidas e com boa iluminação.
+Registre a localização da inspeção pelo aplicativo e descreva qualquer não conformidade no campo de observações, com o local exato e o que foi observado.
 
 ## Situação final
 

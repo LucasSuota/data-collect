@@ -1,12 +1,11 @@
-import sqlite3
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from forms.banco import Conexao
 from forms.models import Campo, Definicao, NaoEncontrado, TipoCampo, ValorInvalido
 from forms.repositorio import (
     FiltroDeIgualdade,
-    abrir_conexao,
     atualizar_registro,
     contar_registros,
     criar_formulario,
@@ -22,14 +21,7 @@ DEFINICAO = Definicao((Campo(id="a", tipo=TipoCampo.TEXTO, rotulo="A"),))
 
 
 @pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
-
-
-@pytest.fixture
-def versao(conexao: sqlite3.Connection):
+def versao(conexao: Conexao):
     formulario = criar_formulario(conexao, "Ensaio", AGORA)
     return inserir_versao(conexao, formulario.id, DEFINICAO, AGORA)
 

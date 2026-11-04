@@ -1,7 +1,21 @@
 import { caminhoDe, lerRota, type Rota } from "./rotas";
 
 const CASOS: [string, Rota][] = [
-  ["#/", { nome: "formularios" }],
+  ["#/", { nome: "inicio" }],
+  ["#/formularios", { nome: "formularios" }],
+  ["#/registros", { nome: "registrosRecentes" }],
+  ["#/equipe", { nome: "equipe" }],
+  ["#/cargos", { nome: "cargos" }],
+  ["#/ia", { nome: "ia" }],
+  ["#/chat", { nome: "chat" }],
+  ["#/perfil", { nome: "perfil" }],
+  ["#/exemplos", { nome: "exemplos" }],
+  ["#/termos", { nome: "termos" }],
+  ["#/privacidade", { nome: "privacidade" }],
+  ["#/ajuda", { nome: "ajuda" }],
+  ["#/ajuda/primeiros-passos", { nome: "ajuda", guia: "primeiros-passos" }],
+  ["#/busca/corpo%20de%20prova", { nome: "busca", termo: "corpo de prova" }],
+  ["#/convite/abc-123_XYZ", { nome: "convite", token: "abc-123_XYZ" }],
   ["#/formularios/3/registros", { nome: "registros", formularioId: 3 }],
   ["#/formularios/3/novo", { nome: "novoRegistro", formularioId: 3 }],
   ["#/registros/9", { nome: "registro", registroId: 9 }],
@@ -19,8 +33,12 @@ describe("rotas", () => {
     expect(caminhoDe(rota)).toBe(hash);
   });
 
-  it.each(["", "#", "#/"])("a raiz (%j) é a lista de formulários", (hash) => {
-    expect(lerRota(hash)).toEqual({ nome: "formularios" });
+  it.each(["", "#", "#/"])("a raiz (%j) é o início", (hash) => {
+    expect(lerRota(hash)).toEqual({ nome: "inicio" });
+  });
+
+  it("um `%` solto na busca é rota inválida, não erro", () => {
+    expect(lerRota("#/busca/100%")).toEqual({ nome: "naoEncontrada" });
   });
 
   it.each([

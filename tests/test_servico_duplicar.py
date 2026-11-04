@@ -6,7 +6,7 @@ import pytest
 
 from forms import servico
 from forms.models import DefinicaoInvalida, ExclusaoBloqueada, NaoEncontrado
-from forms.repositorio import abrir_conexao, listar_dependencias
+from forms.repositorio import listar_dependencias
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 DEPOIS = datetime(2026, 11, 3, 10, 0, 0, tzinfo=UTC)
@@ -35,13 +35,6 @@ PROCTOR = {
         },
     ]
 }
-
-
-@pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
 
 
 def _criar(conexao, nome, definicao=ENSAIO):

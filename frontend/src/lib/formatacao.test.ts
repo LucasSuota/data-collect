@@ -41,7 +41,7 @@ describe("formatarCelula", () => {
     expect(formatarCelula(c, undefined)).toBe("—");
   });
 
-  it("sim/não, data, referência, localização e foto", () => {
+  it("sim/não, data, referência e localização", () => {
     expect(formatarCelula(coluna({ tipo: "sim_nao" }), true)).toBe("Sim");
     expect(formatarCelula(coluna({ tipo: "sim_nao" }), false)).toBe("Não");
     expect(formatarCelula(coluna({ tipo: "data" }), "2026-11-01")).toBe("01/11/2026");
@@ -49,7 +49,6 @@ describe("formatarCelula", () => {
     expect(
       formatarCelula(coluna({ tipo: "localizacao" }), { latitude: "-23.55", longitude: "-46.63" }),
     ).toBe("-23,55 / -46,63");
-    expect(formatarCelula(coluna({ tipo: "foto" }), [1, 2, 3])).toBe("3 foto(s)");
   });
 
   it("texto e seleção saem como estão; vazio sai vazio", () => {
@@ -62,7 +61,6 @@ describe("formatarCelula", () => {
       "sim_nao",
       "referencia",
       "localizacao",
-      "foto",
     ] as const) {
       expect(formatarCelula(coluna({ tipo }), null)).toBe("");
     }
