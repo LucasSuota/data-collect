@@ -1,8 +1,9 @@
 # Ambiente do data-collect (AGENTS.md §4.1): `docker compose up` sobe tudo.
 #
-# Só o proxy (`web`) publica portas. Postgres, Logto e API ficam na rede interna.
-# Em desenvolvimento, `docker-compose.override.yml` (carregado sozinho) abre o Postgres e o
-# Mailpit no localhost. Em produção use só este arquivo: `docker compose -f docker-compose.yml up -d`.
+# Não há proxy reverso neste arquivo: nenhum serviço publica porta aqui. Em desenvolvimento,
+# `docker-compose.override.yml` (carregado sozinho) abre no localhost o Postgres, a API, o Logto e o
+# Mailpit, e o front roda à parte (`npm run dev`, porta 5173). Servir o front e o HTTPS em produção
+# ainda não está resolvido (AGENTS.md §4.1).
 name: data-collect
 
 x-limites: &limites
@@ -39,11 +40,11 @@ services:
     # O seed é idempotente: só cria o que falta (e roda em toda subida, para acompanhar atualizações).
     entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
     environment:
-      TRUST_PROXY_HEADER: "1"
       DB_URL: postgres://${POSTGRES_USER:-forms}:${POSTGRES_PASSWORD}@postgres:5432/logto
-      ENDPOINT: https://${AUTH_HOST:-auth.localhost}
+      # Endereço público do login: é o que vai no `iss` do token e para onde o navegador é levado.
+      ENDPOINT: ${AUTH_URL:-http://localhost:3001}
       # O console administrativo não é publicado: acesse por túnel SSH ou pelo override de dev.
-      ADMIN_ENDPOINT: https://${AUTH_ADMIN_HOST:-auth-admin.localhost}
+      ADMIN_ENDPOINT: ${AUTH_ADMIN_URL:-http://localhost:3002}
     networks: [interna]
     mem_limit: 1g
     healthcheck:
@@ -67,9 +68,9 @@ services:
     environment:
       LOGTO_INTERNO: http://logto:3001
       LOGTO_DB_URL: postgresql://${POSTGRES_USER:-forms}:${POSTGRES_PASSWORD}@postgres:5432/logto
-      LOGTO_API_RESOURCE: https://${APP_HOST:-localhost}/api
-      APP_URL: https://${APP_HOST:-localhost}
-      AUTH_URL: https://${AUTH_HOST:-auth.localhost}
+      LOGTO_API_RESOURCE: ${API_URL:-http://localhost:8000}
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3001}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_USER: ${SMTP_USER:-}
@@ -94,14 +95,14 @@ services:
       FORMS_AMBIENTE: producao
       FORMS_DATABASE_URL: postgresql://forms_app:${FORMS_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-forms}
       FORMS_MIGRATION_URL: postgresql://${POSTGRES_USER:-forms}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-forms}
-      FORMS_CORS_ORIGINS: https://${APP_HOST:-localhost}
+      FORMS_CORS_ORIGINS: ${APP_URL:-http://localhost:5173}
       FORMS_ADMIN_EMAIL: ${FORMS_ADMIN_EMAIL:-}
       FORMS_EQUIPE_INICIAL: ${FORMS_EQUIPE_INICIAL:-Minha equipe}
       FORMS_CHAVE_MESTRA: ${FORMS_CHAVE_MESTRA:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      LOGTO_ENDPOINT: https://${AUTH_HOST:-auth.localhost}
+      LOGTO_ENDPOINT: ${AUTH_URL:-http://localhost:3001}
       LOGTO_INTERNO: http://logto:3001
-      LOGTO_API_RESOURCE: https://${APP_HOST:-localhost}/api
+      LOGTO_API_RESOURCE: ${API_URL:-http://localhost:8000}
       FORMS_CONFIG_DIR: /config
     volumes:
       - config:/config:ro
@@ -114,29 +115,6 @@ services:
       timeout: 5s
       retries: 20
       start_period: 20s
-
-  # Proxy reverso com HTTPS (Caddy + limite de taxa): serve o front, encaminha /api e o login.
-  web:
-    <<: *limites
-    build:
-      context: .
-      dockerfile: docker/web/Dockerfile
-    image: data-collect-web:local
-    depends_on:
-      api: {condition: service_healthy}
-    environment:
-      APP_HOST: ${APP_HOST:-localhost}
-      AUTH_HOST: ${AUTH_HOST:-auth.localhost}
-      ACME_EMAIL: ${ACME_EMAIL:-admin@exemplo.invalid}
-    ports:
-      - "${HTTP_PORTA:-80}:80"
-      - "${HTTPS_PORTA:-443}:443"
-    volumes:
-      - config:/etc/data-collect:ro
-      - dados-caddy:/data
-    networks: [interna]
-    mem_limit: 256m
-    cpus: 1
 
   # Backup diário (pg_dump) para o volume `backups`. A chave-mestra NÃO vai junto (§12).
   backup:
@@ -160,7 +138,6 @@ services:
 volumes:
   dados-postgres:
   config:
-  dados-caddy:
   backups:
 
 networks:

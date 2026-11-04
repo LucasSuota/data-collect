@@ -10,7 +10,7 @@ O projeto é um monorepo: backend Python, interface web e a infraestrutura de im
 
 Implementados e testados: o núcleo (fórmulas, validação, repositório, serviço), a API com autenticação e permissões por cargo, equipes e convites, histórico e concorrência otimista, LGPD, a CLI de operação, os módulos de IA (`ia/` e `rag/`), o `frontend/` e a infraestrutura (`docker-compose.yml`, `docker/`).
 
-**Verificado à mão:** a pilha inteira sobe com `docker compose`, o `logto-setup` provisiona o Logto real e a API valida um token real dele (token de 10 minutos, `iss` e `aud` conferidos), o limite de requisições do proxy responde 429 e o backup é restaurável.
+**Verificado à mão:** a pilha inteira sobe com `docker compose`, o `logto-setup` provisiona o Logto real e a API valida um token real dele (token de 10 minutos, `iss` e `aud` conferidos), o backup é restaurável.
 **Ainda não verificado:** nenhuma chamada a um LLM real foi feita (os testes usam um cliente falso), e os textos legais (`legal/`) precisam de revisão jurídica antes de produção.
 
 ## O que o sistema faz
@@ -28,15 +28,18 @@ Implementados e testados: o núcleo (fórmulas, validação, repositório, servi
 
 ## Como subir tudo
 
+> Guia completo de instalação e uso (primeiro acesso, CLI, produção, backup e problemas comuns): [setup.md](setup.md).
+
 Requer Docker. Em desenvolvimento:
 
 ```bash
 cp .env.example .env     # preencha as senhas e FORMS_ADMIN_EMAIL
 docker compose up -d --build
 docker compose logs api | grep convite   # link do primeiro administrador
+cd frontend && npm ci && npm run dev     # a interface, em http://localhost:5173
 ```
 
-Abra `https://localhost` (o certificado é de uma CA interna do Caddy; aceite o aviso do navegador) e use o link de convite. O e-mail de verificação chega no Mailpit, em `http://localhost:8025`.
+Abra `http://localhost:5173` e use o link de convite (`/convite/<token>`). Em desenvolvimento não há proxy nem certificado: tudo roda em HTTP no localhost. O e-mail de verificação chega no Mailpit, em `http://localhost:8025`.
 
 O que sobe:
 
@@ -46,11 +49,10 @@ O que sobe:
 | `logto` | Identidade (OIDC) auto-hospedada: e-mail e senha, verificação e recuperação |
 | `logto-setup` | Provisiona o Logto como código e de forma idempotente (`python -m forms.provisionar_logto`) e escreve a configuração da API e do front |
 | `api` | FastAPI, roda como usuário sem privilégios e conecta no banco como `forms_app` (sem `BYPASSRLS`) |
-| `web` | Caddy: HTTPS, cabeçalhos de segurança, limite de taxa e de corpo, serve o front e `/api` |
 | `backup` | `pg_dump` diário com retenção (volume `backups`) |
 | `mailpit` | Só em desenvolvimento (`docker-compose.override.yml`): caixa de e-mail de teste |
 
-**Só o proxy publica portas** (80 e 443). Em produção suba só o arquivo principal (`docker compose -f docker-compose.yml up -d`) e preencha o `.env` conforme o [.env.example](.env.example): `APP_HOST` e `AUTH_HOST` com dois nomes do seu domínio, SMTP real, `ACME_EMAIL`, `FORMS_CHAVE_MESTRA` (cifra a chave de IA de cada equipe; **guarde-a fora do backup do banco**).
+**Não há proxy na frente.** O compose só publica portas em desenvolvimento (`docker-compose.override.yml`, no `127.0.0.1`): API em `:8000`, login (Logto) em `:3001`, Postgres, Mailpit. O front roda à parte, com `npm run dev`. **Servir o front e o HTTPS em produção ainda não está resolvido**; antes disso o app não deve ser exposto à internet (veja [docker/OPERACAO.md](docker/OPERACAO.md)). Os endereços vêm de `APP_URL`, `AUTH_URL` e `API_URL` no [.env.example](.env.example); `FORMS_CHAVE_MESTRA` cifra a chave de IA de cada equipe (**guarde-a fora do backup do banco**).
 
 Mapa de dados, retenção, `fail2ban`, rotação de segredos, plano de resposta a incidente e a lista para ir à produção: [docker/OPERACAO.md](docker/OPERACAO.md).
 
@@ -121,7 +123,7 @@ src/forms/     backend Python
   rag/  ia/                                  (opcionais; achados pelo nome em api_extensoes.py)
 templates/     corpo_de_prova.json  inspecao_obra.json
 ajuda/ legal/ docs/   guias, textos legais e procedimentos em Markdown
-docker/        Dockerfiles, Caddyfile, backup, init do Postgres
+docker/        Dockerfiles, backup, init do Postgres
 tests/
 ```
 
@@ -157,11 +159,11 @@ O contrato é o OpenAPI gerado pelo FastAPI (`/docs`, só em desenvolvimento); o
 
 ## Segurança
 
-- **Rede:** só o proxy publica portas, com HTTPS e HSTS; API, Postgres e Logto ficam na rede interna.
+- **Rede:** o compose não publica porta fora do desenvolvimento (e lá só no `127.0.0.1`). Não há proxy nem HTTPS no repositório por enquanto.
 - **Autenticação:** JWT do Logto validado em todo endpoint (assinatura pelo JWKS, `iss`, `aud`, `exp`), token de 10 minutos com refresh rotativo. Cargo e permissões vêm **do banco a cada requisição**, nunca do token nem do front.
 - **Isolamento:** todo acesso filtra por `grupo_id`; testes de vazamento percorrem todas as rotas que recebem id. RLS no Postgres com um papel sem `BYPASSRLS`.
 - **Segredos:** senha é do Logto (hash); token de convite só como hash SHA-256; chave de LLM cifrada com Fernet e nunca devolvida.
-- **Limites:** taxa por IP no proxy (600 por minuto na API, 60 no login), corpo de no máximo 1 MB (413), limites por pessoa e por equipe nos endpoints caros (429 com `Retry-After`), timeouts contra conexão lenta e limites de CPU e memória por contêiner. Para bloquear reincidentes no servidor, use o `fail2ban` lendo o log do Caddy. **Não cobre DDoS volumétrico**: por decisão, não há serviço de borda na frente.
+- **Limites:** corpo de no máximo 1 MB (413), limites por pessoa e por equipe nos endpoints caros (429 com `Retry-After`), timeouts do uvicorn contra conexão lenta e limites de CPU e memória por contêiner. **Sem proxy, não há limite por IP** (nem `fail2ban`). **Não cobre DDoS volumétrico**: por decisão, não há serviço de borda na frente.
 - **LGPD:** aceite versionado dos Termos e da Política, exportação e exclusão dos dados da pessoa, IA desligada por padrão, campos com `"ia": false` nunca vão ao índice nem ao prompt, e logs sem e-mail, valores de campo, corpo, query string nem token (uma linha por requisição com o molde da rota e um `X-Request-Id`).
 - **IA:** a saída do LLM é dado não confiável (validada antes de aparecer) e o conteúdo de registro é entrada não confiável (prompt injection). O LLM nunca gera SQL.
 - Exportação CSV neutraliza injeção de fórmula em células de texto; o front renderiza Markdown sem HTML cru.
@@ -169,7 +171,7 @@ O contrato é o OpenAPI gerado pelo FastAPI (`/docs`, só em desenvolvimento); o
 ## Qualidade
 
 - **TDD** no núcleo, com `formulas.py` e `validacao.py` primeiro e mais fundo. O LLM é sempre substituído por um cliente falso nos testes, que nunca fazem chamada de rede. O Logto real nunca é usado nos testes: o token de teste é assinado com chaves geradas no próprio teste.
-- **CI** (GitHub Actions): `ruff`, `pytest` contra um PostgreSQL com `pgvector` (Linux), build das imagens, validação do Caddyfile e o job do front (tipos gerados do OpenAPI, lint, formatação, typecheck, testes e build).
+- **CI** (GitHub Actions): `ruff`, `pytest` contra um PostgreSQL com `pgvector` (Linux), build da imagem da API e o job do front (tipos gerados do OpenAPI, lint, formatação, typecheck, testes e build).
 - **Agentes** (`agents/`): o `orchestrator` recebe toda tarefa, confere o escopo e aciona `issue-creator`, `issue-planner`, `issue-coder`, `issue-reviewer`, `doc-writer` e `git-manager`. O `doc-writer` mantém um `README.md` de resumo em cada pasta com código.
 - **`AI_NOTES.md`** registra os erros reais da IA durante a construção.
 

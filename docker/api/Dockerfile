@@ -26,5 +26,4 @@ USER app
 EXPOSE 8000
 ENTRYPOINT ["/entrada.sh"]
 CMD ["uvicorn", "forms.api:app_do_ambiente", "--factory", "--host", "0.0.0.0", "--port", "8000", \
-     "--proxy-headers", "--forwarded-allow-ips", "*", "--limit-concurrency", "200", \
-     "--timeout-keep-alive", "5", "--no-access-log"]
+     "--limit-concurrency", "200", "--timeout-keep-alive", "5", "--no-access-log"]

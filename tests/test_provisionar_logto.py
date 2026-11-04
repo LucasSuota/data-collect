@@ -158,6 +158,15 @@ def test_configuracao_escrita_nao_mistura_segredo_com_o_arquivo_publico(ambiente
     assert "LOGTO_M2M_SECRET=segredo-m2m" in privado
 
 
+def test_configuracao_publica_aponta_o_front_para_a_api_direto(ambiente) -> None:
+    # Sem proxy na frente, o front não tem um `/api` na própria origem: fala com a API pelo
+    # endereço dela, que é o mesmo do API resource.
+    escrever_configuracao(ambiente, "id-web", "id-m2m", "segredo-m2m")
+
+    publico = json.loads((ambiente.pasta_de_configuracao / "frontend-config.json").read_text())
+    assert publico["apiBase"] == "https://app.exemplo/api"
+
+
 def test_variavel_obrigatoria_ausente_e_erro_claro() -> None:
     with pytest.raises(ProvisionamentoFalhou, match="LOGTO_DB_URL"):
         Ambiente.do_ambiente({})

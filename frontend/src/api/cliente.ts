@@ -49,7 +49,7 @@ export type RespostaDoAssistente = Esquemas["RespostaSaida"];
 export type ResumoDaIa = Esquemas["ResumoSaida"];
 
 export interface Configuracao {
-  /** Vazio quando o front é servido pela mesma origem do proxy (`/api` entra em `urlBase`). */
+  /** Endereço da API (ex.: `http://localhost:8000`); vazio só se o front e a API dividirem a origem. */
   urlBase: string;
   /** Token de acesso do Logto (10 minutos); o SDK o renova sozinho (AGENTS.md §2.12). */
   obterToken?: () => Promise<string | null>;
