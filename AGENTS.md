@@ -120,7 +120,7 @@ Um formulário pode depender de outro. Exemplo: `proctor` depende de `ensaio`, e
 
 ### 2.9. Aplicação web e implantação
 
-O produto é uma **aplicação web** usada por equipes e **auto-hospedada**: tudo sobe com `docker compose up` (PostgreSQL com `pgvector`, Logto, API, frontend servido por proxy reverso com HTTPS e, em desenvolvimento, um servidor de e-mail de teste), sem serviço externo na frente. Detalhes técnicos em §4.1.
+O produto é uma **aplicação web** usada por equipes e **auto-hospedada**: tudo sobe com `docker compose up` (PostgreSQL com `pgvector`, Logto, API e, em desenvolvimento, um servidor de e-mail de teste; o frontend roda à parte, no Vite), sem serviço externo na frente. **Não há proxy reverso no repositório** (o Caddy foi removido por decisão do autor): servir o front e o HTTPS em produção está em aberto. Detalhes técnicos em §4.1.
 
 - Acesso por navegador, com o celular em primeiro lugar, e como PWA instalável (§2.17).
 - Fora do escopo: serviço externo de borda (CDN, WAF de terceiros), Kubernetes e multi-região (§3.1). Sem esse tipo de serviço, o app **não cobre DDoS volumétrico**; o que ele faz é limitar abuso de aplicação e esgotamento de recursos (§12).
@@ -256,19 +256,19 @@ LangChain, LlamaIndex, LiteLLM (por ora), **ORM** (SQL à mão com `psycopg`), b
 | IA (opcional) | provedores de LLM atrás de `ia/cliente.py` (Anthropic e compatíveis com OpenAI), via SDK ou `httpx` |
 | Configuração | `python-dotenv`, `.env` fora do git |
 | Frontend (`frontend/`) | React, TypeScript (`strict`), Vite, Tailwind CSS; `npm`; fontes hospedadas (`@fontsource`); PWA |
-| Infraestrutura | Docker, `docker-compose`, proxy reverso com HTTPS (Caddy, nginx ou Traefik, decidido na issue #115) |
+| Infraestrutura | Docker e `docker-compose`. Sem proxy reverso por ora: o HTTPS e a entrega do front em produção estão em aberto (um proxy, Caddy, nginx ou Traefik, volta por decisão do autor) |
 | Qualidade do front | Vitest + Testing Library, Playwright (e2e em viewport mobile), ESLint, Prettier |
 | Qualidade | `pytest` contra Postgres real, `httpx` (TestClient), `ruff` (com a regra `S608`), GitHub Actions |
 
-**Execução:** `docker compose up` sobe tudo (§4.1). **Desenvolvimento do front:** `npm run dev` (Vite, porta 5173) chamando a API; como são origens diferentes, a API habilita **CORS só para as origens configuradas** por variável de ambiente; nunca `*`. Em produção, front e API ficam na mesma origem pelo proxy, sem CORS.
+**Execução:** `docker compose up` sobe tudo (§4.1). **Desenvolvimento do front:** `npm run dev` (Vite, porta 5173) chamando a API; como são origens diferentes, a API habilita **CORS só para as origens configuradas** por variável de ambiente; nunca `*`. Em desenvolvimento tudo é HTTP no `localhost` (front `:5173`, API `:8000`, login `:3001`), então não há certificado; os endereços vêm de `APP_URL`, `AUTH_URL` e `API_URL`. Em produção, a origem do front também entra no CORS enquanto não houver proxy que una front e API.
 
 ### 4.1. Implantação (Docker Compose)
 
-- **Serviços:** `postgres` (com `pgvector`), `logto` e um `logto-setup` que provisiona tudo como código e de forma idempotente (aplicativo SPA com refresh token rotativo, aplicativo M2M da API, API resource com token de 10 minutos, conector SMTP, tela de login em PT-BR com senha mínima de 10 caracteres e aceite dos termos). O `iss` do token é o endereço público do login, mas a API busca as chaves (JWKS) e fala com a Management API pela rede interna (`LOGTO_INTERNO`), `api`, `web` (proxy reverso com HTTPS: serve o estático do front e encaminha `/api` e a autenticação) um `backup` diário com `pg_dump` (volume `backups`, com retenção) e, só em desenvolvimento (`docker-compose.override.yml`, carregado sozinho), um servidor de e-mail de teste (Mailpit) e as portas do Postgres e do Logto no `localhost`. **Só o proxy publica portas** (80 e 443); Postgres, API e Logto ficam na rede interna.
+- **Serviços:** `postgres` (com `pgvector`), `logto` e um `logto-setup` que provisiona tudo como código e de forma idempotente (aplicativo SPA com refresh token rotativo, aplicativo M2M da API, API resource com token de 10 minutos, conector SMTP, tela de login em PT-BR com senha mínima de 10 caracteres e aceite dos termos). O `iss` do token é o endereço público do login, mas a API busca as chaves (JWKS) e fala com a Management API pela rede interna (`LOGTO_INTERNO`), `api`, um `backup` diário com `pg_dump` (volume `backups`, com retenção) e, só em desenvolvimento (`docker-compose.override.yml`, carregado sozinho), um servidor de e-mail de teste (Mailpit) e as portas do Postgres, da API e do Logto no `127.0.0.1`. **O `docker-compose.yml` principal não publica porta nenhuma**; só o override de desenvolvimento publica, e só no `127.0.0.1`. O front roda com `npm run dev` e descobre o id do aplicativo do Logto por `public/config.json` (gerado do `logto-setup`) ou pelas variáveis `VITE_*`.
 - **Configuração** por variáveis de ambiente (`.env.example` documentado; `.env` nunca vai ao git, à imagem nem ao banco).
 - **Banco:** migrações aplicadas por `forms migrar` (e opcionalmente na subida) com trava `pg_advisory_lock`; o banco persiste entre versões, então migração de esquema é crítica (§5.2). Backup com `pg_dump` agendado e restauração testada; `GET /healthz` e `GET /readyz` para os healthchecks.
-- **Proteção local:** limite de requisições e de conexões por IP no proxy, timeouts contra conexão lenta, limite de corpo (413), bloqueio de IPs reincidentes (`fail2ban`), limites de CPU e memória por contêiner e `statement_timeout` no Postgres (§12). **Não cobre DDoS volumétrico** (sem serviço de borda, por decisão).
-- **CI:** Postgres como serviço, `ruff`, `pytest` (Linux), build das imagens e o job do `frontend/`.
+- **Proteção local:** timeouts do uvicorn contra conexão lenta, limite de corpo (413), limites por pessoa e por equipe nos endpoints caros, limites de CPU e memória por contêiner e `statement_timeout` no Postgres (§12). **Sem proxy, não há limite por IP nem `fail2ban`**, e o que faltar aqui volta quando houver um proxy. **Não cobre DDoS volumétrico** (sem serviço de borda, por decisão).
+- **CI:** Postgres como serviço, `ruff`, `pytest` (Linux), build da imagem da API, o job do `frontend/` e o e2e (compose sem proxy mais o Vite).
 - Dependências da infraestrutura e por quê: Docker (ambiente reproduzível e subida em um comando), Logto (identidade e e-mail/senha prontos, sem escrever autenticação), `PyJWT` (validar o token sem escrever criptografia), `pgvector` (busca vetorial no próprio banco), `cryptography` (cifrar a chave de LLM).
 
 ---
@@ -289,7 +289,7 @@ ajuda/       guias em .md (central de ajuda e base do chatbot)
 legal/       Termos de Uso e Política de Privacidade (versionados)
 docs/        procedimentos em .md (base do assistente)
 frontend/    React + TypeScript + Vite + Tailwind (§4); data-collect-design-pattern.pdf
-docker/      Dockerfiles, configuração do proxy e init do Postgres
+docker/      Dockerfiles, backup, init do Postgres e guia de operação
 docker-compose.yml
 tests/       test_formulas.py  test_validacao.py  test_servico.py  test_api.py ...
 ```
@@ -504,13 +504,13 @@ Se o tempo apertar, corte **nesta ordem**:
 
 ## 12. Segurança
 
-- **Rede:** só o proxy publica portas (80 e 443), com HTTPS; API, Postgres e Logto ficam na rede interna do compose. Em desenvolvimento, a API ouve em `127.0.0.1`.
+- **Rede:** o compose principal não publica porta; em desenvolvimento o override publica API, Logto, Postgres e Mailpit só no `127.0.0.1`. **Não há HTTPS no repositório** (sem proxy): não exponha o app na internet até haver um.
 - **Autenticação:** JWT do Logto validado em todo endpoint (JWKS, `iss`, `aud`, `exp`); a equipe vem de `X-Equipe` e é conferida contra `membros_grupo`, token de 10 minutos (§2.12). Cargo e permissões vêm do banco a cada requisição, nunca do token nem do front.
 - **Isolamento:** todo acesso filtra por `grupo_id`; recurso de outra equipe é 404; testes de vazamento por rota. Row Level Security no Postgres como defesa em profundidade, quando adotado.
 - **SQL sempre parametrizado** (`%s`), sem f-string nem concatenação (regra `S608` do `ruff` e teste de varredura); usuário do banco da aplicação com privilégio mínimo (sem DDL; migrações com outro papel); `statement_timeout`.
 - **Segredos:** a senha fica no Logto (hash); o token de convite só como hash SHA-256; a chave de LLM cifrada (Fernet) com chave-mestra só no ambiente e nunca devolvida pela API; chaves e `.env` nunca no frontend, no git, em imagem, em log nem em backup junto do dump.
-- **Limites:** rate limit por IP e por conexão no proxy e por pessoa e equipe nos endpoints caros (exportar, prévia de fórmulas, IA, convites), com 429 e `Retry-After`; corpo de no máximo 1 MB para JSON (413); timeouts contra conexão lenta; `fail2ban` para reincidentes; limites de recurso por contêiner. Sem serviço de borda, **DDoS volumétrico não é coberto** (§2.9).
-- **CORS** só para as origens configuradas, nunca `allow_origins=["*"]`; cabeçalhos de segurança (CSP restritiva, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` liberando só a geolocalização, HSTS no proxy); `/docs` e `/openapi.json` fechados em produção.
+- **Limites:** rate limit por pessoa e equipe nos endpoints caros (exportar, prévia de fórmulas, IA, convites), com 429 e `Retry-After`; corpo de no máximo 1 MB para JSON (413); timeouts do uvicorn contra conexão lenta; limites de recurso por contêiner. Limite por IP e `fail2ban` dependem de um proxy, que não existe hoje. Sem serviço de borda, **DDoS volumétrico não é coberto** (§2.9).
+- **CORS** só para as origens configuradas, nunca `allow_origins=["*"]`; cabeçalhos de segurança (CSP restritiva, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` liberando só a geolocalização; CSP do front e HSTS ficam para o proxy que vier); `/docs` e `/openapi.json` fechados em produção.
 - **IA:** saída do LLM é **dado não confiável**: valide contra o esquema esperado e contra o banco antes de exibir. Conteúdo de registro também é entrada não confiável (prompt injection). O LLM nunca gera SQL; campo `"ia": false` nunca é enviado; sem consentimento da equipe, nada é enviado.
 - Texto vindo do usuário (rótulos, opções, valores) é tratado como dado, nunca executado; a API não devolve HTML e o front renderiza Markdown de forma segura.
 - Exportação CSV: neutralizar células **de texto** iniciadas por `=`, `+`, `-`, `@`, tab ou `CR` (injeção de fórmula em planilha), prefixando com `'`. Não vale para números: um `Decimal` negativo (`-3,5`) começa com `-` e não pode ser corrompido, e número só entra no CSV via formatação de `Decimal`.

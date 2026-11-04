@@ -58,52 +58,13 @@ Para trocar uma senha do `.env`, atualize o `.env` **e** o papel no banco (`ALTE
 
 O app grava uma linha por requisição em `forms.acesso`: identificador, método, **molde da rota** (nunca o caminho real), status e duração. Não há e-mail, valor de campo, corpo, query string, token nem IP. O log de acesso do uvicorn fica **desligado** (`--no-access-log`) porque imprimiria o caminho real, inclusive o token do convite. O identificador volta no cabeçalho `X-Request-Id`: peça-o a quem relatar um problema.
 
-O Caddy não grava log de acesso por padrão.
-
 ## 6. Proteção contra abuso
 
-O que o app faz sozinho: limite de requisições por IP no proxy (600 por minuto na API; 600 no login, com 30 por minuto para quem **envia credenciais**), corpo de no máximo 1 MB, timeouts contra conexão lenta, limite por pessoa e por equipe nos endpoints caros (429 com `Retry-After`) e limites de CPU e memória por contêiner.
+O que o app faz sozinho: limite por pessoa e por equipe nos endpoints caros (429 com `Retry-After`), corpo de no máximo 1 MB (a API confere e responde 413), timeouts do uvicorn contra conexão lenta e limites de CPU e memória por contêiner.
+
+**Hoje não há proxy na frente** (o Caddy foi removido; AGENTS.md §4.1). Isso significa, enquanto não houver outro: sem limite de requisições e de conexões **por IP**, sem bloqueio de reincidentes (`fail2ban`), sem HTTPS e sem os cabeçalhos de segurança do front (CSP, HSTS). A API continua mandando os dela. Por isso o compose **não publica porta nenhuma** fora do desenvolvimento, e **não expõe o app na internet** nesse estado.
 
 **Não cobre DDoS volumétrico:** sem CDN nem WAF na frente (decisão do projeto), banda e conexões saturadas na sua rede não se resolvem aqui.
-
-### Bloqueio de reincidentes com `fail2ban` (opcional)
-
-O `fail2ban` precisa do IP de quem recebeu 429, o que **é dado pessoal**. Ligue só se precisar, com retenção curta (7 dias) e registre isso na política. Exemplo de `log` no `docker/web/Caddyfile`, dentro do bloco do host, gravando só o necessário:
-
-```caddyfile
-log {
-	output file /var/log/caddy/acesso.log {
-		roll_keep 7
-		roll_keep_for 168h
-	}
-	format filter {
-		request>headers delete
-		request>uri delete          # sem query string nem caminho com token
-		wrap json
-	}
-}
-```
-
-`/etc/fail2ban/filter.d/data-collect.conf`:
-
-```ini
-[Definition]
-failregex = "remote_ip":"<HOST>".*"status":429
-```
-
-`/etc/fail2ban/jail.d/data-collect.local`:
-
-```ini
-[data-collect]
-enabled  = true
-filter   = data-collect
-logpath  = /caminho/do/volume/caddy/acesso.log
-maxretry = 20
-findtime = 10m
-bantime  = 1h
-```
-
-Monte o diretório de logs como volume do serviço `web` para o `fail2ban` do host o ler.
 
 ## 7. Backup e restauração
 
@@ -116,7 +77,7 @@ Teste a restauração num banco vazio **antes** de precisar dela (o procedimento
 
 ## 8. Plano de resposta a incidente
 
-1. **Contenha.** Se houver suspeita de acesso indevido: desative a pessoa (`/equipe`, "Desativar acesso", vale na hora) ou revogue o convite; se for a máquina, `docker compose stop web` tira o app do ar sem apagar dados.
+1. **Contenha.** Se houver suspeita de acesso indevido: desative a pessoa (`/equipe`, "Desativar acesso", vale na hora) ou revogue o convite; se for a máquina, `docker compose stop api` tira o app do ar sem apagar dados.
 2. **Preserve.** Faça um `pg_dump` extra e guarde os logs (`forms.acesso`, Logto) antes de mexer.
 3. **Entenda.** Use o histórico de alterações dos registros (quem, o quê, quando) e os identificadores de requisição para reconstruir o que aconteceu.
 4. **Troque o que vazou.** Senhas do `.env`, `FORMS_CHAVE_MESTRA` (e recadastre as chaves de IA), segredo M2M do Logto (apague o aplicativo `data-collect-api` no console do Logto e suba de novo: o `logto-setup` recria), e peça às pessoas que redefinam a senha.
@@ -126,7 +87,8 @@ Teste a restauração num banco vazio **antes** de precisar dela (o procedimento
 ## 9. Antes de ir para produção
 
 - [ ] Revisão jurídica dos Termos e da Política, com controlador e encarregado preenchidos
-- [ ] `.env` com senhas fortes, `FORMS_CHAVE_MESTRA` e SMTP reais; `APP_HOST` e `AUTH_HOST` no seu domínio
+- [ ] Um proxy reverso com HTTPS na frente (serve o front, encaminha a API e o login, limita taxa por IP e manda CSP e HSTS): **pendente**, não há um no repositório
+- [ ] `.env` com senhas fortes, `FORMS_CHAVE_MESTRA` e SMTP reais; `APP_URL`, `AUTH_URL` e `API_URL` com os endereços públicos
 - [ ] Só `docker-compose.yml` (sem o `override`): Mailpit e as portas de desenvolvimento ficam de fora
 - [ ] Backup copiado para fora da máquina e restauração testada
-- [ ] Decidir se o `fail2ban` entra (e o que isso exige na política)
+- [ ] Decidir se o `fail2ban` entra com o novo proxy (ele precisa do IP, que é dado pessoal, e isso exige a política)
