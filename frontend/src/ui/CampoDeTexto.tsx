@@ -26,7 +26,7 @@ export function CampoDeTexto({ rotulo, erros = [], dica, className = "", ...rest
         aria-invalid={invalido}
         aria-describedby={descricao || undefined}
         className={[
-          "min-h-9 rounded-controle border bg-superficie px-3 text-sm text-pedra-900",
+          "min-h-11 rounded-controle border bg-superficie px-3 text-sm text-pedra-900",
           "placeholder:text-pedra-400 transition-colors duration-(--duracao-rapida)",
           invalido ? "border-erro-300" : "border-pedra-300 hover:border-pedra-400",
           className,

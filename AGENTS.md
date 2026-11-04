@@ -155,9 +155,9 @@ Qualidade de interface do `frontend/`. É só apresentação (§2.4): nada aqui 
 
 ### 2.12. Autenticação
 
-- A identidade é do **Logto auto-hospedado** (OIDC): e-mail e senha, verificação de e-mail, recuperação de senha, telas em PT-BR e senha de no mínimo 10 caracteres. **Não há cadastro livre: o acesso é por convite** (§2.13). Quem entra por um convite cria a conta e **aceita os Termos e a Política** (§2.15). O Logto guarda a senha (com hash); o app **nunca** a vê.
+- A identidade é do **Logto auto-hospedado** (OIDC): e-mail e senha, verificação de e-mail, recuperação de senha, telas em PT-BR e senha de no mínimo 10 caracteres. **Não há cadastro livre: o acesso é por convite** (§2.13). O Logto em si deixa criar conta (a tela de cadastro é a que o link do convite usa), mas uma conta sem convite **não entra em equipe nenhuma**: o app só dá acesso a quem é membro de uma equipe, e o servidor responde 403 a quem não é. Quem entra por um convite cria a conta e **aceita os Termos e a Política** (§2.15). O Logto guarda a senha (com hash); o app **nunca** a vê.
 - **Token de acesso curto, de 10 minutos**, renovado pelo SDK com refresh token (rotação ligada); "Manter conectado neste aparelho" estende só a sessão, nunca o token. A renovação é sob demanda: ao receber `401` com código `token_expirado`, o front renova uma vez e repete a chamada.
-- A API valida o JWT em **todo** endpoint (exceto `healthz` e `readyz`): assinatura pelo JWKS descoberto no OIDC, `iss`, `aud`, `exp` e `organization_id`. **Cargo e permissões não vêm do token**: são lidos do banco a cada requisição (§2.13), então mudar um cargo ou desativar alguém vale na hora.
+- A API valida o JWT em **todo** endpoint (exceto `healthz` e `readyz`): assinatura pelo JWKS descoberto no OIDC, `iss`, `aud` e `exp`. A **equipe** vem do cabeçalho `X-Equipe`, que é só um pedido: o servidor confere no banco se a pessoa é membro ativa dela (sem o cabeçalho, vale a única equipe da pessoa). **Cargo e permissões não vêm do token**: são lidos do banco a cada requisição (§2.13), então mudar um cargo ou desativar alguém vale na hora.
 - **Primeiro administrador:** a variável de ambiente `FORMS_ADMIN_EMAIL` (com o nome da equipe) faz a subida criar a equipe e convidar o administrador inicial; é idempotente.
 - `GET /eu` devolve perfil, equipe, cargo e permissões, para o front esconder e bloquear.
 
@@ -264,7 +264,7 @@ LangChain, LlamaIndex, LiteLLM (por ora), **ORM** (SQL à mão com `psycopg`), b
 
 ### 4.1. Implantação (Docker Compose)
 
-- **Serviços:** `postgres` (com `pgvector`), `logto` e um `logto-setup` que provisiona tudo como código e de forma idempotente (aplicativo, API resource, organização, e-mail, cadastro desativado, TTL do token), `api`, `web` (proxy reverso com HTTPS: serve o estático do front e encaminha `/api` e a autenticação) e, só em desenvolvimento, um servidor de e-mail de teste. **Só o proxy publica portas** (80 e 443); Postgres, API e Logto ficam na rede interna.
+- **Serviços:** `postgres` (com `pgvector`), `logto` e um `logto-setup` que provisiona tudo como código e de forma idempotente (aplicativo SPA com refresh token rotativo, aplicativo M2M da API, API resource com token de 10 minutos, conector SMTP, tela de login em PT-BR com senha mínima de 10 caracteres e aceite dos termos). O `iss` do token é o endereço público do login, mas a API busca as chaves (JWKS) e fala com a Management API pela rede interna (`LOGTO_INTERNO`), `api`, `web` (proxy reverso com HTTPS: serve o estático do front e encaminha `/api` e a autenticação) um `backup` diário com `pg_dump` (volume `backups`, com retenção) e, só em desenvolvimento (`docker-compose.override.yml`, carregado sozinho), um servidor de e-mail de teste (Mailpit) e as portas do Postgres e do Logto no `localhost`. **Só o proxy publica portas** (80 e 443); Postgres, API e Logto ficam na rede interna.
 - **Configuração** por variáveis de ambiente (`.env.example` documentado; `.env` nunca vai ao git, à imagem nem ao banco).
 - **Banco:** migrações aplicadas por `forms migrar` (e opcionalmente na subida) com trava `pg_advisory_lock`; o banco persiste entre versões, então migração de esquema é crítica (§5.2). Backup com `pg_dump` agendado e restauração testada; `GET /healthz` e `GET /readyz` para os healthchecks.
 - **Proteção local:** limite de requisições e de conexões por IP no proxy, timeouts contra conexão lenta, limite de corpo (413), bloqueio de IPs reincidentes (`fail2ban`), limites de CPU e memória por contêiner e `statement_timeout` no Postgres (§12). **Não cobre DDoS volumétrico** (sem serviço de borda, por decisão).
@@ -319,7 +319,7 @@ api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py
 ### 5.2. Modelo de dados (PostgreSQL)
 
 ```
-grupos                  id, nome, logto_organization_id, criado_em
+grupos                  id, nome, criado_em
 usuarios                id, logto_sub (único), nome, email, ativo, criado_em, ultimo_acesso_em
 cargos                  id, grupo_id, nome, descricao, padrao
 cargo_permissoes        cargo_id, permissao
@@ -505,7 +505,7 @@ Se o tempo apertar, corte **nesta ordem**:
 ## 12. Segurança
 
 - **Rede:** só o proxy publica portas (80 e 443), com HTTPS; API, Postgres e Logto ficam na rede interna do compose. Em desenvolvimento, a API ouve em `127.0.0.1`.
-- **Autenticação:** JWT do Logto validado em todo endpoint (JWKS, `iss`, `aud`, `exp`, `organization_id`), token de 10 minutos (§2.12). Cargo e permissões vêm do banco a cada requisição, nunca do token nem do front.
+- **Autenticação:** JWT do Logto validado em todo endpoint (JWKS, `iss`, `aud`, `exp`); a equipe vem de `X-Equipe` e é conferida contra `membros_grupo`, token de 10 minutos (§2.12). Cargo e permissões vêm do banco a cada requisição, nunca do token nem do front.
 - **Isolamento:** todo acesso filtra por `grupo_id`; recurso de outra equipe é 404; testes de vazamento por rota. Row Level Security no Postgres como defesa em profundidade, quando adotado.
 - **SQL sempre parametrizado** (`%s`), sem f-string nem concatenação (regra `S608` do `ruff` e teste de varredura); usuário do banco da aplicação com privilégio mínimo (sem DDL; migrações com outro papel); `statement_timeout`.
 - **Segredos:** a senha fica no Logto (hash); o token de convite só como hash SHA-256; a chave de LLM cifrada (Fernet) com chave-mestra só no ambiente e nunca devolvida pela API; chaves e `.env` nunca no frontend, no git, em imagem, em log nem em backup junto do dump.

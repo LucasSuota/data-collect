@@ -129,16 +129,6 @@ export function PainelDePropriedades({
           )}
         </Moldura>
       ) : null}
-      {aceita("maximo") ? (
-        <Texto
-          chave={campo.chave}
-          nome="maximo"
-          rotulo="Máximo de fotos"
-          valor={campo.maximo}
-          erros={errosDe("maximo")}
-          aoMudar={(maximo) => aoMudar({ maximo })}
-        />
-      ) : null}
       {aceita("formulario") ? (
         <Moldura
           id={`origem-${campo.chave}`}

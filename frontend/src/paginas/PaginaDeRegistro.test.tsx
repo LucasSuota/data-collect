@@ -30,6 +30,9 @@ const registro: Registro = {
   formulario_id: 5,
   versao_id: 51,
   dados: { fck: "25", dobro: { valor: "50", erro: null } },
+  revisao: 1,
+  criado_por: null,
+  atualizado_por: null,
   criado_em: "x",
   atualizado_em: "x",
 };
@@ -51,7 +54,7 @@ describe("PaginaDeRegistro: novo", () => {
 
     await userEvent.type(await screen.findByLabelText(/fck/), "25,5");
     await userEvent.type(screen.getByLabelText("Lote"), "L-1");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar registro" }));
 
     await waitFor(() =>
       expect(navegar).toHaveBeenCalledWith({ nome: "registros", formularioId: 5 }),
@@ -78,12 +81,12 @@ describe("PaginaDeRegistro: novo", () => {
       }),
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Salvar" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Salvar registro" }));
 
     expect(await screen.findByLabelText(/fck/)).toHaveAccessibleDescription("Campo obrigatório.");
     expect(screen.getByLabelText("Lote")).toHaveAccessibleDescription("Deve ser um texto.");
     expect(navegar).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Salvar" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Salvar registro" })).toBeEnabled();
   });
 
   it("erro que não é de um campo da tela aparece num aviso geral", async () => {
@@ -101,7 +104,7 @@ describe("PaginaDeRegistro: novo", () => {
       }),
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Salvar" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Salvar registro" }));
 
     expect(await screen.findByText(/fantasma: Este campo não existe/)).toBeInTheDocument();
   });
@@ -120,7 +123,7 @@ describe("PaginaDeRegistro: novo", () => {
     );
 
     await userEvent.type(await screen.findByLabelText(/fck/), "7");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar registro" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível conectar");
     expect(screen.getByLabelText(/fck/)).toHaveValue("7");
@@ -138,7 +141,7 @@ describe("PaginaDeRegistro: novo", () => {
       }),
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "Salvar" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Salvar registro" }));
 
     expect(screen.getByRole("button", { name: "Salvando…" })).toBeDisabled();
     concluir(registro);
@@ -191,7 +194,7 @@ describe("PaginaDeRegistro: editar", () => {
 
     expect(await screen.findByLabelText(/fck/)).toHaveValue("25");
     expect(screen.queryByLabelText("Lote")).not.toBeInTheDocument(); // campo da v2, não da v1
-    expect(screen.getByText("Versão 1 do formulário")).toBeInTheDocument();
+    expect(screen.getByText(/versão 1/)).toBeInTheDocument();
     expect(obterVersao).toHaveBeenCalledWith(5, 51);
   });
 
@@ -206,10 +209,10 @@ describe("PaginaDeRegistro: editar", () => {
     expect(await screen.findByLabelText(/Dobro/)).toHaveTextContent("50");
     await userEvent.clear(screen.getByLabelText(/fck/));
     await userEvent.type(screen.getByLabelText(/fck/), "30");
-    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar registro" }));
 
     await waitFor(() => expect(navegar).toHaveBeenCalled());
-    expect(atualizarRegistro).toHaveBeenCalledWith(9, { fck: "30" });
+    expect(atualizarRegistro).toHaveBeenCalledWith(9, { fck: "30" }, expect.any(Number));
   });
 
   it("exclui só depois da confirmação", async () => {
@@ -256,7 +259,7 @@ describe("PaginaDeRegistro: editar", () => {
       clienteFalso({ obterFormulario: async () => formulario(2, DEFINICAO_V2), previa }),
     );
 
-    await screen.findByRole("button", { name: "Salvar" });
+    await screen.findByRole("button", { name: "Salvar registro" });
 
     expect(screen.queryByRole("button", { name: "Excluir registro" })).not.toBeInTheDocument();
   });

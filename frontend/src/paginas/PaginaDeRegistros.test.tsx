@@ -56,6 +56,9 @@ const registro = (id: number, dados: Record<string, unknown> = {}) => ({
     dobro: { valor: "50.92", erro: null },
     ...dados,
   },
+  revisao: 1,
+  criado_por: null,
+  atualizado_por: null,
   criado_em: "2026-11-02T10:00:00+00:00",
   atualizado_em: "x",
 });
@@ -65,6 +68,7 @@ const pagina = (itens: ReturnType<typeof registro>[], total = itens.length, vers
   colunas: COLUNAS,
   itens,
   total,
+  exibicao: { destaque: null, status: null, resumo: [] },
 });
 
 const formulario = {
@@ -92,6 +96,14 @@ function renderizar(listarRegistros = vi.fn(async () => pagina([registro(1)])), 
       obterFormulario: async () => formulario,
       listarVersoes: async () => versoes,
       listarRegistros,
+      contagens: async () => ({
+        campo_status: null,
+        total: 0,
+        conforme: 0,
+        nao_conforme: 0,
+        erro: 0,
+        aguardando: 0,
+      }),
       ...extra,
     }),
   );

@@ -12,5 +12,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // Máquinas lentas (CI, notebook sob carga) estouravam os 5 s padrão no primeiro teste de cada arquivo.
+    testTimeout: 20_000,
   },
 });

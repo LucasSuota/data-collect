@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { ErroDaApi } from "../api/cliente";
+import { ComPermissao } from "../shell/permissoes";
 import { useApi } from "../api/contexto";
-import type { Esquemas, ParametrosDeConsulta } from "../api/cliente";
+import type { Contagens, Esquemas, ParametrosDeConsulta, ResumoDaIa } from "../api/cliente";
 import { baixarArquivo, formatarCelula } from "../lib/formatacao";
 import type { Rota } from "../rotas";
-import { Botao, Cartao, EstadoVazio, Icone } from "../ui";
+import { Botao, Cartao, EstadoVazio, Icone, SeloDeEstado } from "../ui";
 import { CLASSE_DO_CONTROLE } from "../components/FormRenderer/Campo";
 import { EsqueletoDaTabela } from "./esqueletos";
 import { Falha, mensagemDe, useCarga } from "./Estado";
@@ -26,6 +28,9 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
   const [criadoAte, setCriadoAte] = useState("");
   const [pagina, setPagina] = useState(0);
   const [falhaDoCsv, setFalhaDoCsv] = useState<string | null>(null);
+  const [soMeus, setSoMeus] = useState(false);
+  const [resumo, setResumo] = useState<ResumoDaIa | null>(null);
+  const [falhaDoResumo, setFalhaDoResumo] = useState<string | null>(null);
 
   const formulario = useCarga(() => cliente.obterFormulario(formularioId), [cliente, formularioId]);
   const versoes = useCarga(() => cliente.listarVersoes(formularioId), [cliente, formularioId]);
@@ -34,7 +39,12 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
     criadoDe: criadoDe || undefined,
     criadoAte: criadoAte || undefined,
     filtros,
+    meus: soMeus,
   };
+  const contagens = useCarga(
+    () => cliente.contagens(formularioId, consulta),
+    [cliente, formularioId, versaoId, JSON.stringify(filtros), criadoDe, criadoAte, soMeus],
+  );
   const listagem = useCarga(
     () =>
       cliente.listarRegistros(formularioId, {
@@ -42,7 +52,7 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
         limite: POR_PAGINA,
         deslocamento: pagina * POR_PAGINA,
       }),
-    [cliente, formularioId, versaoId, JSON.stringify(filtros), criadoDe, criadoAte, pagina],
+    [cliente, formularioId, versaoId, JSON.stringify(filtros), criadoDe, criadoAte, soMeus, pagina],
   );
 
   // Trocar de versão muda as colunas: filtros de campos de outra versão perdem o sentido.
@@ -61,79 +71,152 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
     }
   }
 
+  async function resumir() {
+    setFalhaDoResumo(null);
+    setResumo(null);
+    try {
+      setResumo(await cliente.resumir(formularioId, consulta));
+    } catch (erro) {
+      setFalhaDoResumo(erro instanceof ErroDaApi ? erro.message : mensagemDe(erro));
+    }
+  }
+
   const titulo = formulario.situacao === "pronto" ? formulario.dados.nome : "Registros";
 
   return (
     <section className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto text-2xl font-semibold tracking-tight">Registros · {titulo}</h1>
-        <Botao variante="primario" onClick={() => navegar({ nome: "novoRegistro", formularioId })}>
-          <Icone nome="mais" />
-          Novo registro
-        </Botao>
-        <Botao onClick={() => void exportar()}>Exportar CSV</Botao>
+        <h1 className="mr-auto text-2xl font-extrabold">Registros · {titulo}</h1>
+        <ComPermissao permissao="registros:criar" bloqueado="Novo registro">
+          <Botao
+            variante="primario"
+            onClick={() => navegar({ nome: "novoRegistro", formularioId })}
+          >
+            <Icone nome="mais" />
+            Novo registro
+          </Botao>
+        </ComPermissao>
+        <ComPermissao permissao="registros:exportar" bloqueado="Exportar CSV">
+          <Botao onClick={() => void exportar()}>
+            <Icone nome="baixar" />
+            Exportar CSV
+          </Botao>
+        </ComPermissao>
+        <ComPermissao permissao="ia:assistente">
+          <Botao onClick={() => void resumir()}>
+            <Icone nome="brilho" />
+            Resumir com IA
+          </Botao>
+        </ComPermissao>
       </div>
+
+      {contagens.situacao === "pronto" ? (
+        <ChipsDeEstado
+          contagens={contagens.dados}
+          filtros={filtros}
+          aoFiltrar={(novos) => {
+            setFiltros(novos);
+            setPagina(0);
+          }}
+        />
+      ) : null}
+
+      {resumo ? (
+        <Cartao className="flex flex-col gap-2 p-4">
+          <h2 className="font-bold">{resumo.titulo}</h2>
+          {resumo.paragrafos.map((p, i) => (
+            <p key={i} className="text-sm">
+              {p}
+            </p>
+          ))}
+          <p className="text-xs text-pedra-600">
+            Redigido por IA a partir de números calculados pelo servidor e conferidos contra o
+            banco.
+          </p>
+        </Cartao>
+      ) : null}
+      {falhaDoResumo ? <Falha mensagem={falhaDoResumo} /> : null}
 
       {falhaDoCsv ? <Falha mensagem={falhaDoCsv} /> : null}
 
-      <Cartao className="flex flex-col gap-4 p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
-            Versão
-            <select
-              className={CLASSE_DO_CONTROLE}
-              value={versaoId ?? ""}
-              onChange={(e) => trocarDeVersao(e.target.value)}
-            >
-              <option value="">Última</option>
-              {versoes.situacao === "pronto"
-                ? versoes.dados.map((versao) => (
-                    <option key={versao.id} value={versao.id}>
-                      Versão {versao.numero}
-                    </option>
-                  ))
-                : null}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
-            Criado de
-            <input
-              type="date"
-              className={CLASSE_DO_CONTROLE}
-              value={criadoDe}
-              onChange={(e) => {
-                setCriadoDe(e.target.value);
-                setPagina(0);
-              }}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
-            Criado até
-            <input
-              type="date"
-              className={CLASSE_DO_CONTROLE}
-              value={criadoAte}
-              onChange={(e) => {
-                setCriadoAte(e.target.value);
-                setPagina(0);
-              }}
-            />
-          </label>
-        </div>
+      <details
+        className="group rounded-cartao border border-pedra-200 bg-superficie shadow-cartao"
+        open
+      >
+        <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-4 text-sm font-semibold sm:hidden">
+          <Icone nome="funil" /> Filtros
+        </summary>
+        <Cartao className="flex flex-col gap-4 border-0 p-4 shadow-none">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
+              Versão
+              <select
+                className={CLASSE_DO_CONTROLE}
+                value={versaoId ?? ""}
+                onChange={(e) => trocarDeVersao(e.target.value)}
+              >
+                <option value="">Última</option>
+                {versoes.situacao === "pronto"
+                  ? versoes.dados.map((versao) => (
+                      <option key={versao.id} value={versao.id}>
+                        Versão {versao.numero}
+                      </option>
+                    ))
+                  : null}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
+              Criado de
+              <input
+                type="date"
+                className={CLASSE_DO_CONTROLE}
+                value={criadoDe}
+                onChange={(e) => {
+                  setCriadoDe(e.target.value);
+                  setPagina(0);
+                }}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
+              Criado até
+              <input
+                type="date"
+                className={CLASSE_DO_CONTROLE}
+                value={criadoAte}
+                onChange={(e) => {
+                  setCriadoAte(e.target.value);
+                  setPagina(0);
+                }}
+              />
+            </label>
+            <label className="flex min-h-11 items-center gap-2 text-sm font-medium text-pedra-800">
+              <input
+                type="checkbox"
+                className="size-5 accent-sinal-500"
+                checked={soMeus}
+                onChange={(e) => {
+                  setSoMeus(e.target.checked);
+                  setPagina(0);
+                }}
+              />
+              Só os meus
+            </label>
+          </div>
 
-        {listagem.situacao === "pronto" ? (
-          <FiltroPorCampo
-            // Outra versão, outras colunas: recomeça o formulário de filtro.
-            key={listagem.dados.versao_id}
-            colunas={listagem.dados.colunas}
-            filtros={filtros}
-            aoMudar={(novos) => {
-              setFiltros(novos);
-              setPagina(0);
-            }}
-          />
-        ) : null}
-      </Cartao>
+          {listagem.situacao === "pronto" ? (
+            <FiltroPorCampo
+              // Outra versão, outras colunas: recomeça o formulário de filtro.
+              key={listagem.dados.versao_id}
+              colunas={listagem.dados.colunas}
+              filtros={filtros}
+              aoMudar={(novos) => {
+                setFiltros(novos);
+                setPagina(0);
+              }}
+            />
+          ) : null}
+        </Cartao>
+      </details>
 
       {listagem.situacao === "carregando" ? <EsqueletoDaTabela /> : null}
       {listagem.situacao === "erro" ? <Falha mensagem={listagem.mensagem} /> : null}
@@ -144,6 +227,7 @@ export function PaginaDeRegistros({ formularioId, navegar }: Props) {
           total={listagem.dados.total}
           pagina={pagina}
           aoMudarDePagina={setPagina}
+          exibicao={listagem.dados.exibicao ?? {}}
           abrir={(registroId) => navegar({ nome: "registro", registroId })}
         />
       ) : null}
@@ -157,8 +241,10 @@ function Tabela({
   total,
   pagina,
   aoMudarDePagina,
+  exibicao,
   abrir,
 }: {
+  exibicao: Esquemas["ExibicaoSaida"];
   colunas: Coluna[];
   itens: Esquemas["RegistroSaida"][];
   total: number;
@@ -177,7 +263,8 @@ function Tabela({
   const fim = pagina * POR_PAGINA + itens.length;
   return (
     <>
-      <Cartao className="max-h-[70vh] overflow-auto">
+      <CartoesDeRegistro colunas={colunas} itens={itens} exibicao={exibicao} abrir={abrir} />
+      <Cartao className="hidden max-h-[70vh] overflow-auto sm:block">
         <table className="w-full text-left text-sm">
           <thead className="sticky top-0 z-10 bg-pedra-100 text-xs uppercase tracking-wide text-pedra-600">
             <tr>
@@ -244,6 +331,114 @@ function Tabela({
         </Botao>
       </div>
     </>
+  );
+}
+
+/** No celular a lista vira cartões: o destaque em evidência, o estado ao lado e um resumo (§2.17). */
+function CartoesDeRegistro({
+  colunas,
+  itens,
+  exibicao,
+  abrir,
+}: {
+  colunas: Coluna[];
+  itens: Esquemas["RegistroSaida"][];
+  exibicao: Esquemas["ExibicaoSaida"];
+  abrir: (registroId: number) => void;
+}) {
+  const destaque = colunas.find((c) => c.id === exibicao.destaque);
+  const resumo = (exibicao.resumo ?? [])
+    .map((id) => colunas.find((c) => c.id === id))
+    .filter((c): c is Coluna => c !== undefined);
+  return (
+    <ul className="flex flex-col gap-3 sm:hidden">
+      {itens.map((r) => (
+        <li key={r.id}>
+          <button
+            type="button"
+            onClick={() => abrir(r.id)}
+            className="flex w-full flex-col gap-1.5 rounded-cartao border border-pedra-200 bg-superficie p-4 text-left shadow-cartao"
+          >
+            <span className="flex items-center justify-between gap-2">
+              <span className="font-mono text-sm font-semibold">#{r.id}</span>
+              <SeloDeEstado estado={r.estado} />
+            </span>
+            {destaque ? (
+              <span className="font-mono text-2xl font-medium">
+                {formatarCelula(destaque, r.dados[destaque.id]) || "—"}
+                {destaque.unidade ? (
+                  <span className="ml-1 text-sm text-pedra-600">{destaque.unidade}</span>
+                ) : null}
+              </span>
+            ) : null}
+            <span className="text-sm text-pedra-600">
+              {resumo
+                .map((c) => `${c.rotulo}: ${formatarCelula(c, r.dados[c.id]) || "—"}`)
+                .join(" · ")}
+              {r.criado_por ? `${resumo.length > 0 ? " · " : ""}por ${r.criado_por.nome}` : ""}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Os estados contados pelo servidor; Conforme e Não conforme filtram, os outros só informam. */
+function ChipsDeEstado({
+  contagens,
+  filtros,
+  aoFiltrar,
+}: {
+  contagens: Contagens;
+  filtros: Record<string, string>;
+  aoFiltrar: (filtros: Record<string, string>) => void;
+}) {
+  const campo = contagens.campo_status;
+  const atual = campo ? filtros[campo] : undefined;
+  const semStatus = Object.fromEntries(Object.entries(filtros).filter(([k]) => k !== campo));
+  const chips: { rotulo: string; total: number; valor?: "true" | "false" | null }[] = [
+    { rotulo: "Todos", total: contagens.total, valor: null },
+    ...(campo
+      ? [
+          { rotulo: "Conformes", total: contagens.conforme, valor: "true" as const },
+          { rotulo: "Não conformes", total: contagens.nao_conforme, valor: "false" as const },
+          { rotulo: "Erro no cálculo", total: contagens.erro },
+          { rotulo: "Aguardando dados", total: contagens.aguardando },
+        ]
+      : []),
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Estado dos registros"
+      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
+    >
+      {chips.map((c) =>
+        c.valor === undefined ? (
+          <span
+            key={c.rotulo}
+            className="inline-flex min-h-11 shrink-0 items-center rounded-controle border border-pedra-200 bg-superficie px-4 text-sm text-pedra-600"
+          >
+            {c.rotulo} · {c.total}
+          </span>
+        ) : (
+          <button
+            key={c.rotulo}
+            type="button"
+            aria-pressed={c.valor === null ? atual === undefined : atual === c.valor}
+            onClick={() =>
+              aoFiltrar(
+                c.valor === null || !campo ? semStatus : { ...semStatus, [campo]: c.valor ?? "" },
+              )
+            }
+            className={`inline-flex min-h-11 shrink-0 items-center rounded-controle border px-4 text-sm font-semibold ${(c.valor === null ? atual === undefined : atual === c.valor) ? "border-pedra-900 bg-pedra-900 text-superficie" : "border-pedra-200 bg-superficie"}`}
+          >
+            {c.rotulo} · {c.total}
+          </button>
+        ),
+      )}
+    </div>
   );
 }
 

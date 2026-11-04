@@ -1,7 +1,6 @@
 import type { Campo as CampoDaDefinicao, Definicao, ResultadoCalculado } from "../../api/cliente";
 import { formatarNumero } from "../../lib/numero";
 import { Campo, CLASSE_DO_CONTROLE } from "./Campo";
-import { CampoDeFoto } from "./CampoDeFoto";
 import { CampoDeLocalizacao } from "./CampoDeLocalizacao";
 import { CampoDeReferencia } from "./CampoDeReferencia";
 import type { Coordenadas, ErrosPorCampo, ValorDoCampo, Valores } from "./tipos";
@@ -79,16 +78,6 @@ export function FormRenderer({
                 key={campo.id}
                 campo={campo}
                 valor={asCoordenadas(valores[campo.id])}
-                aoMudar={(valor) => mudar(campo.id, valor)}
-                {...comum}
-              />
-            );
-          case "foto":
-            return (
-              <CampoDeFoto
-                key={campo.id}
-                campo={campo}
-                valor={asLista(valores[campo.id])}
                 aoMudar={(valor) => mudar(campo.id, valor)}
                 {...comum}
               />
@@ -257,10 +246,6 @@ function asTexto(valor: ValorDoCampo): string {
 
 function asNumero(valor: ValorDoCampo): number | null {
   return typeof valor === "number" ? valor : null;
-}
-
-function asLista(valor: ValorDoCampo): number[] {
-  return Array.isArray(valor) ? valor : [];
 }
 
 function asCoordenadas(valor: ValorDoCampo): Coordenadas | null {

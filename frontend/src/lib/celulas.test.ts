@@ -18,6 +18,9 @@ const registro = (dados: Record<string, unknown>): Registro => ({
   formulario_id: 1,
   versao_id: 1,
   dados,
+  revisao: 1,
+  criado_por: null,
+  atualizado_por: null,
   criado_em: "2026-11-02T10:00:00+00:00",
   atualizado_em: "2026-11-02T10:00:00+00:00",
 });
@@ -85,13 +88,13 @@ describe("celulasDoRegistro", () => {
     expect(celula?.conforme).toBeNull();
   });
 
-  it("foto mostra a quantidade e localização, o ponto", () => {
+  it("localização sai como latitude / longitude com vírgula decimal", () => {
     const celulas = celulasDoRegistro(
-      registro({ fotos: ["a", "b"], local: { latitude: "-23.5", longitude: "-46.6" } }),
-      [coluna({ id: "fotos", tipo: "foto" }), coluna({ id: "local", tipo: "localizacao" })],
+      registro({ local: { latitude: "-23.5", longitude: "-46.6" } }),
+      [coluna({ id: "local", tipo: "localizacao" })],
       new Set(),
     );
 
-    expect(celulas.map((c) => c.texto)).toEqual(["2 foto(s)", "-23,5 / -46,6"]);
+    expect(celulas.map((c) => c.texto)).toEqual(["-23,5 / -46,6"]);
   });
 });
