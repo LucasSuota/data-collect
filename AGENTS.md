@@ -514,7 +514,7 @@ Se o tempo apertar, corte **nesta ordem**:
 - **IA:** saída do LLM é **dado não confiável**: valide contra o esquema esperado e contra o banco antes de exibir. Conteúdo de registro também é entrada não confiável (prompt injection). O LLM nunca gera SQL; campo `"ia": false` nunca é enviado; sem consentimento da equipe, nada é enviado.
 - Texto vindo do usuário (rótulos, opções, valores) é tratado como dado, nunca executado; a API não devolve HTML e o front renderiza Markdown de forma segura.
 - Exportação CSV: neutralizar células **de texto** iniciadas por `=`, `+`, `-`, `@`, tab ou `CR` (injeção de fórmula em planilha), prefixando com `'`. Não vale para números: um `Decimal` negativo (`-3,5`) começa com `-` e não pode ser corrompido, e número só entra no CSV via formatação de `Decimal`.
-- **Logs** estruturados com identificador de requisição e **sem dados pessoais** (sem e-mail, valores de campo nem corpo).
+- **Logs** com identificador de requisição (`X-Request-Id`) e **sem dados pessoais**: `forms.acesso` grava uma linha por requisição com o **molde da rota** (nunca o caminho real, que pode ter id ou o token do convite), status e duração; sem e-mail, valores de campo, corpo, query string nem IP. O log de acesso do uvicorn fica desligado por imprimir o caminho real. Mapa de dados, retenção e plano de incidente: `docker/OPERACAO.md`.
 - **PWA:** o service worker nunca cacheia resposta da API, token nem dados de equipe.
 - LGPD: aceite, direitos do titular e consentimento para IA em §2.15.
 
