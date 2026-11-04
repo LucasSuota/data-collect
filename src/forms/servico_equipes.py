@@ -5,7 +5,8 @@ ninguém concede o que não tem (convite, cargo ou permissão acima do próprio)
 só existe em claro uma vez. O `servico` não sabe de HTTP: o contexto vem pela conexão.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -74,9 +75,28 @@ def obter_pessoa(conexao: Conexao, usuario_id: int) -> Usuario:
     return repositorio_equipes.obter_usuario(conexao, usuario_id)
 
 
-def cargo_e_permissoes(conexao: Conexao, cargo_id: int) -> tuple[str, frozenset[str]]:
+@contextmanager
+def declarar_equipe(conexao: Conexao, grupo_id: int) -> Iterator[None]:
+    """Declara a equipe na conexão só durante a leitura de um cargo.
+
+    `cargos` tem Row Level Security: sem a equipe declarada, o papel do aplicativo não enxerga o
+    cargo de ninguém. A equipe aqui é uma candidata (vem do cabeçalho ou da lista de equipes da
+    própria pessoa): quem confere a pertença é `membros_grupo`, que não tem RLS.
+    """
+    anterior = conexao.contexto
+    conexao.definir_contexto(Contexto(grupo_id, anterior.usuario_id if anterior else None))
+    try:
+        yield
+    finally:
+        conexao.definir_contexto(anterior)
+
+
+def cargo_e_permissoes(
+    conexao: Conexao, cargo_id: int, grupo_id: int
+) -> tuple[str, frozenset[str]]:
     """Nome e permissões de um cargo (para o `GET /eu`)."""
-    linha = conexao.execute("SELECT nome FROM cargos WHERE id = %s", (cargo_id,)).fetchone()
+    with declarar_equipe(conexao, grupo_id):
+        linha = conexao.execute("SELECT nome FROM cargos WHERE id = %s", (cargo_id,)).fetchone()
     nome = str(linha["nome"]) if linha else ""
     return nome, repositorio_equipes.permissoes_do_cargo(conexao, cargo_id)
 
@@ -137,7 +157,8 @@ def contexto_da_pessoa(conexao: Conexao, usuario_id: int, grupo_id: int) -> Cont
     O cargo e as permissões são lidos **a cada requisição**, então mudar o cargo ou desativar
     alguém vale na hora.
     """
-    membro = repositorio_equipes.obter_membro(conexao, grupo_id, usuario_id)
+    with declarar_equipe(conexao, grupo_id):
+        membro = repositorio_equipes.obter_membro(conexao, grupo_id, usuario_id)
     if membro is None or not membro.ativo:
         raise SemAcessoAEquipe("Você não faz parte desta equipe ou seu acesso foi desativado.")
     permissoes = repositorio_equipes.permissoes_do_cargo(conexao, membro.cargo_id)

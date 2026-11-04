@@ -127,7 +127,7 @@ def quem_sou_eu(conexao: DepConexao) -> EuSaida:
     pessoa = servico_equipes.obter_pessoa(conexao, usuario_id)
     equipes = []
     for equipe in servico_equipes.minhas_equipes(conexao, usuario_id):
-        cargo, permissoes = servico_equipes.cargo_e_permissoes(conexao, equipe.cargo_id)
+        cargo, permissoes = servico_equipes.cargo_e_permissoes(conexao, equipe.cargo_id, equipe.id)
         equipes.append(
             EquipeDaPessoaSaida(
                 id=equipe.id,

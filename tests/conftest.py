@@ -155,7 +155,8 @@ def configuracao(dsn: str) -> Configuracao:
 
 @pytest.fixture
 def app(configuracao: Configuracao, validador: ValidadorDeToken, dsn: str):
-    pool = banco.criar_pool(dsn, tamanho_maximo=4)
+    # Como em produção: a API roda no papel `forms_app`, sujeito ao Row Level Security.
+    pool = banco.criar_pool(dsn, tamanho_maximo=4, papel="forms_app")
     aplicacao = criar_app(configuracao, pool=pool, validador=validador)
     aplicacao.dependency_overrides[obter_agora] = lambda: AGORA  # relógio fixo
     yield aplicacao

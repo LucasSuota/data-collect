@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from forms import repositorio_equipes, segredos, servico_equipes
+from forms import banco, repositorio_equipes, segredos, servico_equipes
 from forms.banco import Conexao
 from forms.models import (
     CargoInvalido,
@@ -463,3 +463,50 @@ def test_primeiro_administrador_cria_a_equipe_e_o_convite_so_uma_vez(sem_context
     assert servico_equipes.contexto_da_pessoa(sem_contexto, pessoa.id, equipe.id).tem(
         "cargos:editar"
     )
+
+
+def test_convite_e_aceito_no_papel_do_aplicativo_mesmo_sem_equipe_declarada(
+    sem_contexto: Conexao, dsn: str
+):
+    # arrange: o convite existe; quem aceita ainda não tem equipe (contexto sem `grupo_id`)
+    token = servico_equipes.garantir_primeiro_administrador(
+        sem_contexto, "adm@x.io", "Minha obra", AGORA
+    )
+    pessoa = servico_equipes.identificar(sem_contexto, "sub-adm", "Adm", "adm@x.io", AGORA)
+    app = banco.abrir_conexao(dsn)
+    app.execute("SET ROLE forms_app")  # o superusuário ignoraria o Row Level Security
+    app.definir_contexto(Contexto(None, pessoa.id))
+
+    # act: `cargos` tem RLS; um JOIN comum com ele faria o convite "sumir" para esse papel
+    equipe = servico_equipes.aceitar_convite(app, token, pessoa.id, AGORA)
+
+    # assert
+    assert equipe.nome == "Minha obra"
+    app.execute("RESET ROLE")
+    app.close()
+
+
+def test_equipe_e_cargo_da_pessoa_sao_lidos_no_papel_do_aplicativo(sem_contexto: Conexao, dsn: str):
+    # arrange: pessoa membro; a conexão do app ainda não declarou equipe (início da requisição)
+    token = servico_equipes.garantir_primeiro_administrador(
+        sem_contexto, "adm@x.io", "Minha obra", AGORA
+    )
+    pessoa = servico_equipes.identificar(sem_contexto, "sub-adm", "Adm", "adm@x.io", AGORA)
+    equipe = servico_equipes.aceitar_convite(sem_contexto, token, pessoa.id, AGORA)
+    app = banco.abrir_conexao(dsn)
+    app.execute("SET ROLE forms_app")
+    app.definir_contexto(Contexto(None, pessoa.id))
+
+    # act
+    contexto = servico_equipes.contexto_da_pessoa(app, pessoa.id, equipe.id)
+    minhas = servico_equipes.minhas_equipes(app, pessoa.id)
+    nome_do_cargo, permissoes = servico_equipes.cargo_e_permissoes(
+        app, minhas[0].cargo_id, equipe.id
+    )
+
+    # assert: `cargos` tem RLS; sem declarar a equipe o cargo "sumiria" e a pessoa seria barrada
+    assert contexto.tem("cargos:editar")
+    assert nome_do_cargo == "Administrador" and "cargos:editar" in permissoes
+    assert app.contexto is not None and app.contexto.grupo_id is None  # voltou ao que era
+    app.execute("RESET ROLE")
+    app.close()

@@ -114,15 +114,30 @@ def _configurar(conexao: Conexao) -> None:
     conexao.adapters.register_loader("timestamptz", _InstanteEmTexto)
 
 
-def criar_pool(dsn: str, *, tamanho_maximo: int = 10) -> ConnectionPool[Conexao]:
-    """Pool da API: uma conexão por requisição (`with pool.connection()`)."""
+def criar_pool(
+    dsn: str, *, tamanho_maximo: int = 10, papel: str | None = None
+) -> ConnectionPool[Conexao]:
+    """Pool da API: uma conexão por requisição (`with pool.connection()`).
+
+    `papel` troca o papel da sessão (`SET ROLE`). Em produção a API já conecta como `forms_app`;
+    os testes conectam como dono do banco e assumem `forms_app` aqui, para o Row Level Security
+    valer também neles (o superusuário o ignoraria e esconderia bugs de isolamento).
+    """
+
+    def configurar(conexao: Conexao) -> None:
+        _configurar(conexao)
+        if papel is not None:
+            # Identificador montado por `psycopg.sql` (nunca por texto): é o único jeito seguro.
+            comando = sql.SQL("SET ROLE {}").format(sql.Identifier(papel))
+            conexao.execute(comando)
+
     return ConnectionPool(
         dsn,
         connection_class=Conexao,
         min_size=1,
         max_size=tamanho_maximo,
         kwargs={"autocommit": True, "row_factory": _fabrica_de_linhas},
-        configure=_configurar,
+        configure=configurar,
         open=True,
     )
 

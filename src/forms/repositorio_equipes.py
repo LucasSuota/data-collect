@@ -391,7 +391,14 @@ _SELECT_CONVITE = """
 
 
 def obter_convite_por_hash(conexao: Conexao, token_hash: str) -> Convite | None:
-    linha = conexao.execute(_SELECT_CONVITE + " WHERE v.token_hash = %s", (token_hash,)).fetchone()
+    # LEFT JOIN de propósito: quem aceita um convite ainda não tem equipe, e `cargos` tem Row Level
+    # Security. Com INNER JOIN o papel do aplicativo não enxergaria o cargo e o convite "sumiria".
+    linha = conexao.execute(
+        "SELECT v.id, v.email, v.cargo_id, COALESCE(c.nome, '') AS cargo_nome, v.criado_em,"
+        " v.expira_em, v.usado_em, v.revogado_em, v.grupo_id"
+        " FROM convites v LEFT JOIN cargos c ON c.id = v.cargo_id WHERE v.token_hash = %s",
+        (token_hash,),
+    ).fetchone()
     return None if linha is None else Convite(**dict(linha))
 
 

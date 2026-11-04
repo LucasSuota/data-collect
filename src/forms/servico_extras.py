@@ -159,7 +159,7 @@ def exportar_meus_dados(conexao: Conexao, usuario_id: int) -> dict[str, ValorJso
             ).fetchone()
         finally:
             conexao.definir_contexto(anterior)
-        cargo, _ = servico_equipes.cargo_e_permissoes(conexao, equipe.cargo_id)
+        cargo, _ = servico_equipes.cargo_e_permissoes(conexao, equipe.cargo_id, equipe.id)
         equipes.append(
             {
                 "equipe": equipe.nome,
@@ -190,16 +190,19 @@ def excluir_minha_conta(conexao: Conexao, usuario_id: int) -> None:
     da equipe fica. Bloqueia se ela for a única administradora de uma equipe com outras pessoas."""
     with transacao(conexao):
         for equipe in servico_equipes.minhas_equipes(conexao, usuario_id):
-            membros = repositorio_equipes.listar_membros(conexao, equipe.id)
-            outros = [m for m in membros if m.usuario_id != usuario_id and m.ativo]
-            if not outros:
-                continue
-            restam = repositorio_equipes.contar_pessoas_com_permissao(
-                conexao,
-                equipe.id,
-                servico_equipes.PERMISSAO_DE_ADMINISTRACAO,
-                ignorar_usuario=usuario_id,
-            )
+            # `cargos` tem RLS: sem a equipe declarada, a lista de membros e a contagem de
+            # administradoras vêm vazias e a trava abaixo deixaria a única administradora sair.
+            with servico_equipes.declarar_equipe(conexao, equipe.id):
+                membros = repositorio_equipes.listar_membros(conexao, equipe.id)
+                outros = [m for m in membros if m.usuario_id != usuario_id and m.ativo]
+                if not outros:
+                    continue
+                restam = repositorio_equipes.contar_pessoas_com_permissao(
+                    conexao,
+                    equipe.id,
+                    servico_equipes.PERMISSAO_DE_ADMINISTRACAO,
+                    ignorar_usuario=usuario_id,
+                )
             if not restam:
                 raise CargoInvalido(
                     (
