@@ -96,7 +96,7 @@ def validador_do_ambiente(
 ) -> ValidadorDeToken:
     """`endpoint` é o público do Logto (ex.: `https://auth.exemplo`), que vai no `iss` do token; o
     OIDC fica em `/oidc`. No compose as chaves (JWKS) são buscadas pela rede interna
-    (`endpoint_interno`), sem passar pelo proxy."""
+    (`endpoint_interno`), sem passar pelo endereço público."""
     base = endpoint.rstrip("/")
     base_das_chaves = (endpoint_interno or endpoint).rstrip("/")
     return ValidadorDeToken(f"{base}/oidc", audiencia, JwksRemoto(f"{base_das_chaves}/oidc/jwks"))

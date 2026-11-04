@@ -3,7 +3,7 @@
 - **Corpo limitado** (1 MB): um JSON maior que isso nunca é lido inteiro (413).
 - **Cabeçalhos de segurança** em toda resposta.
 - **Limite de taxa** por pessoa nas rotas caras (429 com `Retry-After`). É por processo: com mais
-  de uma instância cada uma conta sozinha, e o limite global é do proxy (§4.1).
+  de uma instância cada uma conta sozinha. Não há limite por IP: ele dependia de um proxy (§4.1).
 
 DDoS volumétrico não é coberto aqui nem em lugar nenhum do app (sem serviço de borda, §2.9).
 """

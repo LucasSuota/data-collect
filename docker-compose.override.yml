@@ -1,5 +1,6 @@
 # Desenvolvimento (carregado automaticamente por `docker compose up`).
-# NÃO use em produção: abre o Postgres, o Mailpit e o console do Logto no localhost.
+# NÃO use em produção: abre o Postgres, a API, o Logto e o Mailpit no localhost.
+# O front roda fora do compose: `cd frontend && npm run dev` (http://localhost:5173).
 services:
   postgres:
     ports:
@@ -7,12 +8,12 @@ services:
 
   logto:
     ports:
-      - "127.0.0.1:3001:3001"   # API/experiência de login do Logto (testes sem o proxy)
+      - "127.0.0.1:3001:3001"   # login (OIDC); é o AUTH_URL
       - "127.0.0.1:3002:3002"   # console administrativo
 
-  logto-setup:
-    environment:
-      ORIGENS_EXTRAS: http://localhost:5173   # `npm run dev` do front
+  api:
+    ports:
+      - "127.0.0.1:8000:8000"   # é o API_URL
 
   mailpit:
     image: axllent/mailpit:latest
