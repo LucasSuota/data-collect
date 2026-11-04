@@ -91,7 +91,12 @@ def _texto(valor: object) -> str | None:
     return valor if isinstance(valor, str) and valor.strip() else None
 
 
-def validador_do_ambiente(endpoint: str, audiencia: str) -> ValidadorDeToken:
-    """`endpoint` é o do Logto (ex.: `https://auth.exemplo`); o OIDC fica em `/oidc`."""
+def validador_do_ambiente(
+    endpoint: str, audiencia: str, endpoint_interno: str | None = None
+) -> ValidadorDeToken:
+    """`endpoint` é o público do Logto (ex.: `https://auth.exemplo`), que vai no `iss` do token; o
+    OIDC fica em `/oidc`. No compose as chaves (JWKS) são buscadas pela rede interna
+    (`endpoint_interno`), sem passar pelo proxy."""
     base = endpoint.rstrip("/")
-    return ValidadorDeToken(f"{base}/oidc", audiencia, JwksRemoto(f"{base}/oidc/jwks"))
+    base_das_chaves = (endpoint_interno or endpoint).rstrip("/")
+    return ValidadorDeToken(f"{base}/oidc", audiencia, JwksRemoto(f"{base_das_chaves}/oidc/jwks"))

@@ -61,6 +61,9 @@ class Configuracao:
     origens_cors: tuple[str, ...]
     # Logto auto-hospedado (§2.12). Sem eles a API recusa todo pedido autenticado (falha fechada).
     logto_endpoint: str | None = None
+    # Endereço do Logto na rede interna (JWKS e Management API); o `iss` do token continua sendo o
+    # endereço público acima. Sem ele, usa o público.
+    logto_interno: str | None = None
     logto_audiencia: str | None = None
     # Aplicativo M2M do Logto: lê o perfil de quem entra e apaga contas (§2.15).
     logto_m2m_id: str | None = None
@@ -80,7 +83,8 @@ class Configuracao:
     @classmethod
     def do_ambiente(cls, ambiente: Mapping[str, str] | None = None) -> "Configuracao":
         """Lê `FORMS_DATABASE_URL`, `FORMS_MIGRATION_URL`, `FORMS_CORS_ORIGINS`, `LOGTO_ENDPOINT`,
-        `LOGTO_API_RESOURCE`, `FORMS_AMBIENTE`, `FORMS_ADMIN_EMAIL` e `FORMS_EQUIPE_INICIAL`."""
+        `LOGTO_INTERNO`, `LOGTO_API_RESOURCE`, `FORMS_AMBIENTE`, `FORMS_ADMIN_EMAIL` e
+        `FORMS_EQUIPE_INICIAL`."""
         if ambiente is None:
             load_dotenv()  # o `.env` (fora do git) complementa o ambiente real
             ambiente = os.environ
@@ -91,6 +95,7 @@ class Configuracao:
             dsn=ambiente.get("FORMS_DATABASE_URL") or DSN_PADRAO,
             origens_cors=origens or ORIGENS_PADRAO,
             logto_endpoint=ambiente.get("LOGTO_ENDPOINT") or None,
+            logto_interno=ambiente.get("LOGTO_INTERNO") or None,
             logto_audiencia=ambiente.get("LOGTO_API_RESOURCE") or None,
             logto_m2m_id=ambiente.get("LOGTO_M2M_ID") or None,
             logto_m2m_segredo=ambiente.get("LOGTO_M2M_SECRET") or None,
@@ -189,14 +194,18 @@ def _tamanho_do_pool(pool: ConnectionPool[banco.Conexao] | None, configuracao: C
 def _gestor_da_configuracao(configuracao: Configuracao) -> GestorDeIdentidade | None:
     if configuracao.logto_endpoint and configuracao.logto_m2m_id and configuracao.logto_m2m_segredo:
         return ClienteLogto(
-            configuracao.logto_endpoint, configuracao.logto_m2m_id, configuracao.logto_m2m_segredo
+            configuracao.logto_interno or configuracao.logto_endpoint,
+            configuracao.logto_m2m_id,
+            configuracao.logto_m2m_segredo,
         )
     return None
 
 
 def _validador_da_configuracao(configuracao: Configuracao) -> ValidadorDeToken | None:
     if configuracao.logto_endpoint and configuracao.logto_audiencia:
-        return validador_do_ambiente(configuracao.logto_endpoint, configuracao.logto_audiencia)
+        return validador_do_ambiente(
+            configuracao.logto_endpoint, configuracao.logto_audiencia, configuracao.logto_interno
+        )
     return None
 
 
@@ -214,9 +223,9 @@ def _bootstrap(app: FastAPI, configuracao: Configuracao) -> None:
         )
     if token:
         _registro.warning(
-            "Primeiro administrador: abra /convite/%s no app para criar a conta de %s.",
+            # Sem o e-mail: o log não carrega dado pessoal (§2.15); o link é de uso único.
+            "Primeiro administrador: abra /convite/%s no app para criar a conta.",
             token,
-            configuracao.primeiro_administrador,
         )
 
 
