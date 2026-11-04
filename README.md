@@ -1,10 +1,12 @@
 # data-collect
 
-Aplicativo instalável (Windows, macOS e Linux) para **montar formulários por definição JSON**, preenchê-los e guardar os registros em SQLite, tudo local. Serve para inspeção de obra, ensaios de laboratório, checklists ou qualquer cadastro. Não há usuários nem cargos.
+Aplicação **web** (mobile-first) para **montar formulários por definição JSON**, preenchê-los e guardar os registros em PostgreSQL, em **equipes** com **cargos e permissões**, auto-hospedada com `docker-compose`. Serve para inspeção de obra, ensaios de laboratório, checklists ou qualquer cadastro.
 
 Os campos calculados usam fórmulas avaliadas por um avaliador próprio sobre `ast`, sem `eval`. Princípio central: **a IA nunca calcula, só busca e redige.** Quem calcula e valida é código determinístico.
 
-O projeto é um monorepo: backend Python, interface web e shell desktop. O contexto completo (escopo, arquitetura, regras) está em [AGENTS.md](AGENTS.md), que é a fonte da verdade.
+O projeto é um monorepo: backend Python, interface web e a infraestrutura de implantação. O contexto completo (escopo, arquitetura, regras) está em [AGENTS.md](AGENTS.md), que é a fonte da verdade.
+
+> **Em transição para a versão web.** O [AGENTS.md](AGENTS.md) já descreve o alvo: Postgres, Docker, autenticação com Logto (acesso por convite, aceite LGPD), equipes com cargos e permissões, interface mobile-first com o design de `frontend/data-collect-design-pattern.pdf`, IA com qualquer LLM e chatbot sobre os dados, **sem fotos** e **tudo local**. O roadmap completo está na issue [#164](https://github.com/LucasSuota/data-collect/issues/164). As seções abaixo (arquitetura, API, instalável, como rodar) ainda descrevem o **código atual** e são atualizadas conforme as issues entram (#163).
 
 ## Estado atual
 
@@ -105,7 +107,9 @@ Três recursos, todos com a mesma regra: **a IA nunca calcula, só busca e redig
 
 Para ligar: `uv sync --extra ia` e `ANTHROPIC_API_KEY` no `.env`. Sem isso, as rotas respondem 503 e o restante do app funciona normalmente. A API da Anthropic não tem embeddings, então a busca semântica só liga com outro provedor que implemente `ClienteDeLLM`.
 
-## App instalável
+## App instalável (será removido)
+
+> Sai do produto com a versão web (#117); a implantação passa a ser por `docker compose` (#107).
 
 O instalado tem dois processos: o Electron abre a janela e gerencia o backend Python, que escolhe uma porta livre em `127.0.0.1` e serve o build do front na mesma origem. Os dados do usuário (banco e fotos) ficam na pasta de dados do sistema. Cada execução gera um token exigido pela API, para que outro programa da máquina não a chame.
 
@@ -145,6 +149,6 @@ O front roda separado em `http://localhost:5173` (Vite) e a API libera CORS só 
 - Renomear formulário e migrar um registro para outra versão.
 - Filtro por número e por data na listagem.
 - Fórmulas com campos de texto e seleção; função que ignora vazios (`media_preenchidos`).
-- Fotos em HEIC e captura direta pela câmera.
-- Assinatura de código, notarização e atualização automática do instalável.
-- Usuários, cargos e permissões; modo offline com sincronização.
+- Modo offline com sincronização de dados e edição simultânea em tempo real.
+- Notificação por push ou e-mail, SSO corporativo (SAML) e escopo de cargo por pasta.
+- Fotos e anexos foram **removidos do produto** por decisão do autor.

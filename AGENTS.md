@@ -6,9 +6,9 @@
 
 ## 1. Visão geral
 
-Sistema local para **montar formulários por definição (JSON)**, preencher esses formulários e guardar os registros em **SQLite**. Sem foco em setor: o mesmo sistema serve para inspeção de obra, ensaios de laboratório, checklists ou qualquer cadastro. Inspiração: Fulcrum, mas local, simples e **sem usuários nem cargos**.
+Aplicação **web** (mobile-first) para **montar formulários por definição (JSON)**, preencher esses formulários e guardar os registros em **PostgreSQL**, em **equipes** com **cargos e permissões**: várias pessoas veem e trabalham o mesmo fluxo. Sem foco em setor: o mesmo sistema serve para inspeção de obra, ensaios de laboratório, checklists ou qualquer cadastro. Inspiração: Fulcrum, mas simples e **auto-hospedado** (tudo roda local, no `docker-compose`, sem serviço externo na frente).
 
-> **Este repositório contém o app inteiro** (monorepo): o **backend** Python (`src/forms/`), a **interface web** (`frontend/`: construtor com arrastar e soltar, `FormRenderer`, telas de preenchimento e consulta; React, TypeScript, Vite e Tailwind), o **shell desktop** (`desktop/`, Electron) e o empacotamento do instalável (§4.1). O contrato entre front e backend está em §5.3.
+> **Este repositório contém o app inteiro** (monorepo): o **backend** Python (`src/forms/`), a **interface web** (`frontend/`: construtor com arrastar e soltar, `FormRenderer`, telas de preenchimento e consulta; React, TypeScript, Vite e Tailwind) e a **infraestrutura** (`docker-compose.yml` e `docker/`, §4.1). O contrato entre front e backend está em §5.3. O **design de referência** do front é `frontend/data-collect-design-pattern.pdf` (§2.11).
 
 O controle de corpos de prova de concreto (projeto original) é apenas um **template de demonstração** (`templates/corpo_de_prova.json`), que prova que o sistema genérico dá conta de um caso real com cálculo de resistência e conformidade.
 
@@ -16,9 +16,9 @@ O projeto é também **material de portfólio/entrevista**: o autor precisa cons
 
 ### Estado atual
 
-O núcleo, a API, a CLI, o `frontend/`, o `desktop/`, o empacotamento e os módulos de IA (`ia/`, `rag/`) existem e estão testados. As pastas e módulos descritos aqui continuam sendo a estrutura a seguir; atualize este arquivo se algo mudar. Ainda não verificados à mão: a janela do Electron, o fluxo no navegador real e qualquer chamada real a um LLM (os testes usam sempre o cliente falso).
+**Migração para a versão web em andamento** (roadmap: issue #164 e filhas). Este arquivo descreve o **alvo**; o código ainda está parcialmente no estado anterior (SQLite, `desktop/`, `empacotamento/`, fotos, sem autenticação) e cada issue do roadmap o traz para cá. O núcleo (fórmulas, validação, serviço), a API, a CLI, o `frontend/` e os módulos de IA (`ia/`, `rag/`) existem e estão testados com cliente falso. Ainda não verificados à mão: o fluxo no navegador real e qualquer chamada real a um LLM.
 
-**Ordem de construção (de baixo para cima, sempre com TDD):** `tipos_campo.py` e `formulas.py` (tipos, vazio, datas, funções) → `validacao.py` → `repositorio.py` → `servico.py` (publicar versão, registros, relação entre formulários, cascata, exclusão) → `api.py` e `cli.py` → `frontend/` e `desktop/` (só depois que núcleo e API estiverem testados) → módulos opcionais (`rag/`, `ia/`). A relação entre formulários (§2.7) faz parte do núcleo, mas só entra depois que fórmulas, validação e registros simples estiverem testados.
+**Ordem de construção (de baixo para cima, sempre com TDD):** `tipos_campo.py` e `formulas.py` (tipos, vazio, datas, funções) → `validacao.py` → `repositorio.py` (Postgres e migrações) → `servico.py` (publicar versão, registros, relação entre formulários, cascata, exclusão) → equipes, cargos e autenticação (§2.12, §2.13) → `api.py` e `cli.py` → `frontend/` (só depois que núcleo e API estiverem testados) → módulos opcionais (`rag/`, `ia/`). A relação entre formulários (§2.7) faz parte do núcleo, mas só entra depois que fórmulas, validação e registros simples estiverem testados.
 
 ### Princípio central
 
@@ -31,7 +31,7 @@ O núcleo, a API, a CLI, o `frontend/`, o `desktop/`, o empacotamento e os módu
 ### 2.1. Núcleo (obrigatório, sem IA)
 
 - **Formulário = definição em JSON, versionada.** Registro = dados em JSON + a versão com que foi criado. Editar um formulário **nunca** quebra registros antigos.
-- **Tipos de campo do MVP:** texto, número (com unidade), data, seleção, sim/não, calculado, seção (só visual), referência a registro de outro formulário (§2.7), localização (coordenadas) e foto (§2.8).
+- **Tipos de campo do MVP:** texto, número (com unidade), data, seleção, sim/não, calculado, seção (só visual), referência a registro de outro formulário (§2.7), localização (coordenadas, §2.8). Não há campo de foto nem anexo de arquivo.
 - **Validação no servidor** contra a definição: tipo, obrigatório, opções válidas.
 - **Campos calculados:** fórmulas avaliadas por avaliador próprio sobre o módulo `ast` do Python, com lista de permissão (operadores, comparações, as funções `se`, `min`, `max`, `media`, `soma`, `dias` e a constante `pi`).
 - O servidor **recalcula sempre** ao salvar. O frontend pode mostrar prévia, mas não é fonte da verdade.
@@ -41,12 +41,13 @@ O núcleo, a API, a CLI, o `frontend/`, o `desktop/`, o empacotamento e os módu
 ### 2.2. Suporte ao construtor de formulários (o construtor em si é o `frontend/`)
 
 - Criar formulário e **publicar uma nova versão** a partir de uma definição JSON, rejeitando definição inválida (fórmula proibida, campo inexistente, ciclo, tipo desconhecido, tipos incompatíveis na fórmula, `id` ausente/duplicado/reservado, `casas_decimais` inválido) com erro claro e localizado.
-  - `POST /formularios`: recebe `{nome, definicao}`, cria o formulário e já publica a **versão 1** (um formulário sem versão não pode ser preenchido, então não existe esse estado). Definição inválida → 422 e nada é criado. O nome fica no formulário, fora da definição, e é **único** (sem diferenciar maiúsculas/minúsculas nem espaços nas pontas); nome repetido → 422 no campo `nome`. Como as referências entre formulários usam o nome (§2.7), renomear fica para "próximos passos". Importar templates que dependem uns dos outros exige a ordem das dependências (a origem primeiro).
+  - `POST /formularios`: recebe `{nome, definicao}`, cria o formulário e já publica a **versão 1** (um formulário sem versão não pode ser preenchido, então não existe esse estado). Definição inválida → 422 e nada é criado. O nome fica no formulário, fora da definição, e é **único dentro da equipe** (sem diferenciar maiúsculas/minúsculas nem espaços nas pontas); nome repetido → 422 no campo `nome`. Como as referências entre formulários usam o nome (§2.7), renomear fica para "próximos passos". Importar templates que dependem uns dos outros exige a ordem das dependências (a origem primeiro).
   - `GET /formularios`: lista `{id, nome, criado_em, versao_atual_id, versao_atual_numero}`, sem definições.
   - `GET /formularios/{id}`: formulário com a **versão atual completa** (`id`, `numero`, `definicao`); é de onde o front tira o `versao_id` para preencher.
   - `POST /formularios/lote`: recebe `{formularios: [{nome, definicao}]}` e cria todos **numa só transação**, na ordem das dependências (origem primeiro), com a v1 de cada um. Os formulários do lote podem se referenciar entre si e a formulários já existentes. Qualquer erro (definição inválida, nome repetido dentro do lote ou já existente, ciclo) → 422 com os erros localizados por formulário e **nada é criado**. Serve a importação de templates dependentes e o gerador por IA (§2.5).
   - `POST /formularios/{id}/versoes`: recebe `{definicao}` e publica a próxima versão (`numero` anterior + 1); 422 se inválida. `GET /formularios/{id}/versoes` lista `{id, numero, publicada_em}`; `GET /formularios/{id}/versoes/{versao_id}` devolve a versão com definição (para renderizar um registro antigo).
   - Versões são imutáveis: não existe `PUT`, `PATCH` nem `DELETE` de versão (§3.3).
+  - **Rascunho de versão:** cada formulário pode ter **um rascunho** (a próxima versão em edição), compartilhado pela equipe. `GET /formularios/{id}/rascunho` (404 se não há), `PUT` (substitui; aceita definição incompleta, como o `validar`), `DELETE` (descarta) e `POST /formularios/{id}/rascunho/publicar` (valida como a publicação e cria a versão `numero` anterior + 1, apagando o rascunho). Salvar com `revisao` antiga → 409 (§2.14). É onde o construtor salva e onde o mapa de vínculos cria referências (§2.7). Versões publicadas continuam imutáveis.
   - `DELETE /formularios/{id}`: regras de bloqueio em §2.7.
 - Endpoint para **validar/pré-visualizar** uma definição e para **calcular uma prévia** de fórmulas sem salvar (o servidor continua sendo a fonte da verdade; o front não reimplementa o avaliador).
   - `POST /definicoes/validar`: sem estado (não exige formulário criado). Responde **200** com `{"valida": false, "erros": [...]}`, porque definição incompleta é o caso normal enquanto o usuário edita; o 422 vale só ao **publicar**. Devolve **todos** os erros de uma vez, não só o primeiro.
@@ -58,32 +59,35 @@ O núcleo, a API, a CLI, o `frontend/`, o `desktop/`, o empacotamento e os módu
 
 - Criar e atualizar registro contra uma versão publicada; validar e recalcular sempre no servidor.
   - `POST /formularios/{id}/registros` exige `versao_id` no corpo: o front renderizou uma versão específica, e o servidor não valida contra outra em silêncio.
-  - `PUT /registros/{id}` **substitui** todos os valores (sem `PATCH` parcial), valida e recalcula tudo; o registro continua na versão de origem.
-  - `GET /registros/{id}` devolve `{id, formulario_id, versao_id, dados, criado_em, atualizado_em}`; com o `versao_id` o front busca a definição certa.
-  - `DELETE /registros/{id}` apaga de verdade (uso local, sem auditoria), exceto se outro registro o referencia (§2.7).
+  - `PUT /registros/{id}` **substitui** todos os valores (sem `PATCH` parcial), valida e recalcula tudo; o registro continua na versão de origem. Exige a `revisao` lida (§2.14).
+  - `GET /registros/{id}` devolve `{id, formulario_id, versao_id, dados, revisao, criado_por, atualizado_por, criado_em, atualizado_em}` (autoria em §2.14); com o `versao_id` o front busca a definição certa.
+  - `DELETE /registros/{id}` apaga de verdade (o histórico de alterações fica, §2.14), exceto se outro registro o referencia (§2.7).
   - O cliente manda **só campos de entrada**. Chave de campo calculado ou inexistente → 422 indicando o campo (aceitar e ignorar esconderia bug no front). Erro de validação (obrigatório vazio, opção inválida, tipo errado) → 422 com a lista por `id`; erro de **cálculo** nunca bloqueia (§7).
 - Listar registros com colunas derivadas da definição, filtro simples e **exportação CSV**.
   - `GET /formularios/{id}/registros` lista os registros de **uma versão** (parâmetro `versao_id`, padrão a última publicada); as colunas vêm dessa definição, sem campos `secao`. Paginação com `limite` (padrão 50, máximo 200) e `deslocamento`; resposta `{"itens": [...], "total": N}`.
   - Filtro: só **igualdade** em campos `selecao`, `sim_nao`, `texto` e `calculado` booleano, mais `criado_de` e `criado_ate`. Número e data ficam para "próximos passos" (número é guardado como string, então `"25.5"` e `"25.50"` exigiriam comparação numérica). O nome do campo é validado contra a definição (allowlist) antes de entrar na consulta, e o valor vai sempre parametrizado.
+  - **Cartões e filtros por status:** a definição aceita a propriedade opcional `exibicao` (§5.2) com o campo em destaque, o campo de status e um resumo. `GET /formularios/{id}/registros/contagens` devolve a contagem por estado (Conforme, Não conforme, Erro no cálculo, Aguardando dados), com os mesmos filtros da listagem. O estado é sempre decidido pelo servidor (§7).
   - `GET /formularios/{id}/registros/exportar`: mesma versão e mesmos filtros da listagem. Cabeçalho `rotulo (unidade)`; números arredondados por `casas_decimais` (§7). Formato para abrir no Excel em português: UTF-8 com BOM, separador `;`, vírgula decimal. Campo calculado com erro sai como `ERRO: <mensagem>`; vazio sai vazio.
 
 ### 2.4. Interfaces
 
-- **API** (FastAPI) e **CLI enxuta** (importar template, criar registro a partir de JSON, listar e exportar) chamam as **mesmas funções** de `servico.py`, que não sabe quem as chama.
+- **API** (FastAPI) e **CLI de operação** (migrar o banco, importar template, importar o `forms.db` antigo, reindexar a IA; sempre com `--equipe` e `--usuario` explícitos) chamam as **mesmas funções** de `servico.py`, que não sabe quem as chama. A CLI não é um caminho para furar permissões: ela é para quem administra o servidor.
 - A API é consumida pelo **frontend deste mesmo repositório** (`frontend/`); o contrato é o **OpenAPI** gerado pelo FastAPI (§5.3).
 - **Frontend** (`frontend/`): construtor de formulários com arrastar e soltar, renderizador de formulário (`FormRenderer`), telas de preenchimento, listagem e consulta, exportação. É só apresentação: **não reimplementa** o avaliador de fórmulas nem a validação (usa `/definicoes/validar`, `/definicoes/previa` e os erros da API). Textos em PT-BR.
 
 ### 2.5. Módulos de IA (opcionais — só depois do núcleo estar pronto e testado)
 
 - **Assistente de procedimentos (RAG):** procedimentos em `.md` (escritos pelo autor, genéricos ou sintéticos), busca com **BM25 escrito à mão**, resposta do LLM **somente com os trechos recuperados**, exibindo trecho e arquivo de origem. Sem base nos documentos → responde "não encontrei". Sem internet ou chave de API → mostra só os trechos (fallback).
-- **Busca semântica (opcional dentro do RAG):** o BM25 à mão continua como base e como fallback. Se houver provedor de embeddings (chamado só via `ia/cliente.py`), os vetores ficam numa tabela do SQLite (BLOB) e são comparados por similaridade de cosseno em Python, sem extensão de banco: com algumas centenas de trechos isso é instantâneo. Sem internet ou chave, vale só o BM25.
+- **Busca híbrida (opcional dentro do RAG):** (1) filtros de metadados no SQL (equipe, formulário, datas), sempre primeiro; (2) **BM25 escrito à mão** sobre o conjunto filtrado, que continua sendo a base e o fallback; (3) se houver provedor de embeddings (chamado só via `ia/cliente.py`), vetores com **`pgvector`** (índice HNSW), com o modelo e a dimensão guardados junto de cada vetor (vetores de modelos diferentes não se comparam); (4) fusão por RRF (*reciprocal rank fusion*). Sem internet ou chave, vale só filtro + BM25.
 - **Resumo de registros por IA:** o LLM redige a partir dos dados e de agregados **calculados pelo código** (contagem, média etc.), em saída estruturada (JSON). O código confere se **todos os números do texto batem com o banco**; se não baterem, o resumo é rejeitado.
 - **Gerador de formulário por IA:** a pessoa descreve em texto o que quer e o LLM propõe **um ou mais formulários** (cada um uma **definição JSON**, ligados entre si quando o pedido pedir); a pessoa revisa, ajusta e **aprova** no construtor. O LLM só redige a definição (inclusive o texto das fórmulas): quem valida é o código (`validar_definicao`, §2.2), e nenhum valor de negócio sai do LLM.
   - Saída do LLM é **dado não confiável**: vira JSON no esquema da definição e passa pela mesma validação da publicação. Se houver erros, eles voltam ao LLM para correção, no máximo 2 vezes; persistindo, a proposta segue para o construtor **com a lista de erros**, para a pessoa corrigir.
-  - O prompt é montado com o catálogo (tipos de campo, funções, `pi`, nomes reservados), gerado das mesmas tabelas do `GET /catalogo`, e com os **formulários existentes**: para cada um, o `nome` e os campos que ele **compartilha** (`id`, rótulo, tipo), vindos da versão atual. Com isso a IA cria **correlações** (§2.7): campos `referencia` apontando para um formulário existente **ou para outro formulário proposto no mesmo pedido** (`formulario` = nome), e fórmulas que usam `<referência>__<campo compartilhado>`. Ex.: "crie ensaio, proctor e insitu, cada um dependendo do anterior" gera os três, com os campos `compartilhado` onde a origem libera. A validação (§2.7) barra origem inexistente, campo não compartilhado e ciclo, **tratando o conjunto proposto como se já estivesse publicado**. A IA **nunca altera um formulário já publicado**; se precisar de um campo que uma origem existente não compartilha, o erro de validação aparece e a pessoa decide ajustar essa origem no construtor. Nenhum registro nem dado do banco é enviado ao LLM, só o texto do pedido, os metadados acima e, ao refinar, os rascunhos em edição.
+  - O prompt é montado com o catálogo (tipos de campo, funções, `pi`, nomes reservados), gerado das mesmas tabelas do `GET /catalogo`, e com os **formulários existentes**: para cada um, o `nome` e os campos que ele **compartilha** (`id`, rótulo, tipo), vindos da versão atual. Com isso a IA cria **correlações** (§2.7): campos `referencia` apontando para um formulário existente **ou para outro formulário proposto no mesmo pedido** (`formulario` = nome), e fórmulas que usam `<referência>__<campo compartilhado>`. Ex.: "crie ensaio, proctor e insitu, cada um dependendo do anterior" gera os três, com os campos `compartilhado` onde a origem libera. A validação (§2.7) barra origem inexistente, campo não compartilhado e ciclo, **tratando o conjunto proposto como se já estivesse publicado**. A IA **nunca altera um formulário já publicado**; se precisar de um campo que uma origem existente não compartilha, o erro de validação aparece e a pessoa decide ajustar essa origem no construtor. Nenhum registro nem dado do banco é enviado ao LLM pelo gerador, só o texto do pedido, os metadados acima e, ao refinar, os rascunhos em edição.
   - **Nunca salva.** `POST /definicoes/gerar` recebe `{pedido, rascunhos?}` (`rascunhos` = `[{nome, definicao}]` em edição, para refinar: "adicione um campo X") e devolve `{formularios: [{nome, definicao, erros}]}` sem criar nada. A pessoa pode editar, remover ou renomear cada rascunho e então aprova o conjunto, que é publicado **de uma vez** por `POST /formularios/lote` (§2.2).
   - Sem chave ou sem internet: o recurso fica indisponível, com mensagem clara em PT-BR; o construtor manual continua funcionando. O endpoint só é montado quando o módulo `ia/` existe.
-  - Resumo e assistente na API: `POST /formularios/{id}/resumo` (mesma versão e filtros da listagem; o código calcula os agregados e o resumo é descartado, com 502, se algum número não bater) e `POST /assistente/perguntar` (`{pergunta}`; devolve `{encontrou, texto, usou_ia, trechos}`; sem IA devolve só os trechos). `IaIndisponivel` vira 503 e resposta da IA fora do formato, 502, ambos no erro uniforme em PT-BR.
+  - **Provedor de LLM neutro:** `ia/cliente.py` expõe a interface `ProvedorDeLLM` (completar, streaming, vetorizar, ferramentas, `capacidades`) com adaptadores para a **Anthropic** e para qualquer API **compatível com OpenAI** (OpenAI, Azure OpenAI, Ollama, LM Studio, vLLM, OpenRouter, Groq, Gemini no endpoint compatível), via `httpx`, mais um cliente falso para testes. O **provedor é configurado por equipe** (provedor, `base_url`, modelo, modelo de embeddings), com a chave **cifrada** em repouso (§12) e nunca devolvida pela API; a instância pode ter um padrão por variável de ambiente. A saída estruturada é portátil: JSON mode, ferramenta com esquema ou prompt com validação, sempre validada e repetida no máximo 2 vezes.
+  - **Chatbot (assistente sobre o app e sobre os dados):** `POST /chat` (SSE). As fontes são os guias de ajuda (§2.16) e os **registros e definições indexados como documentos de texto por equipe** (`documentos_ia`, reindexação incremental ao salvar, excluir ou publicar). Perguntas de filtro ou de número ("quais formulários foram preenchidos dia X?", "quantos corpos de prova em outubro?") usam **ferramentas determinísticas** (`buscar_registros`, `contar_registros`, `valor_do_campo`, `agregar`): o LLM só escolhe a ferramenta e os argumentos, **validados contra a definição**; **nunca gera SQL**; o código calcula e **confere que todo número do texto bate** com o resultado. A resposta traz citações com link para o registro ou guia; sem base → "não encontrei"; sem IA → só os trechos e resultados. Conteúdo de registro é **entrada não confiável** (bloco delimitado, com a instrução de ignorar comandos ali dentro). Respeita equipe, cargo e `"ia": false` (§2.15), tem limite de uso por pessoa e por equipe e guarda conversas por usuário (apagáveis).
+  - Resumo e assistente na API: `POST /formularios/{id}/resumo` (mesma versão e filtros da listagem; o código calcula os agregados e o resumo é descartado, com 502, se algum número não bater) e `POST /assistente/perguntar` (`{pergunta}`; devolve `{encontrou, texto, usou_ia, trechos}`; sem IA devolve só os trechos), que o `POST /chat` substitui. `IaIndisponivel` vira 503 e resposta da IA fora do formato, 502, ambos no erro uniforme em PT-BR.
   - No front: ação "Criar com IA" no construtor (campo de pedido, lista de formulários propostos com os erros de cada um, edição livre de cada rascunho no editor, "Publicar todos").
 
 ### 2.6. Entregáveis de documentação
@@ -106,35 +110,26 @@ Um formulário pode depender de outro. Exemplo: `proctor` depende de `ensaio`, e
 - **Exclusão:** `DELETE /formularios/{id}` só se nenhum outro formulário depende dele (em qualquer versão) **e** ele não tem registros; senão 409. `DELETE /registros/{id}` só se nenhum outro registro o referencia; senão 409. Excluir um formulário apaga também suas versões (só é possível sem registros).
 - Na listagem e no CSV, o campo `referencia` aparece como o `id` do registro apontado.
 - **No front (apresentação, sem regra nova):** o campo `referencia` mostra o registro de origem escolhido com os valores que ele libera (campos `compartilhado`), deixa **escolher** numa lista com busca (registros de todas as versões da origem) e, sem sair do preenchimento, **criar** ou **editar** o registro de origem numa gaveta; a origem pode depender de outra, e as gavetas se empilham. Quem valida, calcula e recalcula em cascata continua sendo o servidor.
-- **Mapa de dependências (front):** tela `#/mapa`, no estilo de um fluxo do n8n, com dois níveis: *formulários* (quem aponta para quem, pela definição atual) e *registros e valores* (qual registro aponta para qual, com os valores já calculados e a conformidade). Mostra a cadeia do cartão selecionado, os vizinhos diretos e as ações; usa só os endpoints existentes (lista, formulário, versões, registros).
+- **Mapa de vínculos (front):** tela `#/mapa`, no estilo de um fluxo do n8n, com duas abas: *Formulários* (quem aponta para quem, pela definição atual) e *Registros e valores* (qual registro aponta para qual, com os valores já calculados e a conformidade). Cartões com portas à esquerda e à direita, setas ortogonais (azul = cadeia do item selecionado, para trás e para frente), grade pontilhada, pan e zoom e um **painel lateral** (campos liberados, "depende de", "alimenta", nomes liberados nas fórmulas, "Abrir no construtor"). **Dá para criar vínculo pelo próprio mapa**: clicar na porta direita da origem e depois na esquerda do dependente cria o campo `referencia` **no rascunho da próxima versão do dependente** (§2.2); versões publicadas nunca mudam e o servidor continua rejeitando ciclos ao publicar. Exige a permissão de publicar formulários (§2.13).
 
-### 2.8. Campos de localização e foto
+### 2.8. Campo de localização
 
 - **`localizacao`:** guarda um ponto como `{"latitude": "-23.550520", "longitude": "-46.633308"}` (strings, no mesmo espírito do `Decimal`, §7). Valida a faixa (latitude de −90 a 90, longitude de −180 a 180); um dos dois sem o outro é erro, e `obrigatorio` vale para o par. Fica no JSON do registro, sem extensão espacial. Não pode ser usado em fórmulas. No CSV sai como `lat / lon` (ex.: `-23,550520 / -46,633308`).
-- **`foto`:** um campo guarda uma ou mais fotos; `maximo` opcional (inteiro `>= 1`). O envio é em duas etapas, porque o registro pode ainda não existir:
-  - `POST /anexos` (multipart, campo `arquivo`) processa a imagem e devolve `{id, largura, altura, tamanho_bytes}`; o registro guarda a lista de `id`s no campo.
-  - `GET /anexos/{id}` devolve o WebP (`image/webp`).
-  - Ao salvar o registro, cada `id` precisa existir e não estar vinculado a outro registro ou campo, senão 422 no campo. Anexos retirados do campo, ou de um registro excluído, são apagados (o arquivo só depois do commit). Anexos nunca vinculados há mais de 24 h são removidos na inicialização do app.
-  - Na listagem o campo vem como lista de `id`s; no CSV, como a quantidade de fotos.
-- **Processamento (`fotos.py`, função pura de bytes para bytes):**
-  - Só entram JPEG, PNG e WebP (HEIC não é suportado, com mensagem clara em PT-BR), até 20 MB e com limite de pixels (proteção contra bomba de descompressão).
-  - Aplica a orientação EXIF, **remove todos os metadados** (o EXIF traz a localização exata) e converte para **WebP** em RGB.
-  - Meta de **50 a 80 KB por foto** (1 KB = 1024 bytes): lado maior inicial de 1280 px (nunca amplia), qualidade começando em 80 e descendo de 5 em 5 até 40; se ainda passar de 80 KB, reduz as dimensões em 15% e repete, com piso de 480 px no lado maior. Se mesmo no piso passar, guarda o menor resultado obtido. Foto que já fica abaixo de 50 KB com qualidade 80 não é piorada nem ampliada: o teto de 80 KB é o que o algoritmo persegue, e 50 KB é só o alvo típico.
-  - Só o WebP processado é guardado; **o original é descartado** e não dá para recuperá-lo. Os parâmetros são constantes nomeadas no módulo.
-- **Testes de `fotos.py`** com imagens geradas no próprio teste (ruído, gradiente, retrato com EXIF de rotação, PNG com transparência, arquivo corrompido): conferem a faixa de tamanho, as dimensões, a ausência de EXIF e a rejeição de formato inválido.
+- No celular, o front oferece **"Usar minha localização"** (`navigator.geolocation`, só sob gesto da pessoa, com mensagem clara se a permissão for negada); a validação continua no servidor.
+- **Não há fotos nem anexos**: o tipo `foto`, o processamento de imagem, a tabela `anexos` e os endpoints `/anexos` foram removidos por decisão do autor (sem upload de arquivo no produto).
 
-### 2.9. App instalável
+### 2.9. Aplicação web e implantação
 
-O produto final é um **aplicativo instalável** de uso local: janela Electron com o frontend, backend Python embutido como processo filho e SQLite. Detalhes técnicos em §4.1.
+O produto é uma **aplicação web** usada por equipes e **auto-hospedada**: tudo sobe com `docker compose up` (PostgreSQL com `pgvector`, Logto, API, frontend servido por proxy reverso com HTTPS e, em desenvolvimento, um servidor de e-mail de teste), sem serviço externo na frente. Detalhes técnicos em §4.1.
 
-- Alvos: **Windows, macOS e Linux**.
-- Fora do escopo: assinatura de código e notarização (por isso o macOS e o Windows mostram um aviso na primeira abertura), loja de apps e atualização automática (próximos passos).
+- Acesso por navegador, com o celular em primeiro lugar, e como PWA instalável (§2.17).
+- Fora do escopo: serviço externo de borda (CDN, WAF de terceiros), Kubernetes e multi-região (§3.1). Sem esse tipo de serviço, o app **não cobre DDoS volumétrico**; o que ele faz é limitar abuso de aplicação e esgotamento de recursos (§12).
 
 ### 2.10. Pastas e duplicação de formulários
 
 Organização da lista de formulários. Não muda definição, versão nem registro.
 
-- **Pastas:** uma árvore (pasta com subpastas, profundidade livre) que **só organiza formulários**. Um formulário está em no máximo uma pasta; sem pasta, ele fica na raiz. Pasta não afeta referências entre formulários (§2.7, que usam o **nome** do formulário, e o nome continua único no sistema inteiro), versões nem registros.
+- **Pastas:** uma árvore (pasta com subpastas, profundidade livre) que **só organiza formulários**. Um formulário está em no máximo uma pasta; sem pasta, ele fica na raiz. Pasta não afeta referências entre formulários (§2.7, que usam o **nome** do formulário, e o nome continua único dentro da equipe), versões nem registros.
   - `POST /pastas` recebe `{nome, pasta_pai_id?}`; `GET /pastas` devolve a lista **plana** `{id, nome, pasta_pai_id, criado_em}` (o front monta a árvore); `PUT /pastas/{id}` recebe `{nome, pasta_pai_id}` e **substitui** os dois (renomear e mover, sem `PATCH`).
   - `PUT /formularios/{id}/pasta` recebe `{pasta_id}` (`null` = raiz) e move o formulário. `GET /formularios` passa a trazer `pasta_id`, e `POST /formularios` aceita `pasta_id` opcional.
   - O nome da pasta é **único entre pastas irmãs** (mesma pasta pai), sem diferenciar maiúsculas/minúsculas nem espaços nas pontas; repetido → 422 no campo `nome`. Mover uma pasta para dentro dela mesma ou de uma descendente → 422 no campo `pasta_pai_id`. Pasta de destino inexistente → 422 no campo; pasta da URL inexistente → 404.
@@ -146,13 +141,65 @@ Organização da lista de formulários. Não muda definição, versão nem regis
 
 ### 2.11. Experiência do front
 
-Qualidade de interface do `frontend/`. É só apresentação (§2.4): nada aqui reimplementa fórmula nem validação.
+Qualidade de interface do `frontend/`. É só apresentação (§2.4): nada aqui reimplementa fórmula nem validação. O **design de referência** é `frontend/data-collect-design-pattern.pdf` (sistema de design, telas mobile, construtor, mapa de vínculos, equipe e cargos); o front deve ficar como ele.
 
-- **Identidade visual própria**, sem o aspecto genérico de template: tokens de design (cor, tipografia, espaçamento, raio, sombra) definidos num só lugar e componentes base reaproveitados pelas telas. Foco visível, contraste adequado e respeito a `prefers-reduced-motion`.
+- **Sistema de design:** tokens definidos num só lugar. Cores: Gelo `#F6F8FB` (fundo), Papel `#FFFFFF` (cartões), Preto `#0B0F19` (texto), **Azul de ação `#1D4ED8`** (ação principal e tudo que está selecionado ou vinculado; é o único azul), Conforme `#14573A`, Não conforme `#8E1C14`, Atenção `#FBEBC8` (erro de cálculo). Tipografia: Archivo (títulos), IBM Plex Sans (interface) e IBM Plex Mono (valores de medição, ids e fórmulas), **hospedadas no próprio app** (sem Google Fonts: nada de terceiro que veja o IP de quem usa). Marca só em texto, `data-collect` com o hífen em azul, sem símbolo.
+- **Estados do campo calculado** sempre com ícone **e** texto, nunca só cor: Conforme, Não conforme, Erro no cálculo, Aguardando dados.
+- **Regra por cargo:** o que o cargo não pode fazer **some** quando não faz sentido para ele e fica **bloqueado com explicação** (borda tracejada, cadeado e a frase da permissão que falta) quando a pessoa esperaria encontrá-lo. A navegação deriva das **permissões** de `GET /eu`, não do nome do cargo. É conveniência: o servidor sempre barra (§3.3).
 - **Skeletons** no lugar do "Carregando…": o esqueleto tem a forma da tela que vai aparecer, para a página não "pular" quando o dado chega.
-- **Arrastar e soltar** do construtor com feedback claro: item arrastado com `DragOverlay`, indicador do ponto de destino e animações curtas, também por teclado.
-- **Editor de fórmulas** mais próximo do Excel: autocomplete de campos e funções, assinatura da função ao digitá-la, parênteses pareados e destacados, e uma forma de montar a fórmula por **blocos arrastáveis** (campos, funções, operadores e parênteses). O editor só **monta o texto** da fórmula; quem valida é `POST /definicoes/validar` e quem calcula é o servidor (§2.2, §7). A gramática continua sendo a do §7 (parênteses já são aceitos pelo avaliador).
+- **Arrastar e soltar** do construtor com feedback claro: item arrastado com `DragOverlay`, linha azul "Soltar aqui" no ponto de destino e animações curtas, também por teclado e por toque, com alternativa sem arraste ("mover para cima/baixo").
+- **Editor de fórmulas** mais próximo do Excel: autocomplete de campos e funções, assinatura da função ao digitá-la, parênteses pareados e destacados, mensagem "Fórmula válida · resultado: número" e uma forma de montar a fórmula por **blocos arrastáveis** (campos, funções, operadores e parênteses). O editor só **monta o texto** da fórmula; quem valida é `POST /definicoes/validar` e quem calcula é o servidor (§2.2, §7). A gramática continua sendo a do §7.
+- **Construtor:** cabeçalho com caminho da pasta e "rascunho da vN", **Criar com IA**, **Validar** e **Publicar versão N**; a partir de 1024 px, três colunas (tipos, campos, propriedades).
+- Foco visível, contraste mínimo 4,5:1, alvos de toque de 44 px e respeito a `prefers-reduced-motion`.
 - Biblioteca nova só com justificativa na issue (§9.12). O `dnd-kit` já está no projeto.
+
+### 2.12. Autenticação
+
+- A identidade é do **Logto auto-hospedado** (OIDC): e-mail e senha, verificação de e-mail, recuperação de senha, telas em PT-BR e senha de no mínimo 10 caracteres. **Não há cadastro livre: o acesso é por convite** (§2.13). Quem entra por um convite cria a conta e **aceita os Termos e a Política** (§2.15). O Logto guarda a senha (com hash); o app **nunca** a vê.
+- **Token de acesso curto, de 10 minutos**, renovado pelo SDK com refresh token (rotação ligada); "Manter conectado neste aparelho" estende só a sessão, nunca o token. A renovação é sob demanda: ao receber `401` com código `token_expirado`, o front renova uma vez e repete a chamada.
+- A API valida o JWT em **todo** endpoint (exceto `healthz` e `readyz`): assinatura pelo JWKS descoberto no OIDC, `iss`, `aud`, `exp` e `organization_id`. **Cargo e permissões não vêm do token**: são lidos do banco a cada requisição (§2.13), então mudar um cargo ou desativar alguém vale na hora.
+- **Primeiro administrador:** a variável de ambiente `FORMS_ADMIN_EMAIL` (com o nome da equipe) faz a subida criar a equipe e convidar o administrador inicial; é idempotente.
+- `GET /eu` devolve perfil, equipe, cargo e permissões, para o front esconder e bloquear.
+
+### 2.13. Equipes, cargos e permissões (RBAC)
+
+- **Equipe** (tabela `grupos`, coluna `grupo_id`; na interface e nas mensagens, sempre "Equipe"): formulários, pastas, registros e dados de IA pertencem a uma equipe. O nome de formulário é único **dentro da equipe** e as referências entre formulários (§2.7) resolvem dentro dela. A v1 trabalha com uma equipe ativa por pessoa; o seletor de equipe só aparece para quem está em duas ou mais.
+- **Cargo:** conjunto **editável** de permissões, **um por pessoa**. As **17 permissões**: `formularios:ver`, `formularios:publicar` (criar e publicar versões), `formularios:excluir`, `formularios:organizar` (pastas); `registros:ver`, `registros:criar`, `registros:editar_proprios`, `registros:editar_todos`, `registros:excluir`, `registros:exportar`; `ia:criar_formularios`, `ia:assistente`; `equipe:ver`, `equipe:convidar` (convidar e desativar), `equipe:atribuir_cargos`, `historico:ver`, `cargos:editar`.
+- **Cargos de partida** (semeados e editáveis): Administrador (as 17); Gestor (`formularios:ver`, `registros:ver`, `registros:exportar`, `equipe:ver`, `historico:ver`); Engenheiro (11: as 4 de formulários, registros exceto excluir, e as 2 de IA); Técnico (`formularios:ver`, `registros:ver`, `registros:criar`, `registros:editar_proprios`); Visualizador (`formularios:ver`, `registros:ver`).
+- **Regras:** sempre existe ao menos um Administrador ativo (não se remove nem rebaixa o último); cargo em uso não é excluído; `registros:editar_proprios` compara com `criado_por`; a matriz **endpoint → permissão** é uma tabela única, usada pela API e pelo catálogo de permissões.
+- **Isolamento:** todo acesso a dados filtra por `grupo_id`; recurso de outra equipe responde **404** (não 403, para não revelar que existe); testes de vazamento percorrem todas as rotas que recebem id. Row Level Security no Postgres é defesa em profundidade opcional.
+- **Convites e pessoas:** convite com token de 256 bits guardado **só como hash**, validade e o **cargo** da pessoa; abas Ativos, Convites e Inativos; **desativar** tira o acesso na hora e mantém o nome e os registros. Escopo de cargo por pasta fica para depois.
+
+### 2.14. Autoria, histórico e concorrência
+
+- Todo registro guarda `criado_por` e `atualizado_por`. Cada alteração grava uma linha de **histórico** (valores anteriores, quem, quando), na mesma transação; a cascata (§2.7) registra "recalculado por alteração em #N". `GET /registros/{id}/historico` exige `historico:ver`; a listagem aceita o filtro "só os meus".
+- **Concorrência otimista:** o registro (e o rascunho de versão) tem uma `revisao`; o `PUT` exige a lida; divergência → **409** com mensagem em PT-BR dizendo quem alterou e quando. Cascata e exclusão usam `SELECT ... FOR UPDATE` em ordem estável de ids, para não dar deadlock.
+
+### 2.15. LGPD
+
+- **Aceite obrigatório** dos Termos de Uso e da Política de Privacidade no cadastro (checkbox no Logto), com **registro próprio** (`consentimentos`: pessoa, documento, versão, data; sem guardar o IP, ou só truncado). Mudou a versão do documento → **reaceite** antes de continuar. Os textos ficam versionados em `legal/` e aparecem em páginas públicas, e precisam de revisão jurídica antes de produção.
+- **Direitos do titular:** `GET /eu/exportar` (perfil, consentimentos, equipes e autoria) e `DELETE /eu` (remove a pessoa no Logto e no app e **anonimiza** a autoria, sem apagar o trabalho da equipe; bloqueia se for o único Administrador de uma equipe com outras pessoas).
+- **IA:** desligada por padrão em cada equipe; ativar exige um aviso claro (para onde os dados vão, qual provedor) e o aceite fica registrado. Campo com `"ia": false` na definição (ex.: CPF) **nunca** entra em índice nem prompt; `localizacao` fica fora por padrão.
+- **Operação:** mapa de dados e retenção documentados, **logs sem dados pessoais** (sem e-mail, valores de campo nem corpo de requisição) e um plano de resposta a incidente.
+- Fontes e demais recursos de interface são servidos pelo próprio app, sem CDN de terceiros.
+
+### 2.16. Introdução e ajuda
+
+- **Tour** no primeiro acesso (curto, pode ser pulado e revisto; o progresso fica no servidor, por pessoa), **checklist "Primeiros passos"** marcado pelo estado real da equipe, estados vazios que ensinam e uma **galeria de exemplos** que importa os `templates/` por `POST /formularios/lote`.
+- **Central de ajuda** dentro do app, com guias em Markdown (`ajuda/`) renderizados sem HTML cru e ajuda contextual ("?") em cada tela. A mesma pasta alimenta o chatbot (§2.5).
+
+### 2.17. Mobile-first e PWA
+
+- **Mobile primeiro**: até 640 px, uma coluna, barra de navegação embaixo (por cargo) e ação principal ao alcance do polegar, com a barra de salvar fixa no formulário; a partir de 640 px, menu lateral fixo e cartões que viram tabela quando há colunas; a partir de 1024 px, construtor em três colunas.
+- Teclados certos (`inputmode="decimal"` aceitando vírgula, `type="date"` nativo), gaveta de referência como *bottom sheet* em tela estreita, filtros em folha, "carregar mais" na listagem, GPS no campo `localizacao` (§2.8) e mapa de vínculos navegável por toque (com lista indentada como alternativa).
+- **PWA** instalável: manifest, ícones e um service worker que guarda **só os arquivos estáticos** do app. **Nunca** cacheia resposta da API, token nem dados da equipe; **não há uso offline de dados** (§3.1).
+- Testes ponta a ponta em viewport de celular (Playwright), acessibilidade e orçamento de desempenho no CI.
+
+### 2.18. Início, busca e notificações
+
+- **Início:** saudação, cargo, busca, "Novo registro" e "Criar formulário" (conforme as permissões), registros recentes com estado e pastas.
+- **Busca global** `GET /busca?q=`: determinística (sem IA), por nome de formulário, `#id` e valores de campos `texto` e `selecao`, limitada ao que o cargo vê; termo sempre parametrizado.
+- **Notificações** no sino, só dentro do app (sem push nem e-mail): convite aceito, cargo alterado, registro seu editado por outra pessoa e erro de cálculo em cascata em registro seu.
 
 ---
 
@@ -164,21 +211,26 @@ Estas exclusões são **deliberadas**. Não implemente, não "adiante" e não su
 
 - Grupo repetível (tabela de linhas) e visibilidade condicional. Consulta espacial (distância, raio) e mapas sobre `localizacao`.
 - Relação um-para-muitos **dentro de um mesmo registro** (ex.: lote com vários corpos de prova como linhas). A relação *entre formulários*, por referência a um registro, está no escopo (§2.7).
-- Usuários, login, cargos e permissões. O uso é local; a API ouve **só em `127.0.0.1`**.
-- Modo offline e sincronização; mapas.
-- Código de interface fora de `frontend/` e `desktop/`. O `dist/` gerado e os binários do instalável não são versionados. Para testar a API sem subir o front, use Swagger (`/docs`), `curl` ou `TestClient`.
-- Deploy, hospedagem e infraestrutura (CI além de lint e testes), assinatura/notarização do instalável, loja de apps e atualização automática. Gerar o instalável (§4.1) está no escopo.
-- `Dockerfile` e `docker-compose`: avaliado e **adiado**. SQLite local + `uv` já dão ambiente reproduzível. Só reconsiderar se alguém sem Python precisar subir a API ou se houver deploy; nesse caso é um `Dockerfile` mínimo, discutido antes.
+- **Fotos e anexos de qualquer tipo** (decisão do autor): nada de upload de arquivo.
+- Modo offline e sincronização de **dados** (o PWA só guarda arquivos estáticos, §2.17); edição simultânea ao vivo em tempo real; notificação por push ou por e-mail.
+- Cadastro livre (o acesso é por convite), SSO corporativo (SAML) e criação de equipes por autoatendimento. Escopo de cargo por pasta é opcional e fica para depois.
+- Aplicativo desktop ou instalável (Electron, PyInstaller), assinatura de código e loja de apps.
+- **Serviço externo na frente do app** (CDN, WAF ou proteção de DDoS de terceiros), Kubernetes e multi-região: o produto é auto-hospedado e **tudo roda local**. Consequência assumida: sem mitigação de ataque volumétrico (§2.9).
+- Código de interface fora de `frontend/`. O `dist/` gerado não é versionado. Para testar a API sem subir o front, use Swagger (`/docs`, só em desenvolvimento), `curl` ou `TestClient`.
 
 ### 3.2. Tecnologias proibidas
 
-LangChain, LlamaIndex, bancos vetoriais (inclui pgvector e extensões como `sqlite-vec`), **ORM** (use `sqlite3` direto), Docker, Postgres/PostGIS (o app instalável usa SQLite, §4.1), bibliotecas de autenticação. **Nova dependência exige justificativa** — o autor precisa conseguir defender cada uma.
+LangChain, LlamaIndex, LiteLLM (por ora), **ORM** (SQL à mão com `psycopg`), bancos vetoriais dedicados (Pinecone, Qdrant, Chroma etc.; o `pgvector` dentro do Postgres é **permitido**), serviços de identidade hospedados por terceiros (Auth0, Clerk, Logto Cloud: o Logto é **só auto-hospedado**), Electron e empacotadores de desktop. Permitidos, cada um com sua justificativa: PostgreSQL, Docker e `docker-compose`, `psycopg`, `pgvector`, `PyJWT`, `cryptography` (Fernet), `@logto/react`, `@fontsource-*`, Playwright. **Nova dependência exige justificativa**: o autor precisa conseguir defender cada uma.
 
 ### 3.3. Proibições de comportamento
 
 - ❌ **Nunca `eval`, `exec`, `compile` ou `__import__`** para fórmulas. Só o avaliador sobre `ast` com lista de permissão. Nó de AST fora da lista → erro explícito, nunca ignorado.
 - ❌ **Nunca pedir ao LLM para calcular, converter unidade, somar ou conferir número.** O LLM só redige texto sobre dados já calculados.
-- ❌ Não confiar no frontend: validação e recálculo são do servidor, sempre.
+- ❌ Não confiar no frontend: validação, recálculo e **permissão** são do servidor, sempre. Esconder um botão não é proteção.
+- ❌ **Nenhum acesso a dados sem `grupo_id`**: toda consulta filtra pela equipe; recurso de outra equipe é 404.
+- ❌ **Nunca pedir ao LLM para gerar SQL** nem executar o que ele devolve; ele só escolhe ferramentas de um conjunto fechado, com argumentos validados.
+- ❌ Nunca enviar à IA um campo com `"ia": false`, nem dado de uma equipe que não ativou a IA.
+- ❌ Nunca guardar segredo em claro no banco: token de convite só como hash, chave de LLM cifrada; senha é do Logto.
 - ❌ Não colocar regra de negócio em `api.py` nem em `cli.py`; ela fica em `servico.py` e abaixo.
 - ❌ Não fazer mudança incompatível no contrato (OpenAPI ou formato do JSON de definição) sem sinalizar explicitamente, porque o `frontend/` quebra (§5.3).
 - ❌ Não importar o SDK do LLM fora de `ia/cliente.py`.
@@ -193,34 +245,31 @@ LangChain, LlamaIndex, bancos vetoriais (inclui pgvector e extensões como `sqli
 |---|---|
 | Linguagem e ambiente | Python 3.12+, `uv`, `pyproject.toml` |
 | Domínio | `dataclasses`, type hints |
-| Persistência | `sqlite3` (stdlib); dados dinâmicos em colunas JSON |
+| Persistência | **PostgreSQL 16** com `psycopg` 3 e pool, SQL à mão e **sem ORM**; dados dinâmicos em `jsonb`; migrações em arquivos SQL numerados |
+| Vetores | extensão `pgvector` |
 | Fórmulas | módulo `ast` com lista de permissão |
-| CLI | `argparse` |
+| CLI | `argparse` (operação) |
 | API | FastAPI, Uvicorn, Pydantic v2 **só na borda** (nunca no domínio) |
-| Recuperação (opcional) | BM25 escrito à mão, sem framework |
-| IA (opcional) | SDK de um LLM (ex.: Anthropic), isolado em `ia/cliente.py` |
+| Autenticação | **Logto** auto-hospedado (OIDC); `PyJWT[crypto]` valida o token na API; `@logto/react` no front |
+| Segredos | `cryptography` (Fernet) para a chave de LLM de cada equipe |
+| Recuperação (opcional) | filtros SQL + BM25 escrito à mão + `pgvector`, sem framework |
+| IA (opcional) | provedores de LLM atrás de `ia/cliente.py` (Anthropic e compatíveis com OpenAI), via SDK ou `httpx` |
 | Configuração | `python-dotenv`, `.env` fora do git |
-| Fotos | `Pillow` (decodificar, converter para WebP, remover EXIF) e `python-multipart` (upload no FastAPI) |
-| Frontend (`frontend/`) | React, TypeScript (`strict`), Vite, Tailwind CSS; gerenciador de pacotes `npm` |
-| Desktop (`desktop/`) | Electron (janela e processo filho do backend), `electron-builder` (instalador) |
-| Backend no instalável | `PyInstaller` (executável), `platformdirs` (pasta de dados) |
-| Qualidade do front | Vitest + Testing Library, ESLint, Prettier |
-| Qualidade | `pytest`, `httpx` (TestClient), `ruff`, GitHub Actions |
+| Frontend (`frontend/`) | React, TypeScript (`strict`), Vite, Tailwind CSS; `npm`; fontes hospedadas (`@fontsource`); PWA |
+| Infraestrutura | Docker, `docker-compose`, proxy reverso com HTTPS (Caddy, nginx ou Traefik, decidido na issue #115) |
+| Qualidade do front | Vitest + Testing Library, Playwright (e2e em viewport mobile), ESLint, Prettier |
+| Qualidade | `pytest` contra Postgres real, `httpx` (TestClient), `ruff` (com a regra `S608`), GitHub Actions |
 
-**Execução local:** `uv run uvicorn forms.api:app --host 127.0.0.1 --port 8000` (a CLI roda por `uv run`). Sem Docker (§3.1).
-**Frontend em dev:** `frontend/` roda na porta 5173 (`npm run dev`, Vite) e chama esta API em `http://127.0.0.1:8000`. Como são origens diferentes, a API habilita **CORS apenas para `http://localhost:5173` e `http://127.0.0.1:5173`** (configurável por variável de ambiente); nunca `*`.
+**Execução:** `docker compose up` sobe tudo (§4.1). **Desenvolvimento do front:** `npm run dev` (Vite, porta 5173) chamando a API; como são origens diferentes, a API habilita **CORS só para as origens configuradas** por variável de ambiente; nunca `*`. Em produção, front e API ficam na mesma origem pelo proxy, sem CORS.
 
-### 4.1. App instalável (empacotamento)
+### 4.1. Implantação (Docker Compose)
 
-- O instalado tem dois processos: o **Electron** (`desktop/`), que abre a janela e gerencia o processo filho, e o **backend Python** (`app.py`, empacotado com PyInstaller), que sobe o FastAPI em `127.0.0.1` numa **porta livre** e **serve o build estático do front** (`frontend/dist`, copiado ao empacotar) na mesma origem, então no instalado não há CORS. O backend escolhe a porta e a imprime como primeira linha da saída (JSON `{"porta": N}`); o Electron a lê, abre a janela em `http://127.0.0.1:<porta>` e encerra o backend ao fechar. Se o backend cair, o Electron mostra um erro claro em PT-BR em vez de uma janela em branco.
-- Os dados do usuário (banco SQLite e pasta de fotos) ficam na pasta de dados do sistema, via `platformdirs`, nunca dentro do pacote do app. Backup = copiar essa pasta.
-- **Token por execução:** um token é gerado a cada início do app e a API o exige no cabeçalho `X-Forms-Token`; outro programa ou página da máquina não chama a API sem ele. O Electron gera o token, passa ao backend por variável de ambiente e o expõe ao front pelo *preload* (`contextBridge`). Em dev (navegador + Vite) ele é dispensado por variável de ambiente.
-- Empacotamento em três passos, com scripts em `empacotamento/`: (1) `npm run build` do front; (2) **PyInstaller** gera o executável do backend; (3) **electron-builder** monta o instalador com o executável do backend (que já leva o `dist` do front dentro, porque é o backend que o serve) (macOS: `.dmg`; Windows: instalador NSIS; Linux: AppImage). O PyInstaller **não faz compilação cruzada**: cada instalador é gerado no próprio sistema, então o build do instalável roda numa matriz de CI com os três. O `dist/` e os binários gerados **não são versionados**.
-- **Portabilidade:** caminhos sempre com `pathlib`, nunca texto concatenado; `anexos.caminho` é guardado com `/` (relativo à pasta de dados) em qualquer sistema; a pasta de dados vem de `platformdirs`. Nenhum código assume `\n` ou `/` do sistema.
-- **Exportar CSV** usa o download padrão do Electron, que abre o diálogo nativo de salvar. Captura direta pela câmera fica fora por ora; o envio de foto usa o seletor de arquivo.
-- **Segurança do Electron:** `contextIsolation` ligado, `nodeIntegration` desligado, sem `remote`; a janela só navega para `http://127.0.0.1:<porta>` e bloqueia qualquer outra URL; o *preload* expõe só o mínimo (o token).
-- O banco do usuário persiste entre versões do app, então migração de esquema é crítica (§5.2).
-- Dependências do instalável e por quê: `PyInstaller` (gerar o executável do backend), `platformdirs` (pasta de dados correta por sistema), `Electron` e `electron-builder` (janela e instalador), `Pillow` e `python-multipart` (§2.8). Alvos: Windows, macOS e Linux (§2.9).
+- **Serviços:** `postgres` (com `pgvector`), `logto` e um `logto-setup` que provisiona tudo como código e de forma idempotente (aplicativo, API resource, organização, e-mail, cadastro desativado, TTL do token), `api`, `web` (proxy reverso com HTTPS: serve o estático do front e encaminha `/api` e a autenticação) e, só em desenvolvimento, um servidor de e-mail de teste. **Só o proxy publica portas** (80 e 443); Postgres, API e Logto ficam na rede interna.
+- **Configuração** por variáveis de ambiente (`.env.example` documentado; `.env` nunca vai ao git, à imagem nem ao banco).
+- **Banco:** migrações aplicadas por `forms migrar` (e opcionalmente na subida) com trava `pg_advisory_lock`; o banco persiste entre versões, então migração de esquema é crítica (§5.2). Backup com `pg_dump` agendado e restauração testada; `GET /healthz` e `GET /readyz` para os healthchecks.
+- **Proteção local:** limite de requisições e de conexões por IP no proxy, timeouts contra conexão lenta, limite de corpo (413), bloqueio de IPs reincidentes (`fail2ban`), limites de CPU e memória por contêiner e `statement_timeout` no Postgres (§12). **Não cobre DDoS volumétrico** (sem serviço de borda, por decisão).
+- **CI:** Postgres como serviço, `ruff`, `pytest` (Linux), build das imagens e o job do `frontend/`.
+- Dependências da infraestrutura e por quê: Docker (ambiente reproduzível e subida em um comando), Logto (identidade e e-mail/senha prontos, sem escrever autenticação), `PyJWT` (validar o token sem escrever criptografia), `pgvector` (busca vetorial no próprio banco), `cryptography` (cifrar a chave de LLM).
 
 ---
 
@@ -228,61 +277,69 @@ LangChain, LlamaIndex, bancos vetoriais (inclui pgvector e extensões como `sqli
 
 ```
 src/forms/   models.py  tipos_campo.py  formulas.py  validacao.py
-             fotos.py  exportacao.py  repositorio.py  cli.py  app.py
-             api.py  api_esquemas.py  api_rotas.py  api_extensoes.py  exportar_openapi.py
-             servico.py (fachada)  servico_base.py  servico_registros.py
-             servico_anexos.py  servico_consulta.py  servico_pastas.py
+             exportacao.py  repositorio.py  segredos.py  cli.py
+             migracoes/  0001_baseline.sql ...  (esquema versionado)
+             api.py  api_esquemas.py  api_rotas.py  api_extensoes.py  auth.py  exportar_openapi.py
+             servico.py (fachada)  servico_base.py  servico_registros.py  servico_consulta.py
+             servico_pastas.py  servico_equipes.py (equipes, cargos, convites)  servico_rascunhos.py
              rag/  chunker.py  indice.py  semantico.py  responder.py  extensao.py  (opcional)
-             ia/   cliente.py  resumo.py  validacao.py  gerador.py  extensao.py     (opcional)
+             ia/   cliente.py (provedores)  resumo.py  validacao.py  gerador.py  chat.py  extensao.py  (opcional)
 templates/   corpo_de_prova.json  inspecao_obra.json  (exemplos)
+ajuda/       guias em .md (central de ajuda e base do chatbot)
+legal/       Termos de Uso e Política de Privacidade (versionados)
 docs/        procedimentos em .md (base do assistente)
-frontend/    React + TypeScript + Vite + Tailwind (§4)
-desktop/     Electron: processo principal, preload, configuração do instalador
-empacotamento/  scripts do instalável (build do front, PyInstaller, electron-builder)
+frontend/    React + TypeScript + Vite + Tailwind (§4); data-collect-design-pattern.pdf
+docker/      Dockerfiles, configuração do proxy e init do Postgres
+docker-compose.yml
 tests/       test_formulas.py  test_validacao.py  test_servico.py  test_api.py ...
 ```
 
-**Resumos de pasta:** cada pasta com código tem um `README.md` curto (o que é, o que tem, como se conecta, como testar), mantido pelo `doc-writer`. `src/forms/` tem um só, com uma seção por módulo. O resumo descreve o que **existe** no código; as regras e o alvo continuam aqui. A pasta `docs/` é reservada à base do RAG e não recebe esses resumos.
+**Resumos de pasta:** cada pasta com código tem um `README.md` curto (o que é, o que tem, como se conecta, como testar), mantido pelo `doc-writer`. `src/forms/` tem um só, com uma seção por módulo. O resumo descreve o que **existe** no código; as regras e o alvo continuam aqui. As pastas `docs/`, `ajuda/` e `legal/` guardam conteúdo (base do RAG, guias e textos legais) e não recebem esses resumos.
 
 ### 5.1. Camadas e direção de dependência
 
 ```
-api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py, fotos.py
-                                →  repositorio.py  →  sqlite3
+api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py, segredos.py
+                                →  repositorio.py  →  psycopg  →  PostgreSQL
 ```
 
 - **`models.py`**: `dataclasses` do domínio. Sem Pydantic, sem I/O.
 - **`tipos_campo.py`**: o que cada tipo aceita, valida e normaliza.
 - **`formulas.py`**: parse, grafo de dependências, detecção de ciclo e avaliação. Funções puras, sem I/O.
 - **`validacao.py`**: valida um registro contra uma definição.
-- **`fotos.py`**: processa uma imagem (valida, orienta, remove metadados, converte para WebP na faixa de tamanho, §2.8). Função pura de bytes para bytes. O I/O de arquivo (gravar e apagar o `.webp`) fica em `servico_anexos.py` (reexportado por `servico.py`), com a pasta de dados recebida por parâmetro.
-- **`repositorio.py`**: único módulo que fala SQL. Sempre com parâmetros (`?`), nunca f-string em SQL.
-- **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI. Para não virar um arquivo gigante, os casos de uso de registros (`servico_registros.py`), anexos (`servico_anexos.py`) e consulta/exportação (`servico_consulta.py`) e pastas (`servico_pastas.py`) moram em módulos próprios, e as peças comuns (transação, campos compartilhados) em `servico_base.py`; `servico.py` os reexporta, então API e CLI chamam tudo por `servico.<função>`.
+- **`segredos.py`**: hash de token (SHA-256, comparação em tempo constante) e cifra e decifra da chave de LLM (Fernet). É o **único** lugar que mexe com criptografia.
+- **`repositorio.py`**: único módulo que fala SQL. Sempre com parâmetros (`%s`), nunca f-string em SQL (a regra `S608` do `ruff` e um teste de varredura garantem); identificador dinâmico, se um dia houver, só com `psycopg.sql`. **Todo método recebe o `grupo_id`** e o aplica na consulta. O esquema vem de `migracoes/` (§5.2).
+- **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI. Cada caso de uso recebe o **contexto da requisição** (`usuario_id`, `grupo_id`, permissões) por parâmetro; o `servico` não sabe de HTTP. Para não virar um arquivo gigante, os casos de uso de registros (`servico_registros.py`), consulta/exportação (`servico_consulta.py`), pastas (`servico_pastas.py`), equipes, cargos e convites (`servico_equipes.py`) e rascunhos de versão (`servico_rascunhos.py`) moram em módulos próprios, e as peças comuns (transação, campos compartilhados) em `servico_base.py`; `servico.py` os reexporta, então API e CLI chamam tudo por `servico.<função>`.
 - **`exportacao.py`**: formatação das células e geração do CSV (§2.3, §12). Funções puras, sem I/O; usada por `servico_consulta.py`.
-- **`api.py`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP. Fica dividida em `api.py` (app, token por execução, CORS, tratadores de erro), `api_esquemas.py` (modelos Pydantic de entrada e saída) e `api_rotas.py` (endpoints); `api_extensoes.py` descobre e monta as rotas dos módulos opcionais; `exportar_openapi.py` gera o `openapi.json` do front.
-- **`cli.py`**: `argparse` fino; só chama `servico.py`.
-- **`app.py`**: entrada do backend no app instalável (§4.1): sobe a API, serve o build do front e imprime a porta. Não abre janela (isso é do Electron). Só monta as peças, sem regra de negócio.
+- **`api.py`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP. Fica dividida em `api.py` (app, CORS, cabeçalhos de segurança, limites, tratadores de erro), `auth.py` (validação do JWT do Logto e montagem do contexto da requisição), `api_esquemas.py` (modelos Pydantic de entrada e saída) e `api_rotas.py` (endpoints); `api_extensoes.py` descobre e monta as rotas dos módulos opcionais; `exportar_openapi.py` gera o `openapi.json` do front.
+- **`cli.py`**: `argparse` fino, só para operação (§2.4); só chama `servico.py`.
 - Dependências apontam **para baixo**: o núcleo nunca importa `api`, `cli`, `rag` ou `ia`.
-- **Módulos opcionais** (`rag/`, `ia/`) dependem do núcleo, nunca o contrário; o app inteiro funciona com eles removidos. Cada um publica um `EXTENSAO` em `extensao.py` (rotas e tratadores de erro), e o núcleo o procura **pelo nome** em execução (`descobrir_extensoes()`), sem importá-lo; só a ausência do próprio módulo é tolerada. Como o PyInstaller não vê imports por nome, `empacotamento/` os declara com `--hidden-import`.
+- **Módulos opcionais** (`rag/`, `ia/`) dependem do núcleo, nunca o contrário; o app inteiro funciona com eles removidos. Cada um publica um `EXTENSAO` em `extensao.py` (rotas e tratadores de erro), e o núcleo o procura **pelo nome** em execução (`descobrir_extensoes()`), sem importá-lo; só a ausência do próprio módulo é tolerada. Sem a pasta do módulo, o app sobe normalmente.
 
-### 5.2. Modelo de dados (SQLite)
+### 5.2. Modelo de dados (PostgreSQL)
 
 ```
-formularios          id, nome (único), pasta_id (nulo = raiz), criado_em
-pastas               id, nome, pasta_pai_id (nulo = raiz), criado_em
-versoes_formulario   id, formulario_id, numero, definicao (JSON), publicada_em
-registros            id, formulario_id, versao_id, dados (JSON), criado_em, atualizado_em
-dependencias_formulario  formulario_id, depende_de_id
-referencias_registro     registro_id, campo_id, destino_id
-anexos               id, registro_id (nulo até vincular), campo_id, caminho, largura, altura, tamanho_bytes, criado_em
+grupos                  id, nome, logto_organization_id, criado_em
+usuarios                id, logto_sub (único), nome, email, ativo, criado_em, ultimo_acesso_em
+cargos                  id, grupo_id, nome, descricao, padrao
+cargo_permissoes        cargo_id, permissao
+membros_grupo           grupo_id, usuario_id, cargo_id, entrou_em
+convites                id, grupo_id, email, cargo_id, token_hash, expira_em, usado_em
+consentimentos          usuario_id, documento, versao, aceito_em
+formularios             id, grupo_id, nome (único por grupo), pasta_id (nulo = raiz), criado_em
+pastas                  id, grupo_id, nome, pasta_pai_id (nulo = raiz), criado_em
+versoes_formulario      id, formulario_id, numero, definicao (jsonb), publicada_em
+rascunhos_formulario    formulario_id, definicao (jsonb), base_versao_id, atualizado_por, atualizado_em, revisao
+registros               id, grupo_id, formulario_id, versao_id, dados (jsonb), revisao, criado_por, atualizado_por, criado_em, atualizado_em
+historico_registro      id, registro_id, usuario_id, quando, valores_anteriores (jsonb), motivo
+dependencias_formulario formulario_id, depende_de_id
+referencias_registro    registro_id, campo_id, destino_id
 ```
 
-- `anexos` guarda os metadados das fotos; o arquivo `.webp` fica na pasta de dados e `caminho` é relativo a ela (§2.8).
-
+- Tabelas de IA (`config_ia_grupo` com a chave cifrada, `documentos_ia` com `vector`, `conversas_ia`, `mensagens_ia`, `uso_ia`), de notificações e de progresso do tour seguem o mesmo padrão e nascem nas issues do roadmap; **toda tabela de dados da equipe leva `grupo_id`**.
 - `dependencias_formulario` é preenchida ao publicar e o vínculo permanece enquanto o formulário existir (versões antigas e seus registros ainda apontam). `referencias_registro` é mantida ao salvar o registro. As duas existem para bloquear exclusões e achar dependentes na cascata sem varrer colunas JSON (§2.7).
-
 - Todo registro aponta para a `versao_id` com que nasceu. Editar o registro **não muda a versão**: ele é validado e recalculado contra a versão de origem. Migrar registro para versão nova está fora do escopo (próximos passos).
-- Esquema criado/migrado por código simples em `repositorio.py` (sem ferramenta de migração), versionado com `PRAGMA user_version`. Como o banco do usuário persiste entre versões do app, toda mudança de esquema exige teste de atualização a partir do esquema anterior.
+- Esquema versionado em **arquivos SQL numerados** (`migracoes/`), aplicados em ordem por um executor pequeno (tabela `esquema_versao`, trava `pg_advisory_lock`), sem ferramenta de migração externa. O banco persiste entre versões do app, então toda mudança de esquema exige **teste de atualização a partir do esquema anterior**.
 
 Exemplo de definição (trecho do template de corpo de prova; este é o formato do contrato):
 
@@ -303,16 +360,16 @@ Exemplo de definição (trecho do template de corpo de prova; este é o formato 
 }
 ```
 
-Valores de `tipo`: `texto`, `numero`, `data`, `selecao`, `sim_nao`, `calculado`, `secao`, `referencia`, `localizacao`, `foto`. Campo `foto` aceita `"maximo"` opcional (§2.8). Campo `referencia` exige `"formulario"` (nome do formulário de origem); qualquer campo (exceto `secao` e `referencia`) aceita `"compartilhado": true` (§2.7). Campo `selecao` exige `"opcoes"`: lista não vazia de strings, sem duplicatas (ex.: `"opcoes": ["Aprovado", "Reprovado"]`).
+Valores de `tipo`: `texto`, `numero`, `data`, `selecao`, `sim_nao`, `calculado`, `secao`, `referencia`, `localizacao`. Campo `referencia` exige `"formulario"` (nome do formulário de origem); qualquer campo (exceto `secao` e `referencia`) aceita `"compartilhado": true` (§2.7). Campo `selecao` exige `"opcoes"`: lista não vazia de strings, sem duplicatas (ex.: `"opcoes": ["Aprovado", "Reprovado"]`). Qualquer campo aceita `"ia": false` (nunca vai à IA, §2.15). A definição aceita, no nível de `campos`, a propriedade **opcional** `"exibicao": {"destaque": "resistencia_mpa", "status": "conforme", "resumo": ["data_moldagem"]}`: `destaque` é campo numérico (ou calculado numérico), `status` é campo calculado **booleano** e `resumo` lista campos existentes; a publicação rejeita ids inexistentes ou de tipo errado. Sem ela, o servidor usa o primeiro calculado numérico e o primeiro calculado booleano.
 
 ### 5.3. Contrato com o frontend (`frontend/`, mesmo repositório)
 
 - O frontend está no mesmo repositório, mas o **backend é a fonte da verdade** de dados, validação, cálculo e do esquema da definição de formulário.
 - O contrato tem duas partes: o **OpenAPI** do FastAPI (`/openapi.json`, `/docs`) e o **formato do JSON de definição** (§6). Modelos Pydantic da API têm nomes e campos estáveis e `response_model` explícito em todo endpoint.
 - Mudança **compatível** (campo opcional novo, endpoint novo): livre. Mudança **incompatível** (renomear/remover campo, mudar tipo, mudar semântica): só com aviso explícito na tarefa/PR, descrevendo o impacto no front; o ajuste do `frontend/` entra no mesmo PR. Os tipos TypeScript da API são **gerados do OpenAPI** (`openapi-typescript`), nunca escritos à mão, e o CI falha se o arquivo gerado estiver desatualizado.
-- Erros da API têm formato uniforme (`{"detalhe": "...", "erros": [{"campo": "...", "mensagem": "..."}]}`) com mensagens em PT-BR, para o front exibir no campo certo. Erro de validação de registro → 422; recurso inexistente → 404; definição inválida ao publicar → 422; exclusão bloqueada por vínculo (§2.7) → 409.
+- Erros da API têm formato uniforme (`{"detalhe": "...", "erros": [{"campo": "...", "mensagem": "..."}]}`) com mensagens em PT-BR, para o front exibir no campo certo. Erro de validação de registro → 422; recurso inexistente (ou de outra equipe) → 404; definição inválida ao publicar → 422; exclusão bloqueada por vínculo (§2.7) → 409; edição com `revisao` antiga (§2.14) → 409; sem token ou token inválido → 401 (com o código `token_expirado` quando só expirou); sem permissão → 403; termos pendentes → 403 com o código `termos_pendentes`; limite de uso → 429 e corpo grande demais → 413.
 - **Localização de erro de definição:** `campo` usa o **id do campo** (`resistencia_mpa.formula`), nunca o índice, porque o índice muda quando o usuário reordena campos no editor e o id não. Exceção: quando o problema é o próprio id (ausente, duplicado ou reservado), usa o índice (`campos[3].id`), já que não há id confiável; erro global (ex.: definição sem a chave `campos`) usa `campos`. Erro de fórmula pode trazer `posicao` opcional (`{"inicio": 12, "fim": 20}`, offsets do `ast` no texto da fórmula) para o front sublinhar o trecho. Ciclo cita os campos envolvidos.
-- Endpoints não dependem de estado de sessão nem de cookie. Sem login de usuário nesta fase; no app instalado a API exige o token por execução no cabeçalho `X-Forms-Token` (§4.1), e o front precisa enviá-lo.
+- Endpoints não dependem de estado de sessão nem de cookie: toda chamada leva `Authorization: Bearer <token do Logto>` (§2.12) e o servidor confere a permissão do cargo (§2.13) a cada requisição.
 - Texto livre ou número vindo do front nunca é confiável (§3.3).
 - **Valores numéricos trafegam como string** nas respostas, para não perder precisão no front; a entrada aceita número ou string (§7). Campos calculados vêm como `{"valor", "erro"}` (§7).
 - `POST /definicoes/validar` não é uma resposta de erro: devolve 200 com `{"valida", "erros"}` (§2.2), então não segue o formato `{"detalhe", "erros"}` acima, mas cada item de `erros` usa o mesmo `{"campo", "mensagem"}`.
@@ -325,12 +382,12 @@ Valores de `tipo`: `texto`, `numero`, `data`, `selecao`, `sim_nao`, `calculado`,
 |---|---|
 | **Vocabulário de domínio** (`formulario`, `registro`, `versao`, `rotulo`, `obrigatorio`, módulos `servico.py`, `tipos_campo.py`…, tabelas, chaves do JSON de definição e campos da API) | **Português** (sem acentos em identificadores) |
 | **Termos técnicos/infra** (`handler`, `middleware`, `router`, `fixture`) | **Inglês** quando já são o nome padrão da técnica |
-| **Código do front** (`frontend/`, `desktop/`) | Identificadores de domínio em português (`Formulario`, `registro`, `rotulo`); termos técnicos em inglês (`component`, `hook`, `props`) |
-| **Textos visíveis ao usuário**, mensagens de erro e de validação | **Português brasileiro** |
+| **Código do front** (`frontend/`) | Identificadores de domínio em português (`Formulario`, `registro`, `rotulo`); termos técnicos em inglês (`component`, `hook`, `props`) |
+| **Textos visíveis ao usuário**, mensagens de erro e de validação | **Português brasileiro**; o grupo se chama **Equipe** e o papel se chama **Cargo** (no banco e no código, `grupo` e `cargo`) |
 | **Comentários, README, `AI_NOTES.md`, este arquivo, PRs** | **Português brasileiro** |
 | **Mensagens de commit** | **Inglês** (Conventional Commits) |
 
-Regra de ouro: **o JSON de definição e o OpenAPI são contratos** com o `frontend/` (`campos`, `id`, `tipo`, `rotulo`, `unidade`, `casas_decimais`, `opcoes`, `compartilhado`, `formulario`, `maximo`, `obrigatorio`, `formula`). Não traduza nem renomeie por conveniência de um lado só (ver §5.3).
+Regra de ouro: **o JSON de definição e o OpenAPI são contratos** com o `frontend/` (`campos`, `id`, `tipo`, `rotulo`, `unidade`, `casas_decimais`, `opcoes`, `compartilhado`, `formulario`, `exibicao`, `ia`, `obrigatorio`, `formula`). Não traduza nem renomeie por conveniência de um lado só (ver §5.3).
 
 ---
 
@@ -348,7 +405,7 @@ O avaliador é a peça mais importante e mais testada do projeto.
 - Grafo de dependências → ordem topológica; **ciclo rejeitado ao publicar** com mensagem que cita os campos do ciclo.
 - Erro de execução (divisão por zero, `dias` com valor não inteiro vindo de um campo) → o campo guarda o erro; o registro continua válido e salvo (formato abaixo).
 - Aritmética sobre números: **`Decimal`** (decidido), nunca `float`. Todo campo `numero` é normalizado para `Decimal` em `tipos_campo.py`, para que as fórmulas nunca misturem tipos. Testar arredondamento do template de corpo de prova.
-- **Número no JSON (fronteira):** na entrada a API aceita número JSON ou string e converte direto para `Decimal` (`Decimal(str(valor))`, nunca via `float`). Na saída da API e na coluna `dados` do SQLite, número vai **sempre como string** (`"25.50"`), porque número JSON vira `float` no JavaScript e perderia a precisão. Datas em ISO (`"2026-11-01"`). Contrato com o front (§5.3).
+- **Número no JSON (fronteira):** na entrada a API aceita número JSON ou string e converte direto para `Decimal` (`Decimal(str(valor))`, nunca via `float`). Na saída da API e na coluna `dados` (`jsonb`), número vai **sempre como string** (`"25.50"`), porque número JSON vira `float` no JavaScript e perderia a precisão. Datas em ISO (`"2026-11-01"`). Contrato com o front (§5.3).
 - **Casas decimais:** `casas_decimais` é opcional na definição do campo e orienta **só a exibição** (o front arredonda) e a **exportação CSV**, que sai arredondada com ele (campo sem `casas_decimais` sai com o valor completo). O `valor` guardado e devolvido mantém a precisão total, e as fórmulas sempre calculam sobre ela, nunca sobre o valor arredondado. Aceito em campos `numero` e em `calculado` cujo tipo inferido é numero; deve ser inteiro `>= 0`. Em outro tipo, ou com valor inválido, a publicação rejeita com mensagem clara.
 - **Tipos na fórmula (checados ao publicar):** o avaliador infere o tipo de cada expressão sem executá-la. Tipos: `numero`, `data`, `booleano` e `duracao` (resultado de `dias(n)`). Campo `numero` → numero; `data` → data; `sim_nao` → booleano; `calculado` → tipo inferido da própria fórmula. Combinações aceitas:
   - `numero` com `+ - * / **` → numero; `soma`, `media`, `min` e `max` só sobre numero → numero.
@@ -357,7 +414,7 @@ O avaliador é a peça mais importante e mais testada do projeto.
   - `and`, `or` e `not` só sobre booleano.
   - `se(cond, a, b)`: `cond` booleano, `a` e `b` do mesmo tipo, resultado nesse tipo.
   - `dias(n)`: `n` numero → duracao.
-  Qualquer outra combinação (`data * 2`, `data + data`, `data >= 3`, `duracao` como resultado final do campo) é **rejeitada ao publicar**, com mensagem e `posicao` na fórmula. Campos `texto`, `selecao`, `secao`, `localizacao` e `foto` não podem ser referenciados em fórmulas (a allowlist não tem constante de texto); reavaliar se surgir a necessidade.
+  Qualquer outra combinação (`data * 2`, `data + data`, `data >= 3`, `duracao` como resultado final do campo) é **rejeitada ao publicar**, com mensagem e `posicao` na fórmula. Campos `texto`, `selecao`, `secao` e `localizacao` não podem ser referenciados em fórmulas (a allowlist não tem constante de texto); reavaliar se surgir a necessidade.
 - **Formato do campo calculado no registro:** todo campo `calculado` é sempre `{"valor": ..., "erro": ...}`; campos de entrada continuam valor simples. Entrada vazia → `{"valor": null, "erro": null}` (ainda não dá para calcular); falha de execução → `{"valor": null, "erro": "mensagem em PT-BR"}`. Fórmula que depende de campo calculado com erro também fica com erro, citando o campo de origem. Este formato é contrato com o front (§5.3).
 - Cobrir com testes: caminho feliz, cada operador, cada função, entradas vazias, divisão por zero, nó proibido, tentativa de injeção (`__import__('os')`, `().__class__`…), ciclo, dependência inexistente, cada combinação de tipos aceita e rejeitada (incluindo comparação entre datas), campo compartilhado vazio ou com erro na origem, ciclo entre formulários, cascata de recálculo.
 
@@ -372,14 +429,16 @@ TDD é a regra para o **núcleo**: `formulas.py`, `validacao.py`, `tipos_campo.p
 3. **Refactor** — melhore com a rede de segurança dos testes.
 
 - Estilo: `pytest`, **Arrange / Act / Assert** explícito, um comportamento por teste, nome descritivo (`test_ciclo_entre_campos_e_rejeitado_ao_publicar`).
-- Banco de teste: SQLite **em memória** ou arquivo temporário (`tmp_path`); nunca o banco real.
+- Banco de teste: **PostgreSQL real** (o do `docker compose` localmente e um serviço no CI), com schema isolado por teste; nunca o banco de uso. O Postgres de teste usa a imagem com `pgvector`.
+- **Autenticação e RBAC:** token de teste assinado com chaves geradas no próprio teste (nunca o Logto real); tabela de verdade de cada permissão contra cada endpoint; **testes de vazamento entre equipes** percorrendo todas as rotas que recebem id (grupo B contra recurso do grupo A → 404).
 - API: `fastapi.testclient.TestClient` (via `httpx`).
 - LLM: **sempre** substituído por um cliente falso nos testes. Nenhum teste faz chamada de rede nem exige chave.
 - **Prioridade de cobertura:** `formulas.py` e `validacao.py` primeiro e mais fundo. É o que o autor vai defender em voz alta.
 - Contrato: teste de API confere o formato de erro uniforme e que os campos dos modelos de resposta não mudaram sem querer (compare com o JSON esperado).
 - Verificação manual: suba a API e exercite o fluxo em `/docs` (Swagger) ou `curl`, além dos testes.
 - **Frontend:** Vitest + Testing Library para a lógica e os componentes (montagem da definição no construtor, `FormRenderer`, exibição de erros por campo). TDD vale para a lógica; tela puramente visual dispensa teste de snapshot. Como o front não tem regra de negócio, não há teste dela lá. Verificação manual: `npm run dev` com a API no ar, golden path + 1 caso de borda.
-- **Desktop:** o instalável é verificado manualmente (instalar, abrir, criar um registro, fechar e reabrir) antes de dar a tarefa por pronta.
+- **Ponta a ponta:** Playwright em viewport de celular e de desktop (login em desenvolvimento, criar formulário, preencher, filtrar, convidar), com verificação de acessibilidade e orçamento de desempenho no CI.
+- **Segurança:** testes de injeção de SQL (nome e valor de filtro), do avaliador de fórmulas e de prompt injection no chatbot, com cliente falso.
 
 ---
 
@@ -406,6 +465,7 @@ TDD é a regra para o **núcleo**: `formulas.py`, `validacao.py`, `tipos_campo.p
 - Ao cometer ou corrigir um **erro real de IA** (lógica errada, API inventada, teste que passa por motivo errado, número alucinado), acrescente uma entrada em `AI_NOTES.md`: o que foi pedido, o que a IA fez de errado, como foi detectado e a correção. Seja honesto: o arquivo é parte da defesa do projeto.
 - Não "melhore" o núcleo além da tarefa pedida. Mudanças em `formulas.py` e `validacao.py` precisam de teste novo que as justifique.
 - Quando houver dúvida sobre escopo, consulte §2 e §3 e **pergunte** em vez de adivinhar.
+- O roadmap da versão web está na issue #164 e nas filhas; cada uma traz o que mudar neste arquivo e no README quando for entregue.
 
 ---
 
@@ -413,12 +473,16 @@ TDD é a regra para o **núcleo**: `formulas.py`, `validacao.py`, `tipos_campo.p
 
 Se o tempo apertar, corte **nesta ordem**:
 
-1. Resumo por IA
-2. Gerador de formulário por IA
-3. Assistente RAG
-4. CLI além de importar e listar
-5. Exportação CSV
-6. Endpoint de prévia de fórmulas (o front ainda calcula só ao salvar)
+1. Sino de notificações e PWA
+2. Chatbot sobre os dados (fica só a ajuda do app)
+3. Resumo por IA
+4. Gerador de formulário por IA
+5. Assistente RAG
+6. CLI além de migrar e importar
+7. Exportação CSV
+8. Endpoint de prévia de fórmulas (o front ainda calcula só ao salvar)
+
+**Nunca cortar:** autenticação, isolamento entre equipes, permissões no servidor e aceite LGPD.
 
 **Nunca cortar:** README, `AI_NOTES.md`, ensaio em voz alta e **testes de fórmulas e validação**.
 
@@ -431,21 +495,28 @@ Se o tempo apertar, corte **nesta ordem**:
 - **Fórmulas sem `eval`:** avaliador sobre `ast` com allowlist, porque executar texto digitado pelo usuário é falha de segurança. Ordem por dependência, ciclos rejeitados.
 - **Servidor é a fonte da verdade:** valida e recalcula sempre; o cliente nunca é confiável.
 - **Núcleo independente das interfaces:** API e CLI são camadas finas sobre `servico.py`.
+- **Permissão e isolamento no servidor:** o cargo é lido do banco a cada requisição e toda consulta filtra por equipe; o que o front esconde é só conveniência. Tem teste de vazamento entre equipes.
+- **Segredo certo para cada caso:** senha é do Logto (hash), token de convite é só hash, chave de LLM é cifrada porque precisa ser reutilizada.
+- **Chatbot sem engolir os dados:** filtros no SQL, BM25 à mão e vetores só sobre o que sobrou; contagens e médias vêm de ferramentas determinísticas, e o LLM nunca gera SQL.
 - **Framework só no encanamento** (FastAPI): o que se explica linha por linha (fórmulas, validação, versionamento, RAG) é código próprio.
 
 ---
 
 ## 12. Segurança
 
-- API ouvindo **somente `127.0.0.1`**.
-- SQL sempre parametrizado.
-- Chave de API só em `.env` / variável de ambiente; nunca no frontend nem em log.
-- Saída do LLM é **dado não confiável**: valide contra o esquema esperado e contra o banco antes de exibir.
-- CORS restrito às origens do frontend em dev (§4); nunca `allow_origins=["*"]`.
-- Texto vindo do usuário (rótulos, opções, valores) é tratado como dado, nunca executado; a API não devolve HTML.
+- **Rede:** só o proxy publica portas (80 e 443), com HTTPS; API, Postgres e Logto ficam na rede interna do compose. Em desenvolvimento, a API ouve em `127.0.0.1`.
+- **Autenticação:** JWT do Logto validado em todo endpoint (JWKS, `iss`, `aud`, `exp`, `organization_id`), token de 10 minutos (§2.12). Cargo e permissões vêm do banco a cada requisição, nunca do token nem do front.
+- **Isolamento:** todo acesso filtra por `grupo_id`; recurso de outra equipe é 404; testes de vazamento por rota. Row Level Security no Postgres como defesa em profundidade, quando adotado.
+- **SQL sempre parametrizado** (`%s`), sem f-string nem concatenação (regra `S608` do `ruff` e teste de varredura); usuário do banco da aplicação com privilégio mínimo (sem DDL; migrações com outro papel); `statement_timeout`.
+- **Segredos:** a senha fica no Logto (hash); o token de convite só como hash SHA-256; a chave de LLM cifrada (Fernet) com chave-mestra só no ambiente e nunca devolvida pela API; chaves e `.env` nunca no frontend, no git, em imagem, em log nem em backup junto do dump.
+- **Limites:** rate limit por IP e por conexão no proxy e por pessoa e equipe nos endpoints caros (exportar, prévia de fórmulas, IA, convites), com 429 e `Retry-After`; corpo de no máximo 1 MB para JSON (413); timeouts contra conexão lenta; `fail2ban` para reincidentes; limites de recurso por contêiner. Sem serviço de borda, **DDoS volumétrico não é coberto** (§2.9).
+- **CORS** só para as origens configuradas, nunca `allow_origins=["*"]`; cabeçalhos de segurança (CSP restritiva, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` liberando só a geolocalização, HSTS no proxy); `/docs` e `/openapi.json` fechados em produção.
+- **IA:** saída do LLM é **dado não confiável**: valide contra o esquema esperado e contra o banco antes de exibir. Conteúdo de registro também é entrada não confiável (prompt injection). O LLM nunca gera SQL; campo `"ia": false` nunca é enviado; sem consentimento da equipe, nada é enviado.
+- Texto vindo do usuário (rótulos, opções, valores) é tratado como dado, nunca executado; a API não devolve HTML e o front renderiza Markdown de forma segura.
 - Exportação CSV: neutralizar células **de texto** iniciadas por `=`, `+`, `-`, `@`, tab ou `CR` (injeção de fórmula em planilha), prefixando com `'`. Não vale para números: um `Decimal` negativo (`-3,5`) começa com `-` e não pode ser corrompido, e número só entra no CSV via formatação de `Decimal`.
-- Upload de foto: tamanho e número de pixels limitados antes de decodificar; só JPEG, PNG e WebP, reconhecidos pelo conteúdo e não pela extensão; metadados (EXIF) removidos; arquivo gravado com nome gerado (UUID), nunca com o nome enviado (sem path traversal).
-- No app instalado a API exige o token por execução (§4.1), além de ouvir só em `127.0.0.1`. O Electron segue as regras de segurança do §4.1 (`contextIsolation`, sem `nodeIntegration`).
+- **Logs** estruturados com identificador de requisição e **sem dados pessoais** (sem e-mail, valores de campo nem corpo).
+- **PWA:** o service worker nunca cacheia resposta da API, token nem dados de equipe.
+- LGPD: aceite, direitos do titular e consentimento para IA em §2.15.
 
 ---
 
@@ -471,11 +542,14 @@ Se o tempo apertar, corte **nesta ordem**:
 
 - [ ] Testes novos/alterados cobrindo a lógica (`uv run pytest`)
 - [ ] Lint e formatação (`uv run ruff check .` e `uv run ruff format .`). Atenção: o `ruff format` também formata blocos de Python dentro de arquivos `.md`
-- [ ] CI verde no PR (`.github/workflows/ci.yml` roda `uv sync --locked`, ruff check, ruff format --check e pytest, o pytest numa matriz com Windows, macOS e Linux; o job do `frontend/` roda `npm ci`, lint, typecheck, testes e build). Se mudar dependência, commite `pyproject.toml` e `uv.lock` juntos
+- [ ] CI verde no PR (`.github/workflows/ci.yml` roda `uv sync --locked`, ruff check, ruff format --check e pytest, o pytest contra um Postgres de serviço, em Linux; o job do `frontend/` roda `npm ci`, lint, typecheck, testes e build). Se mudar dependência, commite `pyproject.toml` e `uv.lock` juntos
 - [ ] **Testado manualmente** quando mexer em API/CLI: golden path + 1 caso de borda via `/docs` ou `curl` (testes não substituem ver funcionando)
 - [ ] Contrato (OpenAPI / JSON de definição) inalterado ou mudança incompatível sinalizada (§5.3)
 - [ ] Mudou o esquema do banco? Teste de atualização a partir do esquema anterior (§5.2)
-- [ ] Nenhum `eval`/`exec`, nenhum SQL por concatenação, nenhum segredo no diff
+- [ ] Nenhum `eval`/`exec`, nenhum SQL por concatenação (`ruff S608` verde), nenhum segredo no diff
+- [ ] Mexeu em dados? **Todo acesso filtra por `grupo_id`** e há teste de vazamento entre equipes
+- [ ] Mexeu em endpoint? A permissão está na matriz e testada por cargo
+- [ ] Algo novo pode ir à IA? Respeita `"ia": false` e o consentimento da equipe
 - [ ] Sem `print` de depuração, `Any` injustificado ou TODO sem explicação
 - [ ] Nada fora do escopo da §2 foi adicionado; nada da §3 foi violado
 - [ ] `AI_NOTES.md` atualizado se houve erro real de IA
@@ -489,5 +563,6 @@ Se o tempo apertar, corte **nesta ordem**:
 - Python `ast`: https://docs.python.org/3/library/ast.html
 - FastAPI: https://fastapi.tiangolo.com
 - `uv`: https://docs.astral.sh/uv
-- Frontend e desktop: `frontend/` e `desktop/` neste repositório
-- React: https://react.dev · Vite: https://vite.dev · Tailwind: https://tailwindcss.com · Electron: https://www.electronjs.org/docs
+- Frontend: `frontend/` neste repositório (design de referência em `frontend/data-collect-design-pattern.pdf`)
+- Logto: https://docs.logto.io · PostgreSQL: https://www.postgresql.org/docs · psycopg: https://www.psycopg.org/psycopg3/docs · pgvector: https://github.com/pgvector/pgvector
+- React: https://react.dev · Vite: https://vite.dev · Tailwind: https://tailwindcss.com
