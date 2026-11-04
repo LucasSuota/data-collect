@@ -29,8 +29,11 @@ from forms.api_esquemas import (
     PastaAtualizacao,
     PastaEntrada,
     PastaSaida,
+    PessoaResumoSaida,
     PreviaEntrada,
     PreviaSaida,
+    RascunhoEntrada,
+    RascunhoSaida,
     RegistroAtualizacao,
     RegistroEntrada,
     RegistroSaida,
@@ -45,6 +48,7 @@ from forms.api_esquemas import (
 )
 from forms.banco import Conexao
 from forms.models import ErroDeCampo, Formulario, Registro, RegistroInvalido, Versao
+from forms.repositorio import RascunhoGuardado
 from forms.servico import Rascunho
 
 # Erros comuns a (quase) todo endpoint, para o OpenAPI mostrar o formato uniforme.
@@ -209,6 +213,74 @@ def listar_versoes(formulario_id: int, conexao: DepConexao) -> list[ResumoDeVers
 )
 def obter_versao(formulario_id: int, versao_id: int, conexao: DepConexao) -> VersaoSaida:
     return VersaoSaida.de(servico.obter_versao(conexao, formulario_id, versao_id))
+
+
+# --- rascunho de versão ---
+
+
+def _rascunho_saida(conexao: Conexao, rascunho: RascunhoGuardado) -> RascunhoSaida:
+    nomes = servico.nomes_de_pessoas(conexao, [rascunho.atualizado_por])
+    por = rascunho.atualizado_por
+    return RascunhoSaida(
+        formulario_id=rascunho.formulario_id,
+        definicao=rascunho.definicao,
+        base_versao_id=rascunho.base_versao_id,
+        revisao=rascunho.revisao,
+        atualizado_por=None
+        if por is None or por not in nomes
+        else PessoaResumoSaida(id=por, nome=nomes[por]),
+        atualizado_em=rascunho.atualizado_em,
+    )
+
+
+@roteador.get(
+    "/formularios/{formulario_id}/rascunho",
+    response_model=RascunhoSaida,
+    tags=["rascunho"],
+    summary="O rascunho da próxima versão (404 se não há)",
+)
+def obter_rascunho(formulario_id: int, conexao: DepConexao) -> RascunhoSaida:
+    return _rascunho_saida(conexao, servico.obter_rascunho(conexao, formulario_id))
+
+
+@roteador.put(
+    "/formularios/{formulario_id}/rascunho",
+    response_model=RascunhoSaida,
+    tags=["rascunho"],
+    summary="Cria ou substitui o rascunho (aceita definição incompleta)",
+    responses={409: {"model": ErroSaida, "description": "Outra pessoa alterou o rascunho."}},
+)
+def salvar_rascunho(
+    formulario_id: int, entrada: RascunhoEntrada, conexao: DepConexao, agora: DepAgora
+) -> RascunhoSaida:
+    salvo = servico.salvar_rascunho(
+        conexao, formulario_id, entrada.definicao, entrada.revisao, agora
+    )
+    return _rascunho_saida(conexao, salvo)
+
+
+@roteador.delete(
+    "/formularios/{formulario_id}/rascunho",
+    status_code=204,
+    response_class=Response,
+    tags=["rascunho"],
+    summary="Descarta o rascunho",
+)
+def descartar_rascunho(formulario_id: int, conexao: DepConexao) -> Response:
+    servico.descartar_rascunho(conexao, formulario_id)
+    return Response(status_code=204)
+
+
+@roteador.post(
+    "/formularios/{formulario_id}/rascunho/publicar",
+    status_code=201,
+    response_model=VersaoSaida,
+    tags=["rascunho"],
+    summary="Valida o rascunho e publica a versão N+1",
+    description="Definição inválida → 422 com os erros e o rascunho continua.",
+)
+def publicar_rascunho(formulario_id: int, conexao: DepConexao, agora: DepAgora) -> VersaoSaida:
+    return VersaoSaida.de(servico.publicar_rascunho(conexao, formulario_id, agora))
 
 
 # --- pastas ---

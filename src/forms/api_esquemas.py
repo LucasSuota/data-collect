@@ -707,3 +707,22 @@ class ImportarExemplosEntrada(Modelo):
 
 class ExemplosImportadosSaida(Modelo):
     formularios: list[str]
+
+
+class RascunhoEntrada(Modelo):
+    """O rascunho aceita definição incompleta (como o `validar`); só publicar valida (§2.2)."""
+
+    definicao: object
+    revisao: int | None = Field(
+        default=None,
+        description="Omitida ao criar o rascunho; a `revisao` lida ao substituí-lo (senão 409).",
+    )
+
+
+class RascunhoSaida(Modelo):
+    formulario_id: int
+    definicao: object
+    base_versao_id: int | None = Field(description="A versão atual quando o rascunho nasceu.")
+    revisao: int
+    atualizado_por: PessoaResumoSaida | None
+    atualizado_em: str

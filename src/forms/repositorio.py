@@ -838,3 +838,77 @@ def registros_recentes(conexao: Conexao, limite: int) -> list[Registro]:
         (conexao.grupo_id, limite),
     )
     return [_registro_da_linha(linha) for linha in linhas]
+
+
+# --- rascunho de versão (§2.2) ---
+
+
+@dataclass(frozen=True)
+class RascunhoGuardado:
+    formulario_id: int
+    definicao: dict[str, ValorJson]
+    base_versao_id: int | None
+    revisao: int
+    atualizado_por: int | None
+    atualizado_em: str
+
+
+def obter_rascunho(conexao: Conexao, formulario_id: int) -> RascunhoGuardado | None:
+    linha = conexao.execute(
+        "SELECT formulario_id, definicao, base_versao_id, revisao, atualizado_por, atualizado_em"
+        " FROM rascunhos_formulario WHERE formulario_id = %s AND grupo_id = %s",
+        (formulario_id, conexao.grupo_id),
+    ).fetchone()
+    return None if linha is None else RascunhoGuardado(**dict(linha))
+
+
+def criar_rascunho(
+    conexao: Conexao,
+    formulario_id: int,
+    definicao: Mapping[str, ValorJson],
+    base_versao_id: int | None,
+    agora: datetime,
+) -> None:
+    conexao.execute(
+        "INSERT INTO rascunhos_formulario (grupo_id, formulario_id, definicao, base_versao_id,"
+        " atualizado_por, atualizado_em) VALUES (%s, %s, %s, %s, %s, %s)",
+        (
+            conexao.grupo_id,
+            formulario_id,
+            Jsonb(definicao),
+            base_versao_id,
+            conexao.usuario_id,
+            _iso(agora),
+        ),
+    )
+
+
+def atualizar_rascunho(
+    conexao: Conexao,
+    formulario_id: int,
+    definicao: Mapping[str, ValorJson],
+    revisao_esperada: int,
+    agora: datetime,
+) -> bool:
+    """Só grava se a revisão ainda é a lida (concorrência otimista, §2.14); devolve se gravou."""
+    cursor = conexao.execute(
+        "UPDATE rascunhos_formulario SET definicao = %s, atualizado_por = %s, atualizado_em = %s,"
+        " revisao = revisao + 1 WHERE formulario_id = %s AND grupo_id = %s AND revisao = %s",
+        (
+            Jsonb(definicao),
+            conexao.usuario_id,
+            _iso(agora),
+            formulario_id,
+            conexao.grupo_id,
+            revisao_esperada,
+        ),
+    )
+    return cursor.rowcount == 1
+
+
+def apagar_rascunho(conexao: Conexao, formulario_id: int) -> bool:
+    cursor = conexao.execute(
+        "DELETE FROM rascunhos_formulario WHERE formulario_id = %s AND grupo_id = %s",
+        (formulario_id, conexao.grupo_id),
+    )
+    return cursor.rowcount == 1

@@ -60,7 +60,7 @@ from forms.servico_extras import (
     marcar_notificacao_lida,
     nomes_de_pessoas,
     obter_progresso,
-    recentes,
+    recentes_com_estado,
 )
 from forms.servico_pastas import (
     atualizar_pasta,
@@ -70,6 +70,7 @@ from forms.servico_pastas import (
     listar_pastas,
     mover_formulario,
 )
+from forms.servico_rascunhos import descartar_rascunho, obter_rascunho, salvar_rascunho
 from forms.servico_registros import (
     ResultadoDaPrevia,
     atualizar_registro,
@@ -286,6 +287,16 @@ def publicar_versao(
         if item.erros:
             raise DefinicaoInvalida(tuple(item.erros))
         return _gravar(conexao, conjunto, agora, versionando=formulario)[0].versao
+
+
+def publicar_rascunho(conexao: Conexao, formulario_id: int, agora: datetime) -> Versao:
+    """Valida o rascunho como uma publicação e cria a versão N+1; o rascunho some na mesma
+    transação. Se a definição for inválida nada muda e o rascunho continua (422 com os erros)."""
+    with transacao(conexao):
+        rascunho = obter_rascunho(conexao, formulario_id)
+        versao = publicar_versao(conexao, formulario_id, rascunho.definicao, agora)
+        repositorio.apagar_rascunho(conexao, formulario_id)
+    return versao
 
 
 def validar_conjunto(conexao: Conexao, rascunhos: Sequence[Rascunho]) -> list[ErrosDoFormulario]:
@@ -642,6 +653,10 @@ def _gravar(
 
 # `api.py` e `cli.py` chamam tudo por aqui; cada grupo de casos de uso mora no seu módulo.
 __all__ = [
+    "descartar_rascunho",
+    "obter_rascunho",
+    "publicar_rascunho",
+    "salvar_rascunho",
     "ExemploDeTemplate",
     "importar_exemplos",
     "listar_exemplos",
@@ -655,7 +670,7 @@ __all__ = [
     "marcar_notificacao_lida",
     "nomes_de_pessoas",
     "obter_progresso",
-    "recentes",
+    "recentes_com_estado",
     "Contagens",
     "estado_do_registro",
     "exibicao_efetiva",

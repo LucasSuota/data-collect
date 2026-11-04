@@ -94,7 +94,7 @@ def test_conexao_sem_contexto_recusa_a_equipe(dsn: str):
 
     # act / assert
     with pytest.raises(SemContexto):
-        con.grupo_id
+        _ = con.grupo_id
     con.close()
 
 

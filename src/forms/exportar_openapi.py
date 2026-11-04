@@ -10,13 +10,18 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from forms.api import app
+from forms.api import Configuracao, criar_app, descobrir_extensoes
 
 SAIDA_PADRAO = Path("openapi.json")
 
 
 def gerar() -> str:
-    # Determinístico: mesma ordem de chaves da definição, sem espaço variável, `\n` final.
+    # O app é montado sem abrir conexão: só o esquema importa. Determinístico: mesma ordem de
+    # chaves da definição, sem espaço variável, `\n` final.
+    app = criar_app(
+        Configuracao(dsn="postgresql://openapi/openapi", origens_cors=("http://localhost:5173",)),
+        extensoes=descobrir_extensoes(),
+    )
     return json.dumps(app.openapi(), indent=2, ensure_ascii=False) + "\n"
 
 

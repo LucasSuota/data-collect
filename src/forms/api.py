@@ -150,9 +150,10 @@ def criar_app(
         app.state.pool = pool
     app.include_router(roteador_publico)
     app.include_router(roteador_aberto)
+    # `/registros/recentes` vem antes de `/registros/{registro_id}`, senão este a captura.
+    app.include_router(roteador_extras)
     app.include_router(roteador)
     app.include_router(roteador_equipes)
-    app.include_router(roteador_extras)
     for extensao in extensoes:
         app.include_router(extensao.roteador)
         for tipo, tratador in extensao.tratadores.items():

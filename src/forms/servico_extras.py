@@ -90,10 +90,6 @@ def buscar(conexao: Conexao, termo: str) -> ResultadoDaBusca:
     return ResultadoDaBusca(formularios, tuple(registros[:LIMITE_DA_BUSCA]))
 
 
-def recentes(conexao: Conexao, limite: int = 5) -> list[Registro]:
-    return repositorio.registros_recentes(conexao, limite)
-
-
 # --- notificações ---
 
 
