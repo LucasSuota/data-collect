@@ -384,7 +384,10 @@ def inserir_registro(
     versao_id: int,
     dados: Mapping[str, ValorJson],
     agora: datetime,
+    *,
+    atualizado_em: datetime | None = None,
 ) -> Registro:
+    """`atualizado_em` só difere de `agora` na importação do banco antigo (datas originais)."""
     momento = _iso(agora)
     linha = conexao.execute(
         "INSERT INTO registros (grupo_id, formulario_id, versao_id, dados, criado_em,"
@@ -396,7 +399,7 @@ def inserir_registro(
             versao_id,
             Jsonb(dados),
             momento,
-            momento,
+            momento if atualizado_em is None else _iso(atualizado_em),
             conexao.usuario_id,
             conexao.usuario_id,
         ),
@@ -449,6 +452,14 @@ def atualizar_registro(
             f"O registro {registro_id} foi alterado por outra pessoa (revisão {atual.revisao})."
         )
     return obter_registro(conexao, registro_id)
+
+
+def reescrever_dados(conexao: Conexao, registro_id: int, dados: Mapping[str, ValorJson]) -> None:
+    """Troca o JSON sem mexer em revisão nem datas: só a importação usa (remapear ids)."""
+    conexao.execute(
+        "UPDATE registros SET dados = %s WHERE id = %s AND grupo_id = %s",
+        (Jsonb(dados), registro_id, conexao.grupo_id),
+    )
 
 
 def excluir_registro(conexao: Conexao, registro_id: int) -> None:

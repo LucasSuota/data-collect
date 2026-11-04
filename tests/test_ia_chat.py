@@ -143,7 +143,7 @@ def test_marcar_campo_como_ia_false_depois_tira_o_valor_do_indice(conexao: Conex
     servico.publicar_versao(conexao, formulario.formulario.id, nova, AGORA)
     indexacao.sincronizar(conexao, AGORA)
 
-    # assert: o registro continua na versão 1 (onde `obs` era visível); a definição nova some com o campo
+    # assert: o registro segue na versão 1; a definição indexada (a atual) perde o campo
     documentos = repositorio.candidatos(conexao, formulario_id=None, de=None, ate=None, limite=10)
     definicao = next(d for d in documentos if d.tipo == "formulario").texto
     assert "Observação" not in definicao and "versão 2" in definicao
@@ -578,7 +578,7 @@ def test_injecao_de_prompt_num_registro_chega_como_dado_delimitado_e_o_sistema_m
         "o que há de estranho?",
     )
 
-    # assert: o conteúdo vai dentro de <fontes>, as regras do sistema mandam ignorar ordens ali, e a resposta é conferida
+    # assert: o conteúdo vai dentro de <fontes> e o sistema manda ignorar ordens ali
     sistema, mensagem = llm.chamadas[-1]
     assert malicioso.split(".")[0] in mensagem
     assert "<fontes>" in mensagem

@@ -62,6 +62,7 @@ from forms.servico_extras import (
     obter_progresso,
     recentes_com_estado,
 )
+from forms.servico_importacao import ImportacaoInvalida, Relatorio, importar_sqlite
 from forms.servico_pastas import (
     atualizar_pasta,
     conferir_destino,
@@ -653,6 +654,9 @@ def _gravar(
 
 # `api.py` e `cli.py` chamam tudo por aqui; cada grupo de casos de uso mora no seu módulo.
 __all__ = [
+    "ImportacaoInvalida",
+    "Relatorio",
+    "importar_sqlite",
     "descartar_rascunho",
     "obter_rascunho",
     "publicar_rascunho",

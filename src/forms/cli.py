@@ -8,6 +8,7 @@ exigem `--equipe` e `--usuario` explícitos e valem só o que o cargo daquela pe
 """
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -95,6 +96,17 @@ def _montar_parser() -> argparse.ArgumentParser:
     importar.add_argument("--nome", help="nome do formulário (só com um arquivo)")
     importar.set_defaults(executar=_importar_template, com_equipe=True, migrar_antes=False)
 
+    sqlite = comandos.add_parser(
+        "importar-sqlite", help="importa o forms.db da versão anterior para uma equipe vazia"
+    )
+    sqlite.add_argument("arquivo", type=Path, help="o arquivo .db (SQLite) da versão anterior")
+    sqlite.set_defaults(executar=_importar_sqlite, com_equipe=True, migrar_antes=False)
+
+    reindexar = comandos.add_parser(
+        "reindexar-ia", help="reindexa registros e definições da equipe para o assistente"
+    )
+    reindexar.set_defaults(executar=_reindexar_ia, com_equipe=True, migrar_antes=False)
+
     criar = comandos.add_parser("criar-registro", help="cria um registro a partir de um JSON")
     criar.add_argument("formulario", help="nome ou id do formulário")
     criar.add_argument(
@@ -137,6 +149,32 @@ def _argumentos_de_consulta(parser: argparse.ArgumentParser) -> None:
 def _migrar(conexao: servico.Conexao, args: argparse.Namespace, agora: datetime) -> int:
     aplicadas = servico.migrar_banco(conexao)
     print(f"{aplicadas} migração(ões) aplicada(s).")
+    return 0
+
+
+def _importar_sqlite(conexao: servico.Conexao, args: argparse.Namespace, agora: datetime) -> int:
+    relatorio = servico.importar_sqlite(conexao, args.arquivo, agora)
+    print(
+        f"Importado: {relatorio.pastas} pasta(s), {relatorio.formularios} formulário(s), "
+        f"{relatorio.versoes} versão(ões), {relatorio.registros} registro(s) e "
+        f"{relatorio.referencias} referência(s)."
+    )
+    for aviso in relatorio.avisos:
+        print(f"Aviso: {aviso}", file=sys.stderr)
+    return 0
+
+
+def _reindexar_ia(conexao: servico.Conexao, args: argparse.Namespace, agora: datetime) -> int:
+    # O módulo de IA é opcional: o núcleo só o procura pelo nome, sem importá-lo (§5.1).
+    try:
+        indexacao = importlib.import_module("forms.ia.indexacao")
+        repositorio = importlib.import_module("forms.ia.repositorio")
+    except ModuleNotFoundError:
+        print("Erro: o módulo de IA não está instalado.", file=sys.stderr)
+        return 1
+    repositorio.apagar_todos_os_documentos(conexao)
+    resultado = indexacao.sincronizar(conexao, agora)
+    print(f"Reindexado: {resultado.gravados} documento(s) gravado(s).")
     return 0
 
 

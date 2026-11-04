@@ -50,3 +50,5 @@ select = ["E", "F", "I", "B", "UP", "S608"]
 [tool.ruff.lint.per-file-ignores]
 # Os testes montam SQL só com constantes do próprio teste (nome de tabela), nunca com dado externo.
 "tests/*" = ["S608"]
+# Linhas de INSERT do banco antigo: dados em forma de tabela, mais legíveis sem quebrar.
+"tests/test_importacao_sqlite.py" = ["E501"]
