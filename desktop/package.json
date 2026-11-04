@@ -2,7 +2,7 @@
   "name": "desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "Janela Electron do Construtor de Formulários Modulares",
+  "description": "Janela Electron do data-collect",
   "main": "dist/principal.js",
   "engines": {
     "node": ">=22.12.0"

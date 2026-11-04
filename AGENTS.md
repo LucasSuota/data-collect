@@ -1,4 +1,4 @@
-# Construtor de Formulários Modulares — Contexto para Agentes de IA
+# data-collect — Contexto para Agentes de IA
 
 > Este arquivo é o **contexto canônico** do projeto para qualquer agente de IA (Claude, Cursor, Codex, Copilot, etc.). Toda IA que trabalhar neste repositório **deve** ler e seguir o que está aqui antes de propor mudanças. Este arquivo é a **única fonte de verdade** do projeto: se código, README ou outro documento divergirem dele, o AGENTS.md vence (ou é atualizado de propósito, junto com a mudança).
 
@@ -105,6 +105,8 @@ Um formulário pode depender de outro. Exemplo: `proctor` depende de `ensaio`, e
 - **Cascata:** ao atualizar um registro de origem (criar não tem dependentes, e excluir é bloqueado se houver), os registros dependentes (transitivamente) são recalculados **na mesma transação**, cada um contra a sua própria versão. Falha de cálculo no dependente vira erro no campo e nunca bloqueia nem reverte a edição da origem.
 - **Exclusão:** `DELETE /formularios/{id}` só se nenhum outro formulário depende dele (em qualquer versão) **e** ele não tem registros; senão 409. `DELETE /registros/{id}` só se nenhum outro registro o referencia; senão 409. Excluir um formulário apaga também suas versões (só é possível sem registros).
 - Na listagem e no CSV, o campo `referencia` aparece como o `id` do registro apontado.
+- **No front (apresentação, sem regra nova):** o campo `referencia` mostra o registro de origem escolhido com os valores que ele libera (campos `compartilhado`), deixa **escolher** numa lista com busca (registros de todas as versões da origem) e, sem sair do preenchimento, **criar** ou **editar** o registro de origem numa gaveta; a origem pode depender de outra, e as gavetas se empilham. Quem valida, calcula e recalcula em cascata continua sendo o servidor.
+- **Mapa de dependências (front):** tela `#/mapa`, no estilo de um fluxo do n8n, com dois níveis: *formulários* (quem aponta para quem, pela definição atual) e *registros e valores* (qual registro aponta para qual, com os valores já calculados e a conformidade). Mostra a cadeia do cartão selecionado, os vizinhos diretos e as ações; usa só os endpoints existentes (lista, formulário, versões, registros).
 
 ### 2.8. Campos de localização e foto
 

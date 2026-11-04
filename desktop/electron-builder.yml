@@ -1,7 +1,7 @@
 # Passo 3 do empacotamento (AGENTS.md §4.1): monta o instalador com o executável do backend.
 # O dist do front já vai dentro do executável (o backend é quem o serve, na mesma origem).
 appId: br.com.construtor.formularios
-productName: Construtor de Formulários
+productName: data-collect
 directories:
   output: ../empacotamento/instaladores
 files:

@@ -13,6 +13,13 @@ const CAMINHOS = {
   fechar: "M6 6l12 12M18 6L6 18",
   alerta: "M12 4l9 16H3L12 4zM12 10v4M12 17h.01",
   ok: "M5 12.5l4.5 4.5L19 7.5",
+  busca: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",
+  mapa: "M4 5h6v5H4zM14 14h6v5h-6zM10 7.5h2.5a2 2 0 0 1 2 2V14M4 16h6v3H4z",
+  elo: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+  menos: "M5 12h14",
+  ajustar: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+  entrada: "M4 12h13M12 6l6 6-6 6",
+  abrir: "M14 5h5v5M19 5l-8 8M10 6H6a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-4",
 } as const;
 
 export type NomeDoIcone = keyof typeof CAMINHOS;

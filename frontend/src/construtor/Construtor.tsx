@@ -307,19 +307,22 @@ function Editor({
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-3">
-        <h1 className="mr-auto text-2xl font-semibold tracking-tight">
-          {editando
-            ? `Editar · ${formulario.nome}`
-            : rascunho
-              ? "Editar rascunho"
-              : "Novo formulário"}
-        </h1>
-        {editando ? (
-          <p className="text-sm text-pedra-500">
-            Publicar cria a versão {formulario.versao_atual.numero + 1}; os registros antigos
-            continuam na versão deles.
-          </p>
-        ) : (
+        <div className="mr-auto flex min-w-0 flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {editando
+              ? `Editar · ${formulario.nome}`
+              : rascunho
+                ? "Editar rascunho"
+                : "Novo formulário"}
+          </h1>
+          {editando ? (
+            <p className="text-sm text-pedra-500">
+              Publicar cria a versão {formulario.versao_atual.numero + 1}; os registros antigos
+              continuam na versão deles.
+            </p>
+          ) : null}
+        </div>
+        {!editando ? (
           <label className="flex flex-col gap-1 text-sm font-medium text-pedra-800">
             Nome do formulário
             <input
@@ -335,7 +338,7 @@ function Editor({
               </span>
             ))}
           </label>
-        )}
+        ) : null}
         {rascunho ? (
           <>
             <Botao onClick={rascunho.aoCancelar}>Cancelar</Botao>

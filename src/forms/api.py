@@ -100,7 +100,7 @@ def criar_app(
         yield
 
     app = FastAPI(
-        title="Construtor de Formulários Modulares",
+        title="data-collect",
         version="0.1.0",
         description=(
             "API local. Todo erro tem o formato `{detalhe, erros: [{campo, mensagem}]}`. "

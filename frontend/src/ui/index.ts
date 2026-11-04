@@ -1,8 +1,11 @@
 export { Aviso } from "./Aviso";
 export { Botao } from "./Botao";
+export { CampoDeBusca } from "./CampoDeBusca";
 export { CampoDeTexto } from "./CampoDeTexto";
 export { Carregando } from "./Carregando";
 export { Cartao } from "./Cartao";
+export { Conformidade } from "./Conformidade";
+export { Gaveta } from "./Gaveta";
 export { EstadoVazio } from "./EstadoVazio";
 export { Esqueleto } from "./Esqueleto";
 export { Icone, type NomeDoIcone } from "./Icone";

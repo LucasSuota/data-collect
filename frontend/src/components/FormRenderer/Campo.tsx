@@ -23,7 +23,11 @@ export function Campo({ id, rotulo, unidade, obrigatorio, erros = [], children }
   const idDosErros = `erros-${id}`;
   return (
     <div className="flex flex-col gap-1" data-campo={id}>
-      <label htmlFor={idDoControle} className="text-sm font-medium text-pedra-800">
+      <label
+        id={`rotulo-${id}`}
+        htmlFor={idDoControle}
+        className="text-sm font-medium text-pedra-800"
+      >
         {rotulo}
         {unidade ? <span className="ml-1 font-normal text-pedra-500">({unidade})</span> : null}
         {obrigatorio ? (

@@ -1,0 +1,14 @@
+{
+  "campos": [
+    {"id": "ensaio_umidade", "tipo": "referencia", "rotulo": "Ensaio de umidade (amostra natural)",
+     "formulario": "ensaio_umidade", "obrigatorio": true},
+    {"id": "energia", "tipo": "selecao", "rotulo": "Energia de compactação",
+     "opcoes": ["Normal", "Intermediária", "Modificada"], "obrigatorio": true},
+    {"id": "umidade_otima_pct", "tipo": "numero", "rotulo": "Umidade ótima", "unidade": "%",
+     "casas_decimais": 1, "obrigatorio": true, "compartilhado": true},
+    {"id": "gamad_max", "tipo": "numero", "rotulo": "Massa específica aparente seca máxima",
+     "unidade": "g/cm³", "casas_decimais": 3, "obrigatorio": true, "compartilhado": true},
+    {"id": "desvio_umidade", "tipo": "calculado", "rotulo": "Umidade natural − ótima", "unidade": "p.p.",
+     "casas_decimais": 2, "formula": "ensaio_umidade__umidade_pct - umidade_otima_pct"}
+  ]
+}

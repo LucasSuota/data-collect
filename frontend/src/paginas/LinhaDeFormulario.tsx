@@ -11,6 +11,8 @@ interface Props {
   formulario: ResumoDeFormulario;
   /** Pastas para onde este formulário pode ir (sem a que ele já ocupa). */
   destinos: Destino[];
+  /** Onde ele está ("Obras / Fundação"); só quando a lista mistura pastas, como na busca. */
+  caminho?: string;
   navegar: (rota: Rota) => void;
   /** Algo mudou no servidor (mover, duplicar, excluir): recarregar a lista. */
   aoAlterar: () => void;
@@ -22,6 +24,7 @@ interface Props {
 export function LinhaDeFormulario({
   formulario,
   destinos,
+  caminho,
   navegar,
   aoAlterar,
   aoCopiado,
@@ -81,103 +84,122 @@ export function LinhaDeFormulario({
     }
   }
 
+  /*
+   * Duas colunas fixas (identificação e ações) em contêiner largo, então todas as linhas alinham
+   * igual, qualquer que seja o tamanho do nome. Em contêiner estreito, as ações descem para uma
+   * segunda linha, sempre alinhadas ao nome; e só com espaço de sobra os botões de ícone ganham
+   * texto. A decisão é pela largura da lista, não da janela.
+   */
   return (
     <li
       ref={setNodeRef}
-      className={`flex flex-wrap items-center gap-x-4 gap-y-2 p-4 transition-opacity duration-(--duracao-rapida) ${isDragging ? "opacity-40" : ""}`}
+      className={`@container p-4 transition-opacity duration-(--duracao-rapida) ${isDragging ? "opacity-40" : ""}`}
     >
-      <button
-        type="button"
-        aria-label={`Arrastar o formulário ${formulario.nome}`}
-        className="-ml-2 grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-controle text-pedra-400 hover:bg-pedra-100 hover:text-pedra-700 active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-      >
-        <Icone nome="alca" />
-      </button>
-      <div className="mr-auto flex min-w-0 items-center gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-controle bg-pedra-100 text-pedra-600">
-          <Icone nome="registros" />
-        </span>
-        <div className="min-w-0">
-          <p className="truncate font-medium">{formulario.nome}</p>
-          <p className="mt-0.5 text-sm text-pedra-500">
-            <Selo>v{formulario.versao_atual_numero}</Selo>
-            <span className="sr-only">versão {formulario.versao_atual_numero}</span>
-          </p>
+      <div className="grid grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3 @3xl:grid-cols-[1.75rem_minmax(0,1fr)_auto]">
+        <button
+          type="button"
+          aria-label={`Arrastar o formulário ${formulario.nome}`}
+          className="grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-controle text-pedra-400 hover:bg-pedra-100 hover:text-pedra-700 active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <Icone nome="alca" />
+        </button>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-controle bg-pedra-100 text-pedra-600">
+            <Icone nome="registros" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-medium">{formulario.nome}</p>
+            <p className="mt-0.5 flex min-w-0 items-center gap-2 text-sm text-pedra-500">
+              <Selo>v{formulario.versao_atual_numero}</Selo>
+              <span className="sr-only">versão {formulario.versao_atual_numero}</span>
+              {caminho ? (
+                <span className="flex min-w-0 items-center gap-1">
+                  <Icone nome="pasta" tamanho={13} className="shrink-0" />
+                  <span className="truncate">{caminho}</span>
+                </span>
+              ) : null}
+            </p>
+          </div>
         </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Botao
-          variante="primario"
-          tamanho="pequeno"
-          aria-label={`Novo registro em ${formulario.nome}`}
-          onClick={() => navegar({ nome: "novoRegistro", formularioId: formulario.id })}
-        >
-          Novo registro
-        </Botao>
-        <Botao
-          tamanho="pequeno"
-          aria-label={`Ver registros de ${formulario.nome}`}
-          onClick={() => navegar({ nome: "registros", formularioId: formulario.id })}
-        >
-          Registros
-        </Botao>
-        <Botao
-          variante="fantasma"
-          tamanho="pequeno"
-          aria-label={`Editar o formulário ${formulario.nome}`}
-          onClick={() => navegar({ nome: "editarFormulario", formularioId: formulario.id })}
-        >
-          <Icone nome="editar" />
-          Editar
-        </Botao>
-        <Botao
-          variante="fantasma"
-          tamanho="pequeno"
-          aria-label={`Duplicar o formulário ${formulario.nome}`}
-          onClick={() => {
-            setDuplicando(true);
-            setNomeDaCopia("");
-            setErrosDaCopia([]);
-          }}
-        >
-          <Icone nome="copiar" />
-          Duplicar
-        </Botao>
-        <Selecao
-          rotulo={`Mover ${formulario.nome} para`}
-          ocultarRotulo
-          value=""
-          onChange={(evento) => void mover(evento.target.value)}
-        >
-          <option value="">Mover para…</option>
-          {formulario.pasta_id != null ? <option value="raiz">Raiz (sem pasta)</option> : null}
-          {destinos.map((destino) => (
-            <option key={destino.id} value={destino.id}>
-              {destino.rotulo}
-            </option>
-          ))}
-        </Selecao>
-        {confirmando ? (
-          <Botao variante="perigoSolido" tamanho="pequeno" onClick={() => void excluir()}>
-            Confirmar exclusão de {formulario.nome}
-          </Botao>
-        ) : (
+        <div className="col-start-2 flex flex-wrap items-center gap-1.5 @3xl:col-start-3">
           <Botao
-            variante="perigo"
+            variante="primario"
             tamanho="pequeno"
-            aria-label={`Excluir o formulário ${formulario.nome}`}
-            onClick={() => setConfirmando(true)}
+            aria-label={`Novo registro em ${formulario.nome}`}
+            onClick={() => navegar({ nome: "novoRegistro", formularioId: formulario.id })}
           >
-            <Icone nome="lixeira" />
-            Excluir
+            Novo registro
           </Botao>
-        )}
+          <Botao
+            tamanho="pequeno"
+            aria-label={`Ver registros de ${formulario.nome}`}
+            onClick={() => navegar({ nome: "registros", formularioId: formulario.id })}
+          >
+            Registros
+          </Botao>
+          <span aria-hidden="true" className="mx-1 h-4 w-px bg-pedra-200" />
+          <Botao
+            variante="fantasma"
+            tamanho="pequeno"
+            aria-label={`Editar o formulário ${formulario.nome}`}
+            title="Editar"
+            onClick={() => navegar({ nome: "editarFormulario", formularioId: formulario.id })}
+          >
+            <Icone nome="editar" />
+            <span className="hidden @4xl:inline">Editar</span>
+          </Botao>
+          <Botao
+            variante="fantasma"
+            tamanho="pequeno"
+            aria-label={`Duplicar o formulário ${formulario.nome}`}
+            title="Duplicar"
+            onClick={() => {
+              setDuplicando(true);
+              setNomeDaCopia("");
+              setErrosDaCopia([]);
+            }}
+          >
+            <Icone nome="copiar" />
+            <span className="hidden @4xl:inline">Duplicar</span>
+          </Botao>
+          <Selecao
+            rotulo={`Mover ${formulario.nome} para`}
+            ocultarRotulo
+            className="w-36"
+            value=""
+            onChange={(evento) => void mover(evento.target.value)}
+          >
+            <option value="">Mover para…</option>
+            {formulario.pasta_id != null ? <option value="raiz">Raiz (sem pasta)</option> : null}
+            {destinos.map((destino) => (
+              <option key={destino.id} value={destino.id}>
+                {destino.rotulo}
+              </option>
+            ))}
+          </Selecao>
+          {confirmando ? (
+            <Botao variante="perigoSolido" tamanho="pequeno" onClick={() => void excluir()}>
+              Confirmar exclusão de {formulario.nome}
+            </Botao>
+          ) : (
+            <Botao
+              variante="perigo"
+              tamanho="pequeno"
+              aria-label={`Excluir o formulário ${formulario.nome}`}
+              title="Excluir"
+              onClick={() => setConfirmando(true)}
+            >
+              <Icone nome="lixeira" />
+              <span className="hidden @4xl:inline">Excluir</span>
+            </Botao>
+          )}
+        </div>
       </div>
       {duplicando ? (
         <form
-          className="flex basis-full flex-col gap-3 rounded-controle bg-pedra-100 p-4"
+          className="mt-3 flex flex-col gap-3 rounded-controle bg-pedra-100 p-4"
           onSubmit={(evento) => void duplicar(evento)}
         >
           <CampoDeTexto

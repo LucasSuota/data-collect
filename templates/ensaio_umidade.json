@@ -1,0 +1,15 @@
+{
+  "campos": [
+    {"id": "secao_amostra", "tipo": "secao", "rotulo": "Amostra"},
+    {"id": "identificacao", "tipo": "texto", "rotulo": "Identificação da amostra", "obrigatorio": true},
+    {"id": "data_ensaio", "tipo": "data", "rotulo": "Data do ensaio", "obrigatorio": true},
+    {"id": "secao_pesagens", "tipo": "secao", "rotulo": "Pesagens"},
+    {"id": "tara_g", "tipo": "numero", "rotulo": "Tara da cápsula", "unidade": "g", "obrigatorio": true},
+    {"id": "massa_umida_g", "tipo": "numero", "rotulo": "Cápsula + solo úmido", "unidade": "g", "obrigatorio": true},
+    {"id": "massa_seca_g", "tipo": "numero", "rotulo": "Cápsula + solo seco", "unidade": "g", "obrigatorio": true},
+    {"id": "secao_resultado", "tipo": "secao", "rotulo": "Resultado"},
+    {"id": "umidade_pct", "tipo": "calculado", "rotulo": "Teor de umidade", "unidade": "%", "casas_decimais": 2,
+     "compartilhado": true,
+     "formula": "(massa_umida_g - massa_seca_g) / (massa_seca_g - tara_g) * 100"}
+  ]
+}

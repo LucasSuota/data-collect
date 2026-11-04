@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
  */
 export type Rota =
   | { nome: "formularios" }
+  | { nome: "mapa" }
   | { nome: "registros"; formularioId: number }
   | { nome: "novoRegistro"; formularioId: number }
   | { nome: "registro"; registroId: number }
@@ -23,6 +24,7 @@ export function lerRota(hash: string): Rota {
   if (caminho === "") return { nome: "formularios" };
   const partes = caminho.split("/");
 
+  if (partes[0] === "mapa" && partes.length === 1) return { nome: "mapa" };
   if (partes[0] === "construtor" && partes.length === 1) return { nome: "novoFormulario" };
   if (partes[0] === "construtor" && partes.length === 3 && partes[1] === "pasta") {
     return ehId(partes[2])
@@ -51,6 +53,8 @@ export function caminhoDe(rota: Rota): string {
   switch (rota.nome) {
     case "formularios":
       return "#/";
+    case "mapa":
+      return "#/mapa";
     case "registros":
       return `#/formularios/${rota.formularioId}/registros`;
     case "novoRegistro":

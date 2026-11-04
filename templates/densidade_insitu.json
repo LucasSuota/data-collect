@@ -1,0 +1,20 @@
+{
+  "campos": [
+    {"id": "proctor", "tipo": "referencia", "rotulo": "Proctor de referência",
+     "formulario": "proctor", "obrigatorio": true},
+    {"id": "ensaio_umidade_campo", "tipo": "referencia", "rotulo": "Umidade do solo em campo",
+     "formulario": "ensaio_umidade", "obrigatorio": true},
+    {"id": "local", "tipo": "localizacao", "rotulo": "Ponto de ensaio"},
+    {"id": "massa_solo_g", "tipo": "numero", "rotulo": "Massa de solo úmido escavado", "unidade": "g",
+     "obrigatorio": true},
+    {"id": "volume_cm3", "tipo": "numero", "rotulo": "Volume do furo", "unidade": "cm³", "obrigatorio": true},
+    {"id": "gc_minimo_pct", "tipo": "numero", "rotulo": "Grau de compactação mínimo especificado",
+     "unidade": "%", "obrigatorio": true},
+    {"id": "gamad_campo", "tipo": "calculado", "rotulo": "Massa específica aparente seca de campo",
+     "unidade": "g/cm³", "casas_decimais": 3,
+     "formula": "massa_solo_g / volume_cm3 / (1 + ensaio_umidade_campo__umidade_pct / 100)"},
+    {"id": "gc_pct", "tipo": "calculado", "rotulo": "Grau de compactação", "unidade": "%", "casas_decimais": 1,
+     "formula": "gamad_campo / proctor__gamad_max * 100"},
+    {"id": "conforme", "tipo": "calculado", "rotulo": "Conforme?", "formula": "gc_pct >= gc_minimo_pct"}
+  ]
+}
