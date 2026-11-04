@@ -510,3 +510,21 @@ def test_equipe_e_cargo_da_pessoa_sao_lidos_no_papel_do_aplicativo(sem_contexto:
     assert app.contexto is not None and app.contexto.grupo_id is None  # voltou ao que era
     app.execute("RESET ROLE")
     app.close()
+
+
+def test_pessoa_sem_nome_no_logto_usa_a_parte_local_do_email(sem_contexto: Conexao):
+    # act
+    pessoa = servico_equipes.identificar(
+        sem_contexto, "sub-x", None, "maria.souza@exemplo.com", AGORA
+    )
+
+    # assert
+    assert pessoa.nome == "Maria Souza"
+
+
+def test_pessoa_sem_nome_e_sem_email_continua_com_o_nome_generico(sem_contexto: Conexao):
+    # act
+    pessoa = servico_equipes.identificar(sem_contexto, "sub-y", None, None, AGORA)
+
+    # assert
+    assert pessoa.nome == "Pessoa sem nome"

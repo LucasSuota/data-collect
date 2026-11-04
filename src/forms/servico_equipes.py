@@ -118,6 +118,14 @@ def renomear_equipe(conexao: Conexao, nome: str) -> None:
 # --- pessoas e contexto ---
 
 
+def _nome_pelo_email(email: str | None) -> str | None:
+    """O Logto cadastra só o e-mail: sem nome, a parte antes do `@` serve de nome de exibição."""
+    if not email or "@" not in email:
+        return None
+    local = email.split("@", 1)[0].replace(".", " ").replace("_", " ").strip()
+    return local.title() or None
+
+
 def identificar(
     conexao: Conexao,
     sub: str,
@@ -140,7 +148,7 @@ def identificar(
                 nome_do_logto = email_do_logto = None
             nome, email = nome or nome_do_logto, email or email_do_logto
         return repositorio_equipes.criar_usuario(
-            conexao, sub, nome or "Pessoa sem nome", email, agora
+            conexao, sub, nome or _nome_pelo_email(email) or "Pessoa sem nome", email, agora
         )
     visto = usuario.ultimo_acesso_em
     mudou = (nome and nome != usuario.nome) or (email and email != usuario.email)

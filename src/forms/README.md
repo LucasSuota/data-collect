@@ -1,8 +1,13 @@
 # src/forms
 
-> Backend Python do construtor de formulários: definições em JSON versionadas, validação, fórmulas e persistência em SQLite.
+> Backend Python do data-collect: definições em JSON versionadas, validação, fórmulas, equipes com cargos e permissões, API autenticada e módulos opcionais de IA. Persistência em PostgreSQL com SQL à mão.
 
-Hoje existem `models.py`, `formulas.py`, `tipos_campo.py`, `validacao.py`, `repositorio.py`, `fotos.py`, `exportacao.py`, `cli.py`, `app.py`, `api.py` (com `api_esquemas.py`, `api_rotas.py`, `api_extensoes.py` e `exportar_openapi.py`), os módulos `servico*.py` e os pacotes opcionais `ia/` e `rag/` (últimas seções).
+Este arquivo resume cada módulo (o que é, como se conecta, como testar). As **regras** e o alvo estão no [AGENTS.md](../../AGENTS.md); aqui está o que **existe** no código.
+
+```
+api.py / cli.py  →  servico.py (+ servico_*.py)  →  validacao.py, formulas.py, tipos_campo.py, segredos.py
+                                                →  repositorio*.py  →  banco.py  →  psycopg  →  PostgreSQL
+```
 
 ## models.py
 
@@ -12,7 +17,7 @@ Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e n
 ### O que tem aqui
 | Símbolo | Papel |
 |---|---|
-| `TipoCampo` | `StrEnum` com os 10 valores de `tipo` do JSON de definição |
+| `TipoCampo` | `StrEnum` com os 9 valores de `tipo` do JSON de definição |
 | `Campo`, `Definicao` | Definição de um formulário; `opcoes` é tupla e `Definicao.campos` também. `para_json()` dá a forma canônica do contrato (só o que não é padrão); `de_json()` lê uma definição **já validada**, como a do banco |
 | `Formulario`, `Versao`, `Registro` | Linhas do banco como dataclasses imutáveis |
 | `Posicao`, `ErroDeCampo` | Erro localizado `{campo, mensagem}` com `posicao` opcional na fórmula (AGENTS.md §5.3) |
@@ -25,7 +30,6 @@ Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e n
 | `Pasta` | Pasta da árvore que organiza formulários (§2.10); `Formulario.pasta_id` nulo = raiz |
 | `PastaInvalida` | Nome vazio ou repetido, destino inexistente ou ciclo; carrega `erros` como `RegistroInvalido` |
 | `ValorInvalido` | Um valor isolado não serve para o tipo do campo (levantada por `tipos_campo.py`) |
-| `FotoInvalida` | Imagem recusada; a mensagem já traz o motivo em PT-BR (levantada por `fotos.py`) |
 | `ErroDeCalculo` | Falha ao executar uma fórmula válida; `calcular_campos` a guarda no campo |
 | `LoteInvalido`, `ErrosDoFormulario` | Erros agrupados por formulário quando um lote é recusado (nada é criado) |
 | `NaoEncontrado`, `ExclusaoBloqueada` | Recurso inexistente (404) e exclusão bloqueada por vínculo (409) |
@@ -106,8 +110,8 @@ Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. N�
 - Número nunca passa por `float`: `0.1` vira `Decimal("0.1")` pelo texto do float (AGENTS.md §7).
 - A string de número é conferida por regex ASCII antes do `Decimal`, que aceitaria `NaN`, `1_000` e dígitos de outros alfabetos.
 - A data é só `AAAA-MM-DD`; `date.fromisoformat` sozinho aceitaria também `20261101` e `2026-W44-1`.
-- Texto, número, data, seleção, sim/não, localização, foto e referência são normalizados aqui. Calculado e seção nunca recebem valor do cliente. Referência confere só o formato (inteiro positivo); a existência do registro é do serviço.
-- Localização vira `Localizacao(latitude, longitude)` em `Decimal`, com faixa -90 a 90 e -180 a 180; um sem o outro é erro. Foto é a lista de ids de anexo, sem repetição e até `maximo`.
+- Texto, número, data, seleção, sim/não, localização e referência são normalizados aqui. Calculado e seção nunca recebem valor do cliente. Referência confere só o formato (inteiro positivo); a existência do registro é do serviço.
+- Localização vira `Localizacao(latitude, longitude)` em `Decimal`, com faixa -90 a 90 e -180 a 180; um sem o outro é erro.
 
 ### Como testar
 `uv run pytest tests/test_tipos_campo.py`
@@ -115,75 +119,6 @@ Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. N�
 ### Cuidados
 - `bool` é subclasse de `int`: o número rejeita `true`/`false` de propósito.
 - Mudar o rótulo ou as propriedades de um tipo muda o catálogo que o front lê.
-
-## repositorio.py
-
-### Responsabilidade
-Único módulo que fala SQL (sempre com `?`). Guarda e devolve formulários, versões, registros, relações e metadados de anexos como dataclasses do `models.py`. Não valida regra de negócio, não decide exclusão (só o banco recusa o que viola chave estrangeira) e não faz commit.
-
-### O que tem aqui
-| Símbolo | Papel |
-|---|---|
-| `abrir_conexao`, `migrar`, `MIGRACOES` | Conexão com `foreign_keys` ligado e esquema migrado por `PRAGMA user_version`; cada migração é transacional. Aberta com `check_same_thread=False`: a API abre a conexão numa dependência e a usa no endpoint, que o FastAPI pode rodar em threads diferentes (uma conexão por requisição, nunca compartilhada) |
-| `criar_formulario`, `obter_formulario(_por_nome)`, `listar_formularios`, `excluir_formulario` | Nome único sem diferenciar caixa, espaços nas pontas nem a forma dos acentos (`chave_do_nome`); nome repetido levanta `DefinicaoInvalida` no campo `nome` |
-| `criar_`/`obter_`/`atualizar_`/`excluir_pasta`, `listar_pastas`, `mover_formulario` | Árvore de pastas (§2.10). Nome único entre irmãs pelo mesmo `chave_do_nome` (índice com `COALESCE(pasta_pai_id, 0)`, porque NULL não conta como igual); `pasta_esta_na_subarvore` (CTE recursiva) serve à detecção de ciclo; o banco recusa apagar pasta com subpasta ou formulário |
-| `inserir_versao`, `obter_versao(_atual)`, `listar_versoes` | Versões imutáveis: não há `update` nem `delete` de versão. O número é o anterior + 1, calculado no próprio `INSERT` |
-| `inserir_`/`atualizar_`/`obter_`/`excluir_registro`, `listar_registros` | Dados em JSON; listagem por versão, do mais recente ao mais antigo, com `total`, `FiltroDeIgualdade` e janela de datas |
-| `registrar_dependencias`, `listar_dependencias`, `formularios_dependentes` | Dependência entre formulários, direta ou transitiva |
-| `substituir_referencias`, `obter_referencias`, `registros_que_referenciam`, `registros_dependentes` | Referências entre registros; os dependentes vêm na ordem de recálculo da cascata |
-| `criar_anexo`, `vincular_`/`desvincular_`/`apagar_anexo`, `listar_anexos_do_registro`, `listar_anexos_orfaos` | Metadados das fotos; `caminho` sempre com `/` e relativo à pasta de dados |
-| `listar_vetores`, `guardar_vetores`, `apagar_vetores` | Embeddings dos trechos dos procedimentos (BLOB), usados só pela busca semântica do `rag/` |
-
-### Como se conecta
-- **Depende de:** `sqlite3` e `forms.models`.
-- **É usado por:** nenhum módulo ainda.
-- **Contratos e dados:** as seis tabelas de AGENTS.md §5.2 mais `vetores_trechos` (busca semântica, opcional), na versão 3 do esquema.
-
-### Decisões que moldam este código
-- O relógio entra por parâmetro (`agora`, em UTC); o módulo nunca lê a hora. Todas as datas usam o mesmo formato ISO, então comparar texto é comparar tempo.
-- A transação é de quem chama: as funções não fazem commit, para a cascata de recálculo entrar ou sair inteira (AGENTS.md §2.7).
-- Filtro: o nome do campo precisa estar em `campos_permitidos` (calculado pelo serviço a partir da definição) **e** ter formato de identificador; o caminho JSON e o valor vão como parâmetro (AGENTS.md §2.3 e §12).
-- Exclusões já são bloqueadas no banco (sem `ON DELETE`, o SQLite recusa), além da checagem do serviço (AGENTS.md §2.7).
-- Migração num `BEGIN` explícito: sem ele o `sqlite3` não abre transação para DDL. A migração 2 (`nome_chave`) calcula a chave em Python porque o `lower()` do SQLite só entende ASCII.
-
-### Como testar
-`uv run pytest tests/test_repositorio_*.py`
-
-### Cuidados
-- Nunca edite uma migração já publicada (o banco do usuário persiste); acrescente outra. Um teste compara a migração 1 com o esquema publicado, escrito literalmente; outros atualizam um banco real da v1 para a v2 e da v2 para a v3 (a tabela de vetores) sem perder dados.
-- Toda mudança de esquema exige teste de atualização a partir do esquema anterior (AGENTS.md §5.2).
-- `PRAGMA user_version` não aceita `?`; o número vem de um `int` interno, nunca de texto externo.
-- `listar_registros` exige `campos_permitidos` para qualquer filtro: sem a allowlist, o filtro é recusado.
-
-## fotos.py
-
-### Responsabilidade
-Transformar a foto enviada num WebP pequeno e sem metadados (AGENTS.md §2.8). Função pura de bytes para bytes: não lê nem grava arquivo, não guarda o original e não conhece registro, campo nem anexo (isso é do `servico.py`).
-
-### O que tem aqui
-| Símbolo | Papel |
-|---|---|
-| `processar_foto(dados)` | Valida, orienta, remove metadados e comprime; devolve `FotoProcessada` ou levanta `FotoInvalida` |
-| `FotoProcessada` | `dados` (WebP), `largura`, `altura` e `tamanho_bytes` |
-| Constantes (`TAMANHO_MAXIMO_SAIDA`, `LADO_MAIOR_INICIAL`, `QUALIDADE_INICIAL`...) | Parâmetros do algoritmo, nomeados no módulo |
-
-### Como se conecta
-- **Depende de:** `Pillow` (dependência nova, só para decodificar, converter e remover EXIF) e `forms.models` (`FotoInvalida`).
-- **É usado por:** nenhum módulo ainda.
-
-### Decisões que moldam este código
-- Formato reconhecido pelo conteúdo (`Image.open(..., formats=[...])`), nunca pela extensão. HEIC tem mensagem própria.
-- Tamanho e número de pixels são conferidos antes de decodificar (AGENTS.md §12).
-- Remover metadados = copiar os pixels para uma imagem nova, que não herda `info` (EXIF, XMP, ICC, textos do PNG).
-- Transparência vira fundo branco; `convert("RGB")` deixaria o transparente preto.
-- O algoritmo persegue só o teto de 80 KB; os 50 KB são alvo típico, não piso. A qualidade desce de 5 em 5 antes de reduzir as dimensões em 15%.
-
-### Como testar
-`uv run pytest tests/test_fotos.py` (leva alguns segundos: o pior caso é um ruído grande).
-
-### Cuidados
-- O perfil de cor é descartado sem conversão para sRGB; fotos em Display P3 podem ficar um pouco menos saturadas.
-- Imagem animada (GIF não entra; WebP/PNG animados) usa só o primeiro quadro.
 
 ## validacao.py
 
@@ -217,76 +152,90 @@ Validar uma definição de formulário e um registro contra ela, devolvendo **to
 - `tipos_calculados` é a base da regra de contrato dos compartilhados (nova versão da origem não pode mudar o tipo inferido).
 - `compartilhados_da_definicao` entrega o que o formulário libera aos dependentes; ciclo entre *formulários* e o contrato entre versões são do serviço, que conhece os outros formulários.
 
-## servico.py (e servico_*.py)
+## banco.py e migracoes/
 
 ### Responsabilidade
-Os casos de uso, chamados igualmente por `api.py` e `cli.py`. Toda regra de negócio fica aqui e abaixo. Recebe a conexão e o relógio (`agora`) por parâmetro, controla a transação (cada caso de uso grava tudo ou nada) e não conhece HTTP.
+A conexão com o PostgreSQL e o esquema versionado. `Conexao` (subclasse de `psycopg.Connection`) carrega o **contexto da requisição** (`grupo_id`, `usuario_id`, permissões) e o declara no banco: `definir_contexto` grava `app.grupo_id`, que o Row Level Security lê.
+
+### O que tem aqui
+| Símbolo | Papel |
+|---|---|
+| `abrir_conexao`, `criar_pool` | Conexão avulsa (CLI, migração, testes) e pool da API (uma conexão por requisição). `criar_pool(papel=...)` faz `SET ROLE`: os testes da API assumem `forms_app` |
+| `migrar`, `Migracao` | Aplica `migracoes/NNNN_*.sql` em ordem, com `pg_advisory_lock` e a tabela `esquema_versao`. Recusa banco mais novo que o código (`EsquemaMaisNovo`) |
+| `0001_nucleo.sql`, `0002_ia.sql`, `0003_extras.sql` | Esquema, Row Level Security (em `cargos`, `pastas`, `formularios`, `versoes_formulario`, `rascunhos_formulario`, `registros`, `historico_registro`, `dependencias_formulario`, `referencias_registro`) e as permissões do papel `forms_app` |
+
+### Cuidados
+- **RLS e o papel do dono:** o superusuário ignora o Row Level Security. Toda consulta que lê uma tabela com RLS antes de a equipe ser declarada vê **zero linhas** no papel `forms_app`: foi assim que o convite "sumia" e a única administradora conseguia excluir a conta. Use `servico_equipes.declarar_equipe` ao ler `cargos` fora do contexto de uma equipe.
+- Toda mudança de esquema exige teste de atualização a partir do esquema anterior (`tests/test_banco.py`).
+
+### Como testar
+`docker compose up -d postgres` e `uv run pytest tests/test_banco.py` (Postgres real em `127.0.0.1:5433`, ou `FORMS_TEST_DSN`).
+
+## repositorio.py, repositorio_equipes.py, repositorio_extras.py
+
+### Responsabilidade
+**Único** lugar que fala SQL, sempre com parâmetros (`%s`); identificador dinâmico só com `psycopg.sql`. Todo método de dados da equipe recebe o `grupo_id` e o aplica na consulta (e o RLS repete a barreira no banco). Sem ORM.
 
 ### O que tem aqui
 | Arquivo | Papel |
 |---|---|
-| `servico.py` | Fachada: formulários e versões (criar, publicar, lote, validar, catálogo, importar template) e reexportação de todo o resto, então a API chama `servico.<função>` |
-| `servico_base.py` | Transação (`transacao`), campos compartilhados dos formulários publicados e o `Cache` de uma operação |
-| `servico_registros.py` | Criar, atualizar (com cascata), excluir registro, excluir formulário e prévia |
-| `servico_pastas.py` | Pastas e subpastas (criar, listar, renomear/mover, excluir) e mover formulário para uma pasta (§2.10) |
-| `servico_anexos.py` | Upload de foto em duas etapas, leitura do WebP, limpeza de órfãos e os arquivos da pasta de dados |
-| `servico_consulta.py` | Listagem com colunas da definição, filtros, paginação e exportação CSV |
-
-### Como se conecta
-- **Depende de:** `repositorio`, `validacao`, `formulas`, `tipos_campo`, `fotos`, `exportacao` e `models`.
-- **É usado por:** `cli.py` e `api_rotas.py`/`api.py`.
-
-### Decisões que moldam este código
-- Publicar um formulário, uma versão e um lote usam **o mesmo motor** (`_validar_conjunto`): um formulário é o conjunto de 1, então mensagens e posições são idênticas.
-- O registro nasce numa versão **explícita** e é sempre validado e recalculado contra ela; editar não muda a versão (AGENTS.md §5.2).
-- Uma só função de cálculo (`formulas.calcular_campos`) serve ao salvar, à cascata e à prévia.
-- Cascata (§2.7): atualizar uma origem recalcula os dependentes transitivos **na mesma transação**, cada um contra a sua versão; erro de cálculo vira erro no campo e só falha de infraestrutura desfaz tudo. Quem não mudou não é regravado.
-- Arquivo de foto só é apagado **depois** do commit; falha antes dele preserva o arquivo. O caminho guardado é conferido para nunca sair da pasta de dados.
-- A prévia trata vazio e valor pela metade como vazio: não reclama de obrigatório (isso é do salvar).
-- Duplicar (`duplicar_formulario`) não tem caminho próprio de gravação: monta o nome (`<nome> (cópia)`, `(cópia 2)`…) e chama `criar_formulario` com a definição da versão atual, então a cópia é validada e registra as dependências como qualquer formulário novo. Sem registros, sem histórico de versões, na pasta do original.
-- Pasta só organiza: mover formulário troca `pasta_id` e não toca em versão, registro nem dependência. Mover pasta para dentro dela mesma ou de uma descendente é recusado; excluir só pasta vazia (409), sem cascata.
-- O filtro só aceita igualdade em `selecao`, `sim_nao`, `texto` e `calculado` booleano; o nome do campo vem de uma allowlist derivada da definição.
+| `repositorio.py` | Formulários, versões, rascunhos, pastas, registros (com `revisao`, autoria e histórico), referências, dependências, busca e contagem por estado |
+| `repositorio_equipes.py` | Pessoas, equipes, membros, cargos e permissões, convites (token só como hash) e consentimentos |
+| `repositorio_extras.py` | Notificações, progresso do passeio e os dados que a busca global e o Início usam |
 
 ### Como testar
-`uv run pytest tests/test_servico_*.py tests/test_exportacao.py`
+`uv run pytest tests/test_repositorio_*.py tests/test_sql_seguro.py` (o segundo varre o código: SQL por f-string ou `%` é rejeitado; exceção só com `noqa` e justificativa na linha).
 
-### Cuidados
-- `transacao` usa `BEGIN` explícito e não aceita ser chamada com uma transação já aberta: quem chama não deve deixar uma aberta.
-- Os campos compartilhados de uma origem e o tipo inferido de um `calculado` são recalculados reanalisando a definição publicada (não são guardados); `Cache` evita repetir isso dentro de uma operação.
-- A exportação CSV é a primeira candidata a corte se o tempo apertar (AGENTS.md §11).
+## segredos.py, permissoes.py, legal.py, ajuda.py
 
-## cli.py
+| Arquivo | Papel |
+|---|---|
+| `segredos.py` | **Único** lugar com criptografia: `hash_do_token` (SHA-256), comparação em tempo constante e Fernet para a chave de LLM de cada equipe |
+| `permissoes.py` | As 17 permissões, os cargos de partida e a **matriz endpoint → permissão** (uma tabela só, usada pela API e por `GET /catalogo/permissoes`) |
+| `legal.py` | Lê `legal/*.md` (a primeira linha traz a `versao:`): é a versão que o aceite LGPD compara |
+| `ajuda.py` | Lê os guias de `ajuda/*.md` (central de ajuda e base do chatbot) |
+
+## servico.py (e servico_*.py)
 
 ### Responsabilidade
-Linha de comando enxuta sobre o `servico`: importar template, criar registro a partir de JSON, listar e exportar. Só `argparse` e impressão; **nenhuma regra de negócio** (um teste confere que não importa repositório, validação, fórmulas nem `sqlite3`).
+Os casos de uso, chamados igualmente por `api*.py` e `cli.py`. Toda regra de negócio fica aqui e abaixo. Recebe a conexão (com o contexto: equipe, pessoa, permissões) e o relógio (`agora`) por parâmetro, controla a transação e não conhece HTTP.
 
 ### O que tem aqui
-| Comando | Papel |
+| Arquivo | Papel |
 |---|---|
-| `forms importar-template ARQUIVO... [--nome N]` | Cria formulários a partir de JSON; vários de uma vez entram em lote, em qualquer ordem |
-| `forms criar-registro FORMULARIO --dados ARQUIVO\|- [--versao ID]` | Cria um registro e mostra os campos calculados |
-| `forms listar [FORMULARIO] [--filtro CAMPO=VALOR]... [--limite N] [--deslocamento N]` | Sem argumento, lista os formulários; com ele, os registros |
-| `forms exportar FORMULARIO [--saida ARQUIVO] [--filtro ...]` | CSV para o Excel em português (UTF-8 com BOM, `;`, vírgula decimal) |
-
-O banco vem de `--banco` (ou da variável `FORMS_DB_PATH`; padrão `forms.db`). O formulário é dado pelo nome ou pelo id.
-
-### Como se conecta
-- **Depende de:** `forms.servico`, `forms.exportacao` (só para formatar células) e `forms.models`.
-- **É usado por:** o comando `forms` (`[project.scripts]` em `pyproject.toml`).
+| `servico.py` | Fachada: formulários e versões (criar, publicar, lote, duplicar, validar, catálogo) e reexportação de todo o resto, então a API chama `servico.<função>` |
+| `servico_base.py` | Transação (`conexao.transaction()`), campos compartilhados dos formulários publicados e o `Cache` de uma operação |
+| `servico_registros.py` | Criar, atualizar (com `revisao`, histórico e cascata), excluir registro, excluir formulário e prévia |
+| `servico_rascunhos.py` | Rascunho compartilhado da próxima versão (salvar com `revisao`, publicar, descartar) |
+| `servico_pastas.py` | Pastas e subpastas e mover formulário |
+| `servico_consulta.py` | Listagem com colunas da definição, filtros, `meus`, paginação, contagens por estado e exportação CSV |
+| `servico_equipes.py` | Pessoas, equipes, cargos, convites, consentimentos e o contexto da requisição (`contexto_da_pessoa`, `declarar_equipe`) |
+| `servico_extras.py` | Início (recentes com estado), busca global, notificações, passeio, exportar e excluir os dados da pessoa (LGPD) |
+| `servico_importacao.py` | Importar o `forms.db` antigo (SQLite) e a galeria de exemplos (`templates/`) |
 
 ### Decisões que moldam este código
-- Erro de domínio vira mensagem em português no `stderr` e código de saída 1; erro de uso do `argparse` sai com 2.
-- O relógio entra por parâmetro em `main` (`relogio`), então os testes são determinísticos.
-- Foto não é suportada pela CLI (o envio usa o seletor de arquivo do front).
+- Publicar um formulário, uma versão, um rascunho e um lote usam **o mesmo motor** de validação: mensagens e posições são idênticas.
+- O registro nasce numa versão **explícita** e é sempre validado e recalculado contra ela; editar não muda a versão. O `PUT` exige a `revisao` lida (409 se outra pessoa salvou antes).
+- Uma só função de cálculo (`formulas.calcular_campos`) serve ao salvar, à cascata e à prévia. A cascata roda na mesma transação, e erro de cálculo vira erro no campo.
+- **Ninguém dá o que não tem:** convite, cargo e permissão acima do próprio são recusados; sempre existe ao menos uma administradora ativa.
+- O filtro da listagem só aceita igualdade em campos `selecao`, `sim_nao`, `texto` e `calculado` booleano; o nome do campo vem de uma allowlist derivada da definição.
 
 ### Como testar
-`uv run pytest tests/test_cli.py`
+`uv run pytest tests/test_servico_*.py tests/test_rascunhos.py tests/test_exportacao.py`
+
+## auth.py, logto.py e provisionar_logto.py
+
+| Arquivo | Papel |
+|---|---|
+| `auth.py` | `ValidadorDeToken`: assinatura pelo JWKS do Logto (só algoritmos assimétricos), `iss`, `aud` e `exp`. O `iss` é o endereço público; as chaves vêm do endereço interno (`LOGTO_INTERNO`). Cargo e permissões **não** vêm do token |
+| `logto.py` | Cliente mínimo da Management API (M2M): ler o perfil de quem entra e apagar a conta (LGPD). O segredo nunca aparece em `repr` nem em log |
+| `provisionar_logto.py` | `python -m forms.provisionar_logto` (serviço `logto-setup` do compose): cria ou atualiza, de forma idempotente, o API resource (token de 10 minutos), o aplicativo SPA (refresh rotativo), o aplicativo M2M da API, o conector SMTP e a tela de login; escreve `api.env` e `frontend-config.json` |
 
 ### Cuidados
-- CLI além de importar e listar é linha de corte (AGENTS.md §11).
-- A exportação sem `--saida` escreve bytes (com BOM) em `stdout.buffer`, para um redirecionamento `> arquivo.csv` abrir certo no Excel.
+- O Logto escolhe o tenant pelo **host** da requisição: o token do `m-default` só sai de `localhost:3002` (o provisionador envia esse `Host`).
+- Testes: `uv run pytest tests/test_provisionar_logto.py tests/test_api_seguranca.py` (o Logto real nunca é usado nos testes; o token é assinado com chaves geradas no teste).
 
-## api.py (e api_esquemas.py, api_rotas.py, exportar_openapi.py)
+## api.py (e api_*.py, exportar_openapi.py)
 
 ### Responsabilidade
 A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio em status HTTP. **Nenhuma regra de negócio.** Pydantic só existe aqui.
@@ -294,126 +243,58 @@ A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio 
 ### O que tem aqui
 | Arquivo | Papel |
 |---|---|
-| `api.py` | `criar_app(Configuracao)`, o `app` do uvicorn, o token por execução, o CORS e os tratadores de erro |
-| `api_esquemas.py` | Modelos Pydantic de entrada e saída; seus nomes e campos são o contrato com o front |
-| `api_rotas.py` | Os endpoints (formulários, versões, lote, pastas, validar, prévia, catálogo, registros, CSV, anexos) e as dependências (conexão por requisição, relógio, pasta de dados) |
-| `api_extensoes.py` | `Extensao`, `descobrir_extensoes()` e `resposta_de_erro()`: como os módulos opcionais (`ia/`, `rag/`) acrescentam rotas sem o núcleo importá-los |
+| `api.py` | `criar_app(Configuracao)`, `app_do_ambiente` (fábrica do uvicorn), CORS, cabeçalhos de segurança, limite de corpo (413), tratadores de erro e o primeiro administrador (`FORMS_ADMIN_EMAIL`) |
+| `api_dependencias.py` | Autenticação e contexto por requisição: identifica a pessoa, valida `X-Equipe` contra `membros_grupo`, lê o cargo do banco, exige os termos e confere a permissão da matriz |
+| `api_seguranca.py` | Limite de requisições por pessoa e por equipe nos endpoints caros (429 com `Retry-After`) |
+| `api_esquemas.py` | Modelos Pydantic de entrada e saída; nomes e campos são o contrato com o front |
+| `api_rotas.py`, `api_equipes.py`, `api_extras.py`, `api_permissoes.py` | Os endpoints: formulários e registros, equipes/cargos/convites, Início/busca/notificações/LGPD e o catálogo de permissões |
+| `api_extensoes.py` | `descobrir_extensoes()`: monta as rotas de `ia/` e `rag/` **pelo nome**, em execução, sem o núcleo importá-los |
 | `exportar_openapi.py` | `forms-openapi`: grava o `openapi.json` do front; `--conferir` falha se estiver desatualizado |
 
-### Como se conecta
-- **Depende de:** `forms.servico` (e dos tipos de `models`/`repositorio` só para montar respostas).
-- **É usado por:** o uvicorn (`uv run uvicorn forms.api:app --host 127.0.0.1 --port 8000`), o front e o Electron.
-- **Configuração** (variáveis de ambiente, ver `.env.example`): `FORMS_DB_PATH`, `FORMS_DATA_DIR`, `FORMS_TOKEN`, `FORMS_SKIP_TOKEN`, `FORMS_CORS_ORIGINS`.
+### Configuração (variáveis de ambiente, ver `.env.example`)
+`FORMS_DATABASE_URL` (papel `forms_app`), `FORMS_MIGRATION_URL` (dono, só para migrar), `FORMS_CORS_ORIGINS`, `LOGTO_ENDPOINT` (público), `LOGTO_INTERNO`, `LOGTO_API_RESOURCE`, `LOGTO_M2M_ID`/`LOGTO_M2M_SECRET`, `FORMS_AMBIENTE`, `FORMS_ADMIN_EMAIL`, `FORMS_EQUIPE_INICIAL`, `FORMS_CHAVE_MESTRA`.
 
 ### Decisões que moldam este código
-- Erro uniforme `{detalhe, erros: [{campo, mensagem, posicao?}]}` em português, inclusive nos erros do próprio Pydantic, 404/405 e 500 (sem vazar a causa; o 500 sai por um middleware dentro do CORS, senão o navegador o esconde do front). 422 validação e definição inválida, 404 inexistente, 409 exclusão bloqueada, 401 token.
-- Token por execução no cabeçalho `X-Forms-Token`, **falha fechada**: sem token configurado e sem `FORMS_SKIP_TOKEN`, toda requisição é recusada. O middleware do token fica *dentro* do CORS, para o preflight (que não leva token) passar e o 401 também levar os cabeçalhos CORS.
-- CORS só para as origens do front (padrão: as duas do Vite); `*` é recusado na configuração.
-- Conexão aberta e fechada por requisição (dependência); o relógio também é dependência, então os testes o fixam. Importar o módulo não abre banco nem cria arquivo.
-- Filtro por campo na listagem e no CSV: `?filtro=campo:valor`, repetível (o `id` nunca contém `:`).
-- Erro de lote: o `campo` leva o nome do formulário como prefixo (`proctor.umidade.formula`).
-- `definicao`, `valores` e `dados` são `object`: chegam como JSON não confiável, e a validação com erros por `id` é do servidor, não do Pydantic. Campo a mais num corpo de requisição é recusado.
-- Na inicialização, remove os anexos nunca vinculados há mais de 24 h.
-- **Extensões opcionais:** `criar_app(..., extensoes=descobrir_extensoes())`. O núcleo procura `forms.ia.extensao` e `forms.rag.extensao` **pelo nome**, em execução, então não os importa (AGENTS.md §5.1) e o app sobe igual, só sem essas rotas, se a pasta for removida. Só a ausência do próprio módulo é aceita: um `import` quebrado lá dentro aparece como erro. As rotas das extensões entram antes do front e do middleware do token, então também exigem o token. O PyInstaller não vê imports por nome: `empacotamento/` os declara com `--hidden-import`.
+- Erro uniforme `{detalhe, erros, codigo}` em português, inclusive nos erros do Pydantic, 404/405 e 500 (sem vazar a causa). 401 com `token_expirado` só quando expirou; 403 com `termos_pendentes`, `sem_equipe` ou `sem_permissao`; 409 em `revisao_desatualizada`.
+- **Falha fechada:** sem Logto configurado, toda chamada autenticada é recusada. Recurso de outra equipe é 404, nunca 403.
+- CORS só para as origens configuradas; `*` é recusado na configuração. `/docs` e `/openapi.json` ficam fechados em produção.
+- Mudar nome ou campo de um modelo de resposta, ou o conjunto de rotas, é **mudança incompatível** com o `frontend/`: `tests/test_api_contrato.py` falha de propósito (regenere o contrato quando a mudança for intencional).
 
 ### Como testar
-`uv run pytest tests/test_api*.py` (`conftest.py` traz o app com banco temporário, token e relógio fixos).
+`uv run pytest tests/test_api*.py` (a fixture sobe a API com o pool no papel `forms_app` e token de teste).
 
-### Cuidados
-- Mudar nome ou campo de um modelo de resposta, ou o conjunto de rotas, é **mudança incompatível** com o `frontend/`: `tests/test_api_contrato.py` falha de propósito (AGENTS.md §5.3).
-- O `TestClient` do Starlette emite um aviso sobre `httpx`; é só aviso.
+## cli.py
 
-## app.py
+CLI de **operação** (`argparse`, só chama `servico.py`; nenhuma regra de negócio): `forms migrar`, `forms importar-template`, `forms importar-sqlite` (traz o `forms.db` antigo), `forms reindexar` (IA), `forms criar-registro`, `forms listar` e `forms exportar`. Sempre com `--equipe` e `--usuario` explícitos: a CLI é para quem administra o servidor, não um caminho para furar permissões. Teste: `uv run pytest tests/test_cli.py tests/test_importacao_sqlite.py`.
 
-### Responsabilidade
-A entrada do backend no app instalável (AGENTS.md §4.1). **Só monta as peças**: lê a configuração, escolhe a porta, monta a API com o front e entrega ao uvicorn. Não abre janela (isso é do Electron) e não tem regra de negócio.
+## exportacao.py
 
-### O que tem aqui
-| Símbolo | Papel |
-|---|---|
-| `main()` | Sobe tudo; imprime `{"porta": N}` como **primeira linha** da saída, que o Electron lê |
-| `configuracao_do_app(ambiente)` | Banco e fotos na pasta de dados do sistema (`platformdirs`; `FORMS_DATA_DIR` sobrescreve); exige `FORMS_TOKEN` |
-| `localizar_front(ambiente)` | Acha o `frontend/dist`: `FORMS_FRONTEND_DIST`, o executável empacotado (`sys._MEIPASS/frontend_dist`) ou o repositório |
-| `abrir_soquete_local()` | Reserva uma porta livre **só em 127.0.0.1**, já escutando, e a entrega ao uvicorn |
+Funções puras que formatam as células e geram o CSV para o Excel em português (UTF-8 com BOM, `;`, vírgula decimal; números arredondados por `casas_decimais`; células de texto que começam por `=`, `+`, `-`, `@`, tab ou CR recebem `'`). Teste: `uv run pytest tests/test_exportacao.py`.
 
-### Como se conecta
-- **Depende de:** `forms.api` (`criar_app(configuracao, pasta_do_front, extensoes)`), `platformdirs` (pasta de dados correta em cada sistema; nova dependência).
-- **É usado por:** o executável do PyInstaller (`empacotamento/`) e o Electron, que o inicia como processo filho.
-
-### Decisões que moldam este código
-- O soquete é entregue ao uvicorn em vez de "achar uma porta livre e fechar", que deixaria uma janela para outro processo ocupá-la.
-- Sem `FORMS_TOKEN` o app não sobe (falha fechada, código de saída 2). O app instalado **nunca** dispensa o token, mesmo com `FORMS_SKIP_TOKEN` no ambiente.
-- Na mesma origem não há CORS. O front estático não pede token (o navegador não manda cabeçalho ao carregar a página), mas **toda rota da API e a documentação continuam exigindo**: o middleware só isenta o que nenhuma rota da API reconhece.
-- Os dados nunca ficam dentro do pacote do app (um teste confere); caminhos sempre com `pathlib`.
-
-### Como testar
-`uv run pytest tests/test_app.py` (inclui subir o servidor de verdade numa thread e consultar pela porta anunciada).
-
-### Cuidados
-- A primeira linha da saída é contrato com o Electron: nada pode ser impresso antes dela.
-- Rodar à mão: `FORMS_TOKEN=abc uv run python -m forms.app` (depois de `npm run build` no `frontend/`).
-
-## ia/ (cliente.py, gerador.py, resumo.py, validacao.py, extensao.py) — opcional
+## ia/ — opcional
 
 ### Responsabilidade
-Os recursos que usam um LLM: **gerar formulários** a partir de um pedido e **resumir registros**. A IA só redige; quem calcula e valida é código determinístico (AGENTS.md §2.5 e §3.3). O app inteiro funciona com esta pasta removida.
+Tudo que usa um LLM, atrás de uma interface neutra de provedor. A IA só redige e escolhe ferramentas; quem calcula e valida é código determinístico (AGENTS.md §2.5, §3.3). O app inteiro funciona com esta pasta removida.
 
 ### O que tem aqui
 | Arquivo | Papel |
 |---|---|
-| `cliente.py` | O **único** lugar que importa o SDK (`anthropic`, importado só na hora de usar). `ClienteDeLLM` (protocolo: `completar`, `vetorizar`, `modelo_de_vetores`), `ClienteAnthropic`, `ClienteFalso` (testes), `criar_cliente(ambiente)` e `IaIndisponivel` |
-| `gerador.py` | `gerar(conexao, cliente, pedido, rascunhos)`: monta o prompt com o catálogo e os formulários existentes, lê o JSON proposto, valida o conjunto com `servico.validar_conjunto` e devolve os erros ao LLM para corrigir, no máximo 2 vezes. **Nunca salva** |
-| `resumo.py` | `calcular_agregados` (contagem, mínimo, máximo, soma, média, frequências, feitos em código sobre **todos** os registros que passam nos filtros) e `resumir`, que só envia os agregados ao LLM |
-| `validacao.py` | `validar_resumo`: formato do JSON, limites de tamanho e **todo número do texto tem de bater com os agregados** (arredondado para as casas escritas, meio para cima); senão `ResumoRejeitado` |
-| `extensao.py` | As rotas `POST /definicoes/gerar` e `POST /formularios/{id}/resumo` e os tratadores `IaIndisponivel` → 503, `RespostaDaIaInvalida` e `ResumoRejeitado` → 502 |
-
-### Como se conecta
-- **Depende de:** o núcleo (`servico`, `models`) e, na `extensao.py`, de `api_rotas`/`api_extensoes`. O SDK é um extra opcional (`uv sync --extra ia`).
-- **É usado por:** a API (descoberta por nome, ver `api.py`) e o front (`frontend/src/ia/`).
-- **Configuração:** `ANTHROPIC_API_KEY` no `.env` (nunca em log, em `repr` nem em mensagem de erro) e `FORMS_LLM_MODELO` (padrão `claude-sonnet-5-5`).
-
-### Decisões que moldam este código
-- A saída do LLM é **dado não confiável**: o gerador passa pela mesma validação da publicação, e o resumo é conferido número a número contra o que o código calculou.
-- O LLM nunca recebe registro nem texto livre do banco: só o pedido, metadados dos formulários (nome e campos compartilhados) e, no resumo, os agregados numéricos e as frequências de seleção e sim/não.
-- Sem chave ou sem internet, as rotas respondem 503 em português e o resto do app segue; o construtor manual continua funcionando.
-- O prompt trata `<pedido>` e `<agregados>` como dado, nunca como instrução.
-
-### Como testar
-`uv run pytest tests/test_ia_*.py tests/test_api_ia.py`. Os testes usam só o `ClienteFalso`: nenhum faz chamada de rede nem exige chave.
+| `cliente.py` | O **único** lugar que importa SDK ou fala com provedor: `ProvedorDeLLM` (completar, streaming, vetorizar, ferramentas, `capacidades`), adaptadores para a Anthropic e para APIs compatíveis com OpenAI (`httpx`) e um cliente falso para testes |
+| `configuracao.py` | Provedor por equipe (`base_url`, modelo, embeddings), chave cifrada em repouso e nunca devolvida, aviso e aceite, limites de uso por pessoa e por equipe |
+| `indexacao.py` | Registros e definições como documentos de texto por equipe (`documentos_ia`), reindexação incremental; campo com `"ia": false` e `localizacao` nunca entram |
+| `busca.py` | Busca híbrida: filtros no SQL, BM25 à mão e `pgvector` (com modelo e dimensão guardados) fundidos por RRF; sem embeddings vale só filtro + BM25 |
+| `ferramentas.py` | `buscar_registros`, `contar_registros`, `valor_do_campo` e `agregar`: o LLM só escolhe a ferramenta e os argumentos, **validados contra a definição**; nunca gera SQL |
+| `chat.py` | `POST /chat` (SSE): responde com citações; todo número do texto é conferido contra o resultado das ferramentas; conteúdo de registro entra como bloco delimitado (prompt injection) |
+| `gerador.py`, `resumo.py`, `validacao.py` | Gerador de formulários (validado como a publicação, no máximo 2 correções) e resumo conferido número a número |
+| `repositorio.py`, `extensao.py` | SQL das tabelas de IA e as rotas (descobertas por nome) |
 
 ### Cuidados
-- **Nenhuma chamada real ao LLM foi testada**: o `ClienteAnthropic` foi escrito contra a documentação do SDK, e a primeira chamada real pode mostrar ajustes (nome do modelo, formato da resposta).
-- Sem chave, a validação do corpo da requisição vem *depois* do 503 (a dependência do cliente roda antes); com chave, um pedido grande demais dá 422.
-- O `ClienteAnthropic` não tem embeddings (`vetorizar` levanta `IaIndisponivel`): a busca semântica só liga com outro provedor que implemente `ClienteDeLLM`.
-
-## rag/ (chunker.py, indice.py, semantico.py, responder.py, extensao.py) — opcional
-
-### Responsabilidade
-O **assistente de procedimentos**: responde perguntas **só com trechos** dos `.md` de `docs/`, mostrando o trecho e o arquivo de origem. Sem base nos documentos, diz que não encontrou (AGENTS.md §2.5).
-
-### O que tem aqui
-| Arquivo | Papel |
-|---|---|
-| `chunker.py` | `dividir_em_trechos` (um trecho por seção, quebrado por parágrafos acima de 800 caracteres) e `carregar_documentos` |
-| `indice.py` | BM25 escrito à mão (`IndiceBm25`), `tokenizar` (sem acento, sem palavras vazias, **sem stemming**) e o protocolo `Buscador` |
-| `semantico.py` | Busca semântica opcional: vetores em BLOB no SQLite (`vetores_trechos`), cosseno em Python, `IndiceHibrido` (BM25 + semântico fundidos por RRF) e `carregar_vetores`, que só vetoriza o que ainda não está no banco |
-| `responder.py` | `perguntar`: busca, pede ao LLM uma resposta **só com os trechos** e descarta a resposta se tiver número que não está neles. Sem LLM ou com falha, devolve só os trechos |
-| `extensao.py` | `POST /assistente/perguntar` e `localizar_docs` (`FORMS_DOCS_DIR`, o executável empacotado ou `docs/` do repositório) |
-
-### Como se conecta
-- **Depende de:** `ia/cliente.py` (`ClienteDeLLM`), `repositorio` e `servico_base.transacao` (só na busca semântica).
-- **É usado por:** a API (extensão descoberta por nome).
-
-### Decisões que moldam este código
-- O BM25 é a base e o **fallback**: sem provedor de embeddings, sem internet ou sem chave, vale só ele. A busca nunca falha por causa dos embeddings.
-- A chave do vetor é o hash do **modelo** e do texto do trecho: trocar o modelo ou editar o trecho gera vetor novo, e o antigo é apagado. A chamada de rede fica fora da transação.
-- O cosseno tem **limiar** (`LIMIAR_DE_SIMILARIDADE = 0,3`): sem ele o "vizinho mais próximo" sempre apareceria e "não encontrei" nunca existiria. O valor depende do modelo de embeddings e deve ser ajustado com perguntas reais.
-- RRF funde só as posições (`1 / (60 + posição)`), então BM25 e cosseno, que têm escalas diferentes, não precisam ser normalizados.
-- O índice é montado a cada pergunta (algumas centenas de trechos): editar um `.md` vale na hora, sem cache para invalidar.
+- **Nenhuma chamada a um LLM real foi feita**: os adaptadores foram escritos contra a documentação, e a primeira chamada real pode pedir ajustes (nome do modelo, formato da resposta, chamada de ferramenta).
+- Sem IA (equipe com a IA desligada, sem chave ou sem internet), o chat devolve só os trechos e resultados; as rotas de geração respondem 503 em português.
 
 ### Como testar
-`uv run pytest tests/test_rag.py tests/test_rag_semantico.py tests/test_api_ia.py`
+`uv run pytest tests/test_ia_*.py tests/test_api_ia*.py`. Nenhum teste faz chamada de rede nem exige chave.
 
-### Cuidados
-- Sem stemming: "romper" e "rompidos" são termos diferentes no BM25. É uma limitação conhecida, que a busca semântica ameniza.
-- O PyInstaller leva `docs/` junto (`--add-data`), mas só os `.md` do repositório; a pessoa não os edita no app instalado.
+## rag/ — opcional
+
+O assistente de procedimentos: `chunker.py` divide os `.md` em trechos, `indice.py` tem o BM25 escrito à mão, `semantico.py` e `responder.py` fazem a busca semântica opcional e a resposta **só com os trechos**, e `extensao.py` monta a rota e escolhe o provedor da equipe e a pasta dos guias (`FORMS_AJUDA_DIR`). Sem base nos documentos, responde "não encontrei". Teste: `uv run pytest tests/test_rag*.py`.
