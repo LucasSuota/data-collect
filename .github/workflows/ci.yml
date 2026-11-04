@@ -151,3 +151,54 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Ponta a ponta contra a pilha REAL (AGENTS.md §8): sobe o compose, pega o link do primeiro convite
+  # no log da API e roda o Playwright (celular e desktop) com acessibilidade e orçamento de JS.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      POSTGRES_PASSWORD: ci-postgres
+      FORMS_APP_PASSWORD: ci-app
+      FORMS_ADMIN_EMAIL: admin@exemplo.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Subir a pilha
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 60); do
+            docker compose ps web --format '{{.Status}}' | grep -q '^Up' && break
+            sleep 5
+          done
+
+      - name: Pegar o link do primeiro convite
+        run: |
+          sleep 10
+          echo "E2E_INVITE_URL=$(docker compose logs api --no-log-prefix | grep -o '/convite/[A-Za-z0-9_-]*' | tail -1)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências e o navegador
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Testes ponta a ponta
+        working-directory: frontend
+        run: npx playwright test
+
+      - name: Logs da pilha, se falhou
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-resultados
+          path: frontend/test-results
