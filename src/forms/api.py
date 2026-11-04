@@ -29,6 +29,7 @@ from forms.api_extras import roteador as roteador_extras
 from forms.api_extras import roteador_aberto
 from forms.api_permissoes import verificar_matriz
 from forms.api_rotas import roteador
+from forms.api_seguranca import AcrescentarCabecalhosDeSeguranca, LimitadorDeTaxa, LimitarCorpo
 from forms.auth import ValidadorDeToken, validador_do_ambiente
 from forms.logto import ClienteLogto, GestorDeIdentidade, IdentidadeIndisponivel
 from forms.models import (
@@ -37,6 +38,7 @@ from forms.models import (
     DefinicaoInvalida,
     ErroDeDominio,
     ExclusaoBloqueada,
+    LimiteExcedido,
     LoteInvalido,
     NaoAutenticado,
     NaoEncontrado,
@@ -145,6 +147,7 @@ def criar_app(
     app.state.configuracao = configuracao
     app.state.validador = validador or _validador_da_configuracao(configuracao)
     app.state.gestor = gestor or _gestor_da_configuracao(configuracao)
+    app.state.limitador = LimitadorDeTaxa()
     app.state.limite_do_pool = asyncio.Semaphore(_tamanho_do_pool(pool, configuracao))
     if pool is not None:
         app.state.pool = pool
@@ -166,6 +169,8 @@ def criar_app(
     # O tratador de erro inesperado fica por dentro: o 500 precisa passar pelo CORS, senão o
     # navegador o esconde e o front acha que o servidor caiu.
     app.middleware("http")(_responder_erro_inesperado)
+    app.add_middleware(AcrescentarCabecalhosDeSeguranca)
+    app.add_middleware(LimitarCorpo)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(configuracao.origens_cors),
@@ -272,6 +277,12 @@ def _registrar_tratadores_de_erro(app: FastAPI) -> None:
     @app.exception_handler(NaoAutenticado)
     async def _nao_autenticado(_: Request, erro: NaoAutenticado) -> JSONResponse:
         return resposta_de_erro(401, str(erro), codigo=erro.codigo)
+
+    @app.exception_handler(LimiteExcedido)
+    async def _limite(_: Request, erro: LimiteExcedido) -> JSONResponse:
+        resposta = resposta_de_erro(429, str(erro), codigo="limite_excedido")
+        resposta.headers["Retry-After"] = str(erro.esperar_segundos)
+        return resposta
 
     @app.exception_handler(TermosPendentes)
     async def _termos(_: Request, erro: TermosPendentes) -> JSONResponse:

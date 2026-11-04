@@ -409,7 +409,8 @@ def obter_registro(conexao: Conexao, registro_id: int, *, travar: bool = False) 
     """Com `travar`, `SELECT ... FOR UPDATE`: a transação segura a linha até terminar (§2.14)."""
     consulta = f"SELECT {_COLUNAS_DO_REGISTRO} FROM registros WHERE id = %s AND grupo_id = %s"  # noqa: S608 - colunas fixas do módulo
     linha = conexao.execute(
-        consulta + (" FOR UPDATE" if travar else ""), (registro_id, conexao.grupo_id)
+        consulta + (" FOR UPDATE" if travar else ""),  # noqa: S608 - só fragmentos fixos
+        (registro_id, conexao.grupo_id),
     ).fetchone()
     if linha is None:
         raise NaoEncontrado(f"Registro {registro_id} não encontrado.")

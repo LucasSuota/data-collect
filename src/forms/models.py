@@ -339,6 +339,14 @@ class TermosPendentes(ErroDeDominio):
         self.documentos = documentos
 
 
+class LimiteExcedido(ErroDeDominio):
+    """Pedidos demais numa janela curta; 429 com `Retry-After` (§12)."""
+
+    def __init__(self, esperar_segundos: int) -> None:
+        super().__init__("Muitas requisições. Tente de novo em instantes.")
+        self.esperar_segundos = esperar_segundos
+
+
 class SemPermissao(ErroDeDominio):
     """O cargo da pessoa não tem a permissão exigida; 403 (§2.13)."""
 

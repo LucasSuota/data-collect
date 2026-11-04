@@ -5,6 +5,7 @@ banco: o cabeçalho `X-Equipe` do cliente é só um pedido, e a pertença à equ
 A matriz endpoint → permissão (`api_permissoes.py`) é aplicada aqui, uma vez, para toda rota.
 """
 
+import math
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import Annotated
@@ -16,10 +17,12 @@ from psycopg_pool import ConnectionPool
 
 from forms import servico_equipes
 from forms.api_permissoes import classificar
+from forms.api_seguranca import LIMITES_POR_ROTA
 from forms.auth import Identidade, ValidadorDeToken
 from forms.banco import Conexao
 from forms.models import (
     Contexto,
+    LimiteExcedido,
     NaoAutenticado,
     SemAcessoAEquipe,
     SemPermissao,
@@ -118,8 +121,18 @@ def _permitida(contexto: Contexto, especificacao: str) -> bool:
     return any(contexto.tem(p) for p in especificacao.split("|"))
 
 
-def autorizar(conexao: Annotated[Conexao, Depends(obter_conexao)]) -> None:
-    """Dependência do roteador inteiro: só força a conferência acima para toda rota."""
+def autorizar(request: Request, conexao: Annotated[Conexao, Depends(obter_conexao)]) -> None:
+    """Dependência do roteador inteiro: força a conferência acima e aplica o limite de taxa das
+    rotas caras (por pessoa; §12)."""
+    rota = (request.method, request.scope["route"].path)
+    limite = LIMITES_POR_ROTA.get(rota)
+    if limite is None:
+        return
+    espera = request.app.state.limitador.tentar(
+        (str(conexao.usuario_id), f"{rota[0]} {rota[1]}"), limite
+    )
+    if espera is not None:
+        raise LimiteExcedido(math.ceil(espera))
 
 
 DepConexao = Annotated[Conexao, Depends(obter_conexao)]
