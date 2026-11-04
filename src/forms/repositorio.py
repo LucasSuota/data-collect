@@ -1,23 +1,29 @@
-"""Persistência em SQLite: único módulo que fala SQL (AGENTS.md §5.1).
+"""Persistência em PostgreSQL: o módulo que fala SQL dos formulários e registros (AGENTS.md §5.1).
 
-Sempre com parâmetros (`?`), nunca f-string em SQL com dado externo. A conexão entra por
-parâmetro em cada função; não há conexão global.
+Sempre com parâmetros (`%s`), nunca f-string em SQL com dado externo (a regra `S608` do `ruff` e
+um teste de varredura vigiam isso). A conexão entra por parâmetro em cada função; não há conexão
+global. Toda consulta filtra por `grupo_id`, vindo do contexto da conexão (§2.13): o Row Level
+Security do banco é a segunda barreira, nunca a única.
+
+Estas funções não fazem commit: a transação é de quem chama (o serviço), para que várias
+operações (por exemplo, a cascata de recálculo) entrem ou saiam juntas. O relógio entra por
+parâmetro (`agora`, sempre em UTC); o repositório nunca lê a hora.
 """
 
-import json
 import re
-import sqlite3
 import unicodedata
-from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path, PurePath
 
+from psycopg.types.json import Jsonb
+
+from forms.banco import Conexao
 from forms.models import (
+    ConflitoDeRevisao,
     Definicao,
     DefinicaoInvalida,
     ErroDeCampo,
-    ErroDeDominio,
     Formulario,
     NaoEncontrado,
     Pasta,
@@ -28,197 +34,17 @@ from forms.models import (
     Versao,
 )
 
-type Migracao = Callable[[sqlite3.Connection], None]
-
-
-class EsquemaMaisNovo(ErroDeDominio):
-    """O banco foi criado por uma versão do app mais nova que esta."""
-
-
-# Esquema 1 (AGENTS.md §5.2). Datas em texto ISO; JSON em colunas de texto.
-# Exclusões: sem ON DELETE o SQLite recusa (RESTRICT), o que protege os bloqueios de
-# exclusão do §2.7 mesmo se o serviço esquecer de checar.
-_ESQUEMA_1 = (
-    """
-    CREATE TABLE formularios (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL UNIQUE,
-        criado_em TEXT NOT NULL
-    )
-    """,
-    # Apagar o formulário apaga suas versões; só é possível sem registros (RESTRICT abaixo).
-    """
-    CREATE TABLE versoes_formulario (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        formulario_id INTEGER NOT NULL REFERENCES formularios (id) ON DELETE CASCADE,
-        numero INTEGER NOT NULL,
-        definicao TEXT NOT NULL,
-        publicada_em TEXT NOT NULL,
-        UNIQUE (formulario_id, numero)
-    )
-    """,
-    """
-    CREATE TABLE registros (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        formulario_id INTEGER NOT NULL REFERENCES formularios (id),
-        versao_id INTEGER NOT NULL REFERENCES versoes_formulario (id),
-        dados TEXT NOT NULL,
-        criado_em TEXT NOT NULL,
-        atualizado_em TEXT NOT NULL
-    )
-    """,
-    "CREATE INDEX registros_por_versao ON registros (formulario_id, versao_id)",
-    """
-    CREATE TABLE dependencias_formulario (
-        formulario_id INTEGER NOT NULL REFERENCES formularios (id) ON DELETE CASCADE,
-        depende_de_id INTEGER NOT NULL REFERENCES formularios (id),
-        PRIMARY KEY (formulario_id, depende_de_id)
-    )
-    """,
-    # Apagar um registro apaga as referências que ele fazia; apagar o destino é recusado.
-    """
-    CREATE TABLE referencias_registro (
-        registro_id INTEGER NOT NULL REFERENCES registros (id) ON DELETE CASCADE,
-        campo_id TEXT NOT NULL,
-        destino_id INTEGER NOT NULL REFERENCES registros (id),
-        PRIMARY KEY (registro_id, campo_id)
-    )
-    """,
-    "CREATE INDEX referencias_por_destino ON referencias_registro (destino_id)",
-    # `registro_id` e `campo_id` ficam nulos até o anexo ser vinculado a um registro (§2.8).
-    # `caminho` é relativo à pasta de dados e usa sempre "/".
-    """
-    CREATE TABLE anexos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        registro_id INTEGER REFERENCES registros (id),
-        campo_id TEXT,
-        caminho TEXT NOT NULL,
-        largura INTEGER NOT NULL,
-        altura INTEGER NOT NULL,
-        tamanho_bytes INTEGER NOT NULL,
-        criado_em TEXT NOT NULL
-    )
-    """,
-    "CREATE INDEX anexos_por_registro ON anexos (registro_id)",
-)
-
-
-def _criar_esquema_1(conexao: sqlite3.Connection) -> None:
-    for comando in _ESQUEMA_1:
-        conexao.execute(comando)
-
 
 def chave_do_nome(nome: str) -> str:
     """Forma comparável do nome: sem espaços nas pontas, sem diferenciar caixa nem a forma
-    (composta ou decomposta) dos acentos. O `lower()` do SQLite só entende ASCII, então a chave
-    é calculada aqui e guardada numa coluna com índice único."""
+    (composta ou decomposta) dos acentos. É calculada aqui e guardada numa coluna com índice
+    único, para a unicidade não depender das regras de caixa do banco."""
     return unicodedata.normalize("NFC", nome.strip()).casefold()
-
-
-def _adicionar_chave_unica_do_nome(conexao: sqlite3.Connection) -> None:
-    conexao.execute("ALTER TABLE formularios ADD COLUMN nome_chave TEXT")
-    for id_do_formulario, nome in conexao.execute("SELECT id, nome FROM formularios").fetchall():
-        conexao.execute(
-            "UPDATE formularios SET nome_chave = ? WHERE id = ?",
-            (chave_do_nome(nome), id_do_formulario),
-        )
-    conexao.execute("CREATE UNIQUE INDEX formularios_por_nome_chave ON formularios (nome_chave)")
-
-
-def _criar_vetores_dos_trechos(conexao: sqlite3.Connection) -> None:
-    # Embeddings dos trechos dos procedimentos (§2.5). `chave` é o hash do modelo e do texto do
-    # trecho, então trecho alterado ou outro modelo de embeddings geram outra chave e o vetor
-    # antigo é só descartado. `vetor` são float32 little-endian (4 bytes por dimensão).
-    conexao.execute("CREATE TABLE vetores_trechos (chave TEXT PRIMARY KEY, vetor BLOB NOT NULL)")
-
-
-def _criar_pastas(conexao: sqlite3.Connection) -> None:
-    # Árvore de pastas que só organiza formulários (§2.10). Sem ON DELETE o SQLite recusa apagar
-    # pasta com subpasta ou formulário, o que protege o bloqueio do serviço. NULL não conta como
-    # igual num índice único, então a unicidade do nome entre irmãs usa 0 no lugar da raiz
-    # (os ids começam em 1). Formulário existente fica na raiz (`pasta_id` nulo).
-    conexao.execute(
-        """
-        CREATE TABLE pastas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            nome_chave TEXT NOT NULL,
-            pasta_pai_id INTEGER REFERENCES pastas (id),
-            criado_em TEXT NOT NULL
-        )
-        """
-    )
-    conexao.execute(
-        "CREATE UNIQUE INDEX pastas_por_nome_entre_irmas"
-        " ON pastas (COALESCE(pasta_pai_id, 0), nome_chave)"
-    )
-    conexao.execute("ALTER TABLE formularios ADD COLUMN pasta_id INTEGER REFERENCES pastas (id)")
-    conexao.execute("CREATE INDEX formularios_por_pasta ON formularios (pasta_id)")
-
-
-# A migração de posição N leva o banco da versão N para a N+1. Nunca edite uma migração
-# já publicada: o banco do usuário persiste entre versões do app; acrescente uma nova.
-MIGRACOES: tuple[Migracao, ...] = (
-    _criar_esquema_1,
-    _adicionar_chave_unica_do_nome,
-    _criar_vetores_dos_trechos,
-    _criar_pastas,
-)
-VERSAO_ATUAL_DO_ESQUEMA = len(MIGRACOES)
-
-
-def abrir_conexao(caminho: Path | str) -> sqlite3.Connection:
-    """Abre o banco com as chaves estrangeiras ligadas e o esquema atualizado."""
-    # A API abre a conexão numa dependência síncrona e a usa no endpoint; o FastAPI roda as duas
-    # no pool de threads, possivelmente em threads diferentes. O padrão (`check_same_thread=True`)
-    # recusaria o uso (`ProgrammingError`) quando requisições chegam em paralelo. É seguro liberar:
-    # cada requisição tem a sua conexão, usada por uma etapa de cada vez (nunca compartilhada).
-    conexao = sqlite3.connect(caminho, check_same_thread=False)
-    try:
-        conexao.row_factory = sqlite3.Row
-        # O SQLite deixa as chaves estrangeiras desligadas por padrão, por conexão.
-        conexao.execute("PRAGMA foreign_keys = ON")
-        migrar(conexao)
-    except BaseException:
-        # Sem fechar, no Windows o arquivo ficaria travado depois da recusa.
-        conexao.close()
-        raise
-    return conexao
-
-
-def migrar(conexao: sqlite3.Connection, migracoes: Sequence[Migracao] = MIGRACOES) -> None:
-    """Aplica as migrações pendentes, cada uma numa transação junto com o `user_version`."""
-    versao_do_banco = conexao.execute("PRAGMA user_version").fetchone()[0]
-    if versao_do_banco > len(migracoes):
-        raise EsquemaMaisNovo(
-            f"O banco foi criado por uma versão mais nova do aplicativo (esquema {versao_do_banco},"
-            f" esta versão conhece até o {len(migracoes)}). Atualize o aplicativo."
-        )
-
-    for numero, migracao in enumerate(migracoes[versao_do_banco:], start=versao_do_banco + 1):
-        # BEGIN explícito: sem ele, o módulo `sqlite3` não abre transação para DDL e uma
-        # falha no meio deixaria o banco pela metade.
-        conexao.execute("BEGIN")
-        try:
-            migracao(conexao)
-            # PRAGMA não aceita parâmetro (?); `numero` é um int gerado aqui, nunca texto externo.
-            conexao.execute(f"PRAGMA user_version = {numero}")
-            conexao.commit()
-        except BaseException:
-            conexao.rollback()
-            raise
-
-
-# --- convenções das consultas ---
-# Estas funções não fazem commit: a transação é de quem chama (o serviço), para que várias
-# operações (por exemplo, a cascata de recálculo) entrem ou saiam juntas.
-# O relógio entra por parâmetro (`agora`, sempre em UTC); o repositório nunca lê a hora.
 
 
 def _iso(momento: datetime) -> str:
     if momento.tzinfo is None:
         raise ValorInvalido("O horário deve vir com fuso (UTC).")
-    # Mesmo formato em todas as colunas de data: a comparação de texto vira comparação de tempo.
     return momento.isoformat(timespec="seconds")
 
 
@@ -243,43 +69,56 @@ class ResumoDeVersao:
 
 
 def criar_formulario(
-    conexao: sqlite3.Connection, nome: str, agora: datetime, pasta_id: int | None = None
+    conexao: Conexao, nome: str, agora: datetime, pasta_id: int | None = None
 ) -> Formulario:
     nome = nome.strip()
     if not nome:
         raise DefinicaoInvalida((ErroDeCampo("nome", "O nome do formulário é obrigatório."),))
     chave = chave_do_nome(nome)
-    if conexao.execute("SELECT 1 FROM formularios WHERE nome_chave = ?", (chave,)).fetchone():
+    repetido = conexao.execute(
+        "SELECT 1 FROM formularios WHERE grupo_id = %s AND nome_chave = %s",
+        (conexao.grupo_id, chave),
+    ).fetchone()
+    if repetido:
         raise DefinicaoInvalida((ErroDeCampo("nome", "Já existe um formulário com este nome."),))
-    cursor = conexao.execute(
-        "INSERT INTO formularios (nome, nome_chave, criado_em, pasta_id) VALUES (?, ?, ?, ?)",
-        (nome, chave, _iso(agora), pasta_id),
-    )
-    return obter_formulario(conexao, _id_inserido(cursor))
-
-
-def obter_formulario(conexao: sqlite3.Connection, formulario_id: int) -> Formulario:
     linha = conexao.execute(
-        "SELECT id, nome, criado_em, pasta_id FROM formularios WHERE id = ?", (formulario_id,)
+        "INSERT INTO formularios (grupo_id, nome, nome_chave, criado_em, pasta_id)"
+        " VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (conexao.grupo_id, nome, chave, _iso(agora), pasta_id),
+    ).fetchone()
+    assert linha is not None  # INSERT ... RETURNING sempre devolve a linha criada
+    return obter_formulario(conexao, linha["id"])
+
+
+def obter_formulario(conexao: Conexao, formulario_id: int) -> Formulario:
+    linha = conexao.execute(
+        "SELECT id, nome, criado_em, pasta_id FROM formularios WHERE id = %s AND grupo_id = %s",
+        (formulario_id, conexao.grupo_id),
     ).fetchone()
     if linha is None:
         raise NaoEncontrado(f"Formulário {formulario_id} não encontrado.")
     return _formulario_da_linha(linha)
 
 
-def obter_formulario_por_nome(conexao: sqlite3.Connection, nome: str) -> Formulario | None:
+def obter_formulario_por_nome(conexao: Conexao, nome: str) -> Formulario | None:
     linha = conexao.execute(
-        "SELECT id, nome, criado_em, pasta_id FROM formularios WHERE nome_chave = ?",
-        (chave_do_nome(nome),),
+        "SELECT id, nome, criado_em, pasta_id FROM formularios"
+        " WHERE grupo_id = %s AND nome_chave = %s",
+        (conexao.grupo_id, chave_do_nome(nome)),
     ).fetchone()
     return None if linha is None else _formulario_da_linha(linha)
 
 
-def _formulario_da_linha(linha: sqlite3.Row) -> Formulario:
-    return Formulario(linha["id"], linha["nome"], linha["criado_em"], linha["pasta_id"])
+def _formulario_da_linha(linha: Mapping[str, object]) -> Formulario:
+    return Formulario(
+        int(str(linha["id"])),
+        str(linha["nome"]),
+        str(linha["criado_em"]),
+        None if linha["pasta_id"] is None else int(str(linha["pasta_id"])),
+    )
 
 
-def listar_formularios(conexao: sqlite3.Connection) -> list[ResumoDeFormulario]:
+def listar_formularios(conexao: Conexao) -> list[ResumoDeFormulario]:
     linhas = conexao.execute(
         """
         SELECT f.id, f.nome, f.criado_em, v.id AS versao_atual_id, v.numero AS versao_atual_numero,
@@ -288,16 +127,19 @@ def listar_formularios(conexao: sqlite3.Connection) -> list[ResumoDeFormulario]:
         LEFT JOIN versoes_formulario v
             ON v.formulario_id = f.id
             AND v.numero = (SELECT MAX(numero) FROM versoes_formulario WHERE formulario_id = f.id)
+        WHERE f.grupo_id = %s
         ORDER BY f.id
-        """
+        """,
+        (conexao.grupo_id,),
     )
     return [ResumoDeFormulario(**dict(linha)) for linha in linhas]
 
 
-def mover_formulario(conexao: sqlite3.Connection, formulario_id: int, pasta_id: int | None) -> None:
+def mover_formulario(conexao: Conexao, formulario_id: int, pasta_id: int | None) -> None:
     """Só troca a pasta: versões, registros e dependências não se mexem."""
     cursor = conexao.execute(
-        "UPDATE formularios SET pasta_id = ? WHERE id = ?", (pasta_id, formulario_id)
+        "UPDATE formularios SET pasta_id = %s WHERE id = %s AND grupo_id = %s",
+        (pasta_id, formulario_id, conexao.grupo_id),
     )
     if cursor.rowcount == 0:
         raise NaoEncontrado(f"Formulário {formulario_id} não encontrado.")
@@ -308,58 +150,68 @@ def mover_formulario(conexao: sqlite3.Connection, formulario_id: int, pasta_id: 
 _MENSAGEM_NOME_REPETIDO = "Já existe uma pasta com este nome neste local."
 
 
-def criar_pasta(
-    conexao: sqlite3.Connection, nome: str, pasta_pai_id: int | None, agora: datetime
-) -> Pasta:
+def criar_pasta(conexao: Conexao, nome: str, pasta_pai_id: int | None, agora: datetime) -> Pasta:
     nome = _nome_da_pasta(nome)
     _conferir_nome_livre(conexao, nome, pasta_pai_id, ignorar_id=None)
-    cursor = conexao.execute(
-        "INSERT INTO pastas (nome, nome_chave, pasta_pai_id, criado_em) VALUES (?, ?, ?, ?)",
-        (nome, chave_do_nome(nome), pasta_pai_id, _iso(agora)),
-    )
-    return obter_pasta(conexao, _id_inserido(cursor))
-
-
-def obter_pasta(conexao: sqlite3.Connection, pasta_id: int) -> Pasta:
     linha = conexao.execute(
-        "SELECT id, nome, pasta_pai_id, criado_em FROM pastas WHERE id = ?", (pasta_id,)
+        "INSERT INTO pastas (grupo_id, nome, nome_chave, pasta_pai_id, criado_em)"
+        " VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (conexao.grupo_id, nome, chave_do_nome(nome), pasta_pai_id, _iso(agora)),
+    ).fetchone()
+    assert linha is not None
+    return obter_pasta(conexao, linha["id"])
+
+
+def obter_pasta(conexao: Conexao, pasta_id: int) -> Pasta:
+    linha = conexao.execute(
+        "SELECT id, nome, pasta_pai_id, criado_em FROM pastas WHERE id = %s AND grupo_id = %s",
+        (pasta_id, conexao.grupo_id),
     ).fetchone()
     if linha is None:
         raise NaoEncontrado(f"Pasta {pasta_id} não encontrada.")
     return Pasta(**dict(linha))
 
 
-def pasta_existe(conexao: sqlite3.Connection, pasta_id: int) -> bool:
-    return conexao.execute("SELECT 1 FROM pastas WHERE id = ?", (pasta_id,)).fetchone() is not None
+def pasta_existe(conexao: Conexao, pasta_id: int) -> bool:
+    return (
+        conexao.execute(
+            "SELECT 1 FROM pastas WHERE id = %s AND grupo_id = %s", (pasta_id, conexao.grupo_id)
+        ).fetchone()
+        is not None
+    )
 
 
-def listar_pastas(conexao: sqlite3.Connection) -> list[Pasta]:
-    linhas = conexao.execute("SELECT id, nome, pasta_pai_id, criado_em FROM pastas ORDER BY id")
+def listar_pastas(conexao: Conexao) -> list[Pasta]:
+    linhas = conexao.execute(
+        "SELECT id, nome, pasta_pai_id, criado_em FROM pastas WHERE grupo_id = %s ORDER BY id",
+        (conexao.grupo_id,),
+    )
     return [Pasta(**dict(linha)) for linha in linhas]
 
 
-def atualizar_pasta(
-    conexao: sqlite3.Connection, pasta_id: int, nome: str, pasta_pai_id: int | None
-) -> Pasta:
+def atualizar_pasta(conexao: Conexao, pasta_id: int, nome: str, pasta_pai_id: int | None) -> Pasta:
     """Renomeia e/ou move. Quem chama já conferiu a existência do destino e o ciclo."""
     obter_pasta(conexao, pasta_id)
     nome = _nome_da_pasta(nome)
     _conferir_nome_livre(conexao, nome, pasta_pai_id, ignorar_id=pasta_id)
     conexao.execute(
-        "UPDATE pastas SET nome = ?, nome_chave = ?, pasta_pai_id = ? WHERE id = ?",
-        (nome, chave_do_nome(nome), pasta_pai_id, pasta_id),
+        "UPDATE pastas SET nome = %s, nome_chave = %s, pasta_pai_id = %s"
+        " WHERE id = %s AND grupo_id = %s",
+        (nome, chave_do_nome(nome), pasta_pai_id, pasta_id, conexao.grupo_id),
     )
     return obter_pasta(conexao, pasta_id)
 
 
-def excluir_pasta(conexao: sqlite3.Connection, pasta_id: int) -> None:
+def excluir_pasta(conexao: Conexao, pasta_id: int) -> None:
     """O banco recusa (IntegrityError) se há subpasta ou formulário; quem chama confere antes."""
-    cursor = conexao.execute("DELETE FROM pastas WHERE id = ?", (pasta_id,))
+    cursor = conexao.execute(
+        "DELETE FROM pastas WHERE id = %s AND grupo_id = %s", (pasta_id, conexao.grupo_id)
+    )
     if cursor.rowcount == 0:
         raise NaoEncontrado(f"Pasta {pasta_id} não encontrada.")
 
 
-def pasta_esta_na_subarvore(conexao: sqlite3.Connection, pasta_id: int, raiz_id: int) -> bool:
+def pasta_esta_na_subarvore(conexao: Conexao, pasta_id: int, raiz_id: int) -> bool:
     """A `pasta_id` é a `raiz_id` ou está dentro dela (em qualquer profundidade)?
 
     Sobe pelos pais a partir de `pasta_id`: a árvore é acíclica, então a consulta termina.
@@ -367,28 +219,32 @@ def pasta_esta_na_subarvore(conexao: sqlite3.Connection, pasta_id: int, raiz_id:
     linha = conexao.execute(
         """
         WITH RECURSIVE ancestrais (id) AS (
-            SELECT ?
+            SELECT %s::bigint
             UNION
             SELECT p.pasta_pai_id FROM pastas p JOIN ancestrais a ON p.id = a.id
-            WHERE p.pasta_pai_id IS NOT NULL
+            WHERE p.pasta_pai_id IS NOT NULL AND p.grupo_id = %s
         )
-        SELECT 1 FROM ancestrais WHERE id = ?
+        SELECT 1 FROM ancestrais WHERE id = %s
         """,
-        (pasta_id, raiz_id),
+        (pasta_id, conexao.grupo_id, raiz_id),
     ).fetchone()
     return linha is not None
 
 
-def contar_subpastas(conexao: sqlite3.Connection, pasta_id: int) -> int:
-    return conexao.execute(
-        "SELECT COUNT(*) FROM pastas WHERE pasta_pai_id = ?", (pasta_id,)
-    ).fetchone()[0]
+def contar_subpastas(conexao: Conexao, pasta_id: int) -> int:
+    linha = conexao.execute(
+        "SELECT COUNT(*) AS n FROM pastas WHERE pasta_pai_id = %s AND grupo_id = %s",
+        (pasta_id, conexao.grupo_id),
+    ).fetchone()
+    return int(linha["n"]) if linha else 0
 
 
-def contar_formularios_da_pasta(conexao: sqlite3.Connection, pasta_id: int) -> int:
-    return conexao.execute(
-        "SELECT COUNT(*) FROM formularios WHERE pasta_id = ?", (pasta_id,)
-    ).fetchone()[0]
+def contar_formularios_da_pasta(conexao: Conexao, pasta_id: int) -> int:
+    linha = conexao.execute(
+        "SELECT COUNT(*) AS n FROM formularios WHERE pasta_id = %s AND grupo_id = %s",
+        (pasta_id, conexao.grupo_id),
+    ).fetchone()
+    return int(linha["n"]) if linha else 0
 
 
 def _nome_da_pasta(nome: str) -> str:
@@ -399,107 +255,113 @@ def _nome_da_pasta(nome: str) -> str:
 
 
 def _conferir_nome_livre(
-    conexao: sqlite3.Connection, nome: str, pasta_pai_id: int | None, ignorar_id: int | None
+    conexao: Conexao, nome: str, pasta_pai_id: int | None, ignorar_id: int | None
 ) -> None:
     repetida = conexao.execute(
         """
         SELECT 1 FROM pastas
-        WHERE nome_chave = ? AND COALESCE(pasta_pai_id, 0) = COALESCE(?, 0)
-            AND (? IS NULL OR id != ?)
+        WHERE grupo_id = %s AND nome_chave = %s
+            AND COALESCE(pasta_pai_id, 0) = COALESCE(%s::bigint, 0)
+            AND (%s::bigint IS NULL OR id != %s::bigint)
         """,
-        (chave_do_nome(nome), pasta_pai_id, ignorar_id, ignorar_id),
+        (conexao.grupo_id, chave_do_nome(nome), pasta_pai_id, ignorar_id, ignorar_id),
     ).fetchone()
     if repetida:
         raise PastaInvalida((ErroDeCampo("nome", _MENSAGEM_NOME_REPETIDO),))
 
 
-def excluir_formulario(conexao: sqlite3.Connection, formulario_id: int) -> None:
+def excluir_formulario(conexao: Conexao, formulario_id: int) -> None:
     """Apaga o formulário e suas versões. O banco recusa (IntegrityError) se houver registros
     ou dependentes; quem chama confere antes para devolver 409 com mensagem clara (§2.7)."""
-    cursor = conexao.execute("DELETE FROM formularios WHERE id = ?", (formulario_id,))
+    cursor = conexao.execute(
+        "DELETE FROM formularios WHERE id = %s AND grupo_id = %s",
+        (formulario_id, conexao.grupo_id),
+    )
     if cursor.rowcount == 0:
         raise NaoEncontrado(f"Formulário {formulario_id} não encontrado.")
 
 
 def inserir_versao(
-    conexao: sqlite3.Connection, formulario_id: int, definicao: Definicao, agora: datetime
+    conexao: Conexao, formulario_id: int, definicao: Definicao, agora: datetime
 ) -> Versao:
     """Publica a próxima versão (número anterior + 1). Não existe como alterar uma versão
     publicada: este módulo não tem `update` nem `delete` de versão (AGENTS.md §3.3)."""
     obter_formulario(conexao, formulario_id)
-    cursor = conexao.execute(
+    linha = conexao.execute(
         """
-        INSERT INTO versoes_formulario (formulario_id, numero, definicao, publicada_em)
-        VALUES (?, (SELECT COALESCE(MAX(numero), 0) + 1 FROM versoes_formulario
-                    WHERE formulario_id = ?), ?, ?)
+        INSERT INTO versoes_formulario (grupo_id, formulario_id, numero, definicao, publicada_em)
+        VALUES (%s, %s, (SELECT COALESCE(MAX(numero), 0) + 1 FROM versoes_formulario
+                         WHERE formulario_id = %s), %s, %s)
+        RETURNING id
         """,
         (
+            conexao.grupo_id,
             formulario_id,
             formulario_id,
-            json.dumps(definicao.para_json(), ensure_ascii=False),
+            Jsonb(definicao.para_json()),
             _iso(agora),
         ),
-    )
-    return obter_versao(conexao, _id_inserido(cursor))
+    ).fetchone()
+    assert linha is not None
+    return obter_versao(conexao, linha["id"])
 
 
-def obter_versao(
-    conexao: sqlite3.Connection, versao_id: int, formulario_id: int | None = None
-) -> Versao:
+def obter_versao(conexao: Conexao, versao_id: int, formulario_id: int | None = None) -> Versao:
     """Com `formulario_id`, só acha a versão se ela pertencer a esse formulário."""
     linha = conexao.execute(
         """
         SELECT id, formulario_id, numero, definicao, publicada_em FROM versoes_formulario
-        WHERE id = ? AND (? IS NULL OR formulario_id = ?)
+        WHERE id = %s AND grupo_id = %s AND (%s::bigint IS NULL OR formulario_id = %s::bigint)
         """,
-        (versao_id, formulario_id, formulario_id),
+        (versao_id, conexao.grupo_id, formulario_id, formulario_id),
     ).fetchone()
     if linha is None:
         raise NaoEncontrado(f"Versão {versao_id} não encontrada.")
     return _versao_da_linha(linha)
 
 
-def obter_versao_atual(conexao: sqlite3.Connection, formulario_id: int) -> Versao:
+def obter_versao_atual(conexao: Conexao, formulario_id: int) -> Versao:
     linha = conexao.execute(
         """
         SELECT id, formulario_id, numero, definicao, publicada_em FROM versoes_formulario
-        WHERE formulario_id = ? ORDER BY numero DESC LIMIT 1
+        WHERE formulario_id = %s AND grupo_id = %s ORDER BY numero DESC LIMIT 1
         """,
-        (formulario_id,),
+        (formulario_id, conexao.grupo_id),
     ).fetchone()
     if linha is None:
         raise NaoEncontrado(f"O formulário {formulario_id} ainda não tem versão publicada.")
     return _versao_da_linha(linha)
 
 
-def listar_versoes(conexao: sqlite3.Connection, formulario_id: int) -> list[ResumoDeVersao]:
+def listar_versoes(conexao: Conexao, formulario_id: int) -> list[ResumoDeVersao]:
     linhas = conexao.execute(
-        "SELECT id, numero, publicada_em FROM versoes_formulario WHERE formulario_id = ?"
-        " ORDER BY numero",
-        (formulario_id,),
+        "SELECT id, numero, publicada_em FROM versoes_formulario"
+        " WHERE formulario_id = %s AND grupo_id = %s ORDER BY numero",
+        (formulario_id, conexao.grupo_id),
     )
     return [ResumoDeVersao(**dict(linha)) for linha in linhas]
 
 
-def _versao_da_linha(linha: sqlite3.Row) -> Versao:
+def _versao_da_linha(linha: Mapping[str, object]) -> Versao:
+    definicao = linha["definicao"]
+    assert isinstance(definicao, dict)  # jsonb de objeto, escrito por `inserir_versao`
     return Versao(
-        id=linha["id"],
-        formulario_id=linha["formulario_id"],
-        numero=linha["numero"],
-        definicao=Definicao.de_json(json.loads(linha["definicao"])),
-        publicada_em=linha["publicada_em"],
+        id=int(str(linha["id"])),
+        formulario_id=int(str(linha["formulario_id"])),
+        numero=int(str(linha["numero"])),
+        definicao=Definicao.de_json(definicao),
+        publicada_em=str(linha["publicada_em"]),
     )
-
-
-def _id_inserido(cursor: sqlite3.Cursor) -> int:
-    # `lastrowid` é `None` só quando nada foi inserido, o que não acontece após um INSERT.
-    assert cursor.lastrowid is not None
-    return cursor.lastrowid
 
 
 # --- registros ---
 
 _CAMPO_FILTRAVEL = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+_COLUNAS_DO_REGISTRO = (
+    "id, formulario_id, versao_id, dados, criado_em, atualizado_em, revisao,"
+    " criado_por, atualizado_por"
+)
 
 
 @dataclass(frozen=True)
@@ -517,26 +379,37 @@ class PaginaDeRegistros:
 
 
 def inserir_registro(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     formulario_id: int,
     versao_id: int,
     dados: Mapping[str, ValorJson],
     agora: datetime,
 ) -> Registro:
     momento = _iso(agora)
-    cursor = conexao.execute(
-        "INSERT INTO registros (formulario_id, versao_id, dados, criado_em, atualizado_em)"
-        " VALUES (?, ?, ?, ?, ?)",
-        (formulario_id, versao_id, json.dumps(dados, ensure_ascii=False), momento, momento),
-    )
-    return obter_registro(conexao, _id_inserido(cursor))
-
-
-def obter_registro(conexao: sqlite3.Connection, registro_id: int) -> Registro:
     linha = conexao.execute(
-        "SELECT id, formulario_id, versao_id, dados, criado_em, atualizado_em"
-        " FROM registros WHERE id = ?",
-        (registro_id,),
+        "INSERT INTO registros (grupo_id, formulario_id, versao_id, dados, criado_em,"
+        " atualizado_em, criado_por, atualizado_por) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+        " RETURNING id",
+        (
+            conexao.grupo_id,
+            formulario_id,
+            versao_id,
+            Jsonb(dados),
+            momento,
+            momento,
+            conexao.usuario_id,
+            conexao.usuario_id,
+        ),
+    ).fetchone()
+    assert linha is not None
+    return obter_registro(conexao, linha["id"])
+
+
+def obter_registro(conexao: Conexao, registro_id: int, *, travar: bool = False) -> Registro:
+    """Com `travar`, `SELECT ... FOR UPDATE`: a transação segura a linha até terminar (§2.14)."""
+    consulta = f"SELECT {_COLUNAS_DO_REGISTRO} FROM registros WHERE id = %s AND grupo_id = %s"  # noqa: S608 - colunas fixas do módulo
+    linha = conexao.execute(
+        consulta + (" FOR UPDATE" if travar else ""), (registro_id, conexao.grupo_id)
     ).fetchone()
     if linha is None:
         raise NaoEncontrado(f"Registro {registro_id} não encontrado.")
@@ -544,32 +417,57 @@ def obter_registro(conexao: sqlite3.Connection, registro_id: int) -> Registro:
 
 
 def atualizar_registro(
-    conexao: sqlite3.Connection, registro_id: int, dados: Mapping[str, ValorJson], agora: datetime
+    conexao: Conexao,
+    registro_id: int,
+    dados: Mapping[str, ValorJson],
+    agora: datetime,
+    *,
+    revisao_esperada: int | None = None,
 ) -> Registro:
-    """Substitui todos os dados (sem mesclar); a versão de origem e a criação não mudam."""
+    """Substitui todos os dados (sem mesclar); a versão de origem e a criação não mudam.
+
+    Com `revisao_esperada`, só grava se ninguém alterou o registro desde a leitura (§2.14).
+    """
     cursor = conexao.execute(
-        "UPDATE registros SET dados = ?, atualizado_em = ? WHERE id = ?",
-        (json.dumps(dados, ensure_ascii=False), _iso(agora), registro_id),
+        "UPDATE registros SET dados = %s, atualizado_em = %s, revisao = revisao + 1,"
+        " atualizado_por = %s WHERE id = %s AND grupo_id = %s"
+        " AND (%s::int IS NULL OR revisao = %s::int)",
+        (
+            Jsonb(dados),
+            _iso(agora),
+            conexao.usuario_id,
+            registro_id,
+            conexao.grupo_id,
+            revisao_esperada,
+            revisao_esperada,
+        ),
     )
     if cursor.rowcount == 0:
-        raise NaoEncontrado(f"Registro {registro_id} não encontrado.")
+        atual = obter_registro(conexao, registro_id)  # 404 se não existe
+        raise ConflitoDeRevisao(
+            f"O registro {registro_id} foi alterado por outra pessoa (revisão {atual.revisao})."
+        )
     return obter_registro(conexao, registro_id)
 
 
-def excluir_registro(conexao: sqlite3.Connection, registro_id: int) -> None:
-    cursor = conexao.execute("DELETE FROM registros WHERE id = ?", (registro_id,))
+def excluir_registro(conexao: Conexao, registro_id: int) -> None:
+    cursor = conexao.execute(
+        "DELETE FROM registros WHERE id = %s AND grupo_id = %s", (registro_id, conexao.grupo_id)
+    )
     if cursor.rowcount == 0:
         raise NaoEncontrado(f"Registro {registro_id} não encontrado.")
 
 
-def contar_registros(conexao: sqlite3.Connection, formulario_id: int) -> int:
-    return conexao.execute(
-        "SELECT COUNT(*) FROM registros WHERE formulario_id = ?", (formulario_id,)
-    ).fetchone()[0]
+def contar_registros(conexao: Conexao, formulario_id: int) -> int:
+    linha = conexao.execute(
+        "SELECT COUNT(*) AS n FROM registros WHERE formulario_id = %s AND grupo_id = %s",
+        (formulario_id, conexao.grupo_id),
+    ).fetchone()
+    return int(linha["n"]) if linha else 0
 
 
 def listar_registros(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     versao_id: int,
     *,
     limite: int,
@@ -578,6 +476,7 @@ def listar_registros(
     campos_permitidos: Collection[str] = frozenset(),
     criado_de: str | None = None,
     criado_ate: str | None = None,
+    criado_por: int | None = None,
 ) -> PaginaDeRegistros:
     """Registros de uma versão, do mais recente para o mais antigo, com `total` do filtro.
 
@@ -589,53 +488,164 @@ def listar_registros(
         raise ValorInvalido(
             "O limite deve ser pelo menos 1 e o deslocamento não pode ser negativo."
         )
+    onde, parametros = _condicoes_dos_registros(
+        conexao, versao_id, filtros, campos_permitidos, criado_de, criado_ate, criado_por
+    )
+    # `onde` só tem fragmentos fixos de `_condicoes_dos_registros`; os valores são parâmetros.
+    total = conexao.execute(
+        f"SELECT COUNT(*) AS n FROM registros WHERE {onde}",  # noqa: S608
+        parametros,
+    ).fetchone()
+    linhas = conexao.execute(
+        f"SELECT {_COLUNAS_DO_REGISTRO} FROM registros"  # noqa: S608
+        f" WHERE {onde} ORDER BY id DESC LIMIT %s OFFSET %s",
+        [*parametros, limite, deslocamento],
+    )
+    return PaginaDeRegistros(
+        tuple(_registro_da_linha(linha) for linha in linhas), int(total["n"]) if total else 0
+    )
 
-    condicoes = ["versao_id = ?"]
-    parametros: list[object] = [versao_id]
+
+def contar_por_estado(
+    conexao: Conexao,
+    versao_id: int,
+    campo_status: str,
+    *,
+    filtros: Sequence[FiltroDeIgualdade] = (),
+    campos_permitidos: Collection[str] = frozenset(),
+    criado_de: str | None = None,
+    criado_ate: str | None = None,
+    criado_por: int | None = None,
+) -> dict[str, int]:
+    """Contagem por estado do campo calculado booleano de status (§2.3): `conforme`,
+    `nao_conforme`, `erro` e `aguardando`, com os mesmos filtros da listagem."""
+    if not _CAMPO_FILTRAVEL.fullmatch(campo_status):
+        raise ValorInvalido(f"Campo de status inválido: '{campo_status}'.")
+    onde, parametros = _condicoes_dos_registros(
+        conexao, versao_id, filtros, campos_permitidos, criado_de, criado_ate, criado_por
+    )
+    linhas = conexao.execute(
+        """
+        SELECT CASE
+                   WHEN dados #>> %s::text[] IS NOT NULL THEN 'erro'
+                   WHEN dados #>> %s::text[] = 'true' THEN 'conforme'
+                   WHEN dados #>> %s::text[] = 'false' THEN 'nao_conforme'
+                   ELSE 'aguardando'
+               END AS estado, COUNT(*) AS n
+        FROM registros WHERE """  # noqa: S608 - `onde` só tem fragmentos fixos
+        + onde
+        + " GROUP BY estado",
+        [[campo_status, "erro"], [campo_status, "valor"], [campo_status, "valor"], *parametros],
+    )
+    contagem = {"conforme": 0, "nao_conforme": 0, "erro": 0, "aguardando": 0}
+    for linha in linhas:
+        contagem[str(linha["estado"])] = int(linha["n"])
+    return contagem
+
+
+def _condicoes_dos_registros(
+    conexao: Conexao,
+    versao_id: int,
+    filtros: Sequence[FiltroDeIgualdade],
+    campos_permitidos: Collection[str],
+    criado_de: str | None,
+    criado_ate: str | None,
+    criado_por: int | None,
+) -> tuple[str, list[object]]:
+    condicoes = ["grupo_id = %s", "versao_id = %s"]
+    parametros: list[object] = [conexao.grupo_id, versao_id]
     for filtro in filtros:
-        condicoes.append("json_extract(dados, ?) = ?")
+        condicoes.append("dados #>> %s::text[] = %s")
         parametros.extend(
             (_caminho_json(filtro, campos_permitidos), _valor_do_filtro(filtro.valor))
         )
     if criado_de is not None:
-        condicoes.append("criado_em >= ?")
+        condicoes.append("criado_em >= %s")
         parametros.append(criado_de)
     if criado_ate is not None:
-        condicoes.append("criado_em <= ?")
+        condicoes.append("criado_em <= %s")
         parametros.append(criado_ate)
-    onde = " AND ".join(condicoes)  # só fragmentos fixos acima; todos os valores são parâmetros
-
-    total = conexao.execute(f"SELECT COUNT(*) FROM registros WHERE {onde}", parametros).fetchone()[
-        0
-    ]
-    linhas = conexao.execute(
-        f"SELECT id, formulario_id, versao_id, dados, criado_em, atualizado_em FROM registros"
-        f" WHERE {onde} ORDER BY id DESC LIMIT ? OFFSET ?",
-        [*parametros, limite, deslocamento],
-    )
-    return PaginaDeRegistros(tuple(_registro_da_linha(linha) for linha in linhas), total)
+    if criado_por is not None:
+        condicoes.append("criado_por = %s")
+        parametros.append(criado_por)
+    return " AND ".join(condicoes), parametros
 
 
-def _caminho_json(filtro: FiltroDeIgualdade, campos_permitidos: Collection[str]) -> str:
+def _caminho_json(filtro: FiltroDeIgualdade, campos_permitidos: Collection[str]) -> list[str]:
     if filtro.campo not in campos_permitidos or not _CAMPO_FILTRAVEL.fullmatch(filtro.campo):
         raise ValorInvalido(f"Não é possível filtrar pelo campo '{filtro.campo}'.")
-    return f'$."{filtro.campo}"' + (".valor" if filtro.calculado else "")
+    return [filtro.campo, "valor"] if filtro.calculado else [filtro.campo]
 
 
-def _valor_do_filtro(valor: str | bool) -> str | int:
-    # O JSON guarda `true`/`false`, que o `json_extract` devolve como 1/0.
-    return int(valor) if isinstance(valor, bool) else valor
+def _valor_do_filtro(valor: str | bool) -> str:
+    # `#>>` devolve o JSON como texto: `true`/`false` para booleano.
+    if isinstance(valor, bool):
+        return "true" if valor else "false"
+    return valor
 
 
-def _registro_da_linha(linha: sqlite3.Row) -> Registro:
+def _registro_da_linha(linha: Mapping[str, object]) -> Registro:
+    dados = linha["dados"]
+    assert isinstance(dados, dict)  # jsonb de objeto, escrito por `inserir_registro`
+    por = linha["criado_por"]
+    atualizado = linha["atualizado_por"]
     return Registro(
-        id=linha["id"],
-        formulario_id=linha["formulario_id"],
-        versao_id=linha["versao_id"],
-        dados=json.loads(linha["dados"]),
-        criado_em=linha["criado_em"],
-        atualizado_em=linha["atualizado_em"],
+        id=int(str(linha["id"])),
+        formulario_id=int(str(linha["formulario_id"])),
+        versao_id=int(str(linha["versao_id"])),
+        dados=dados,
+        criado_em=str(linha["criado_em"]),
+        atualizado_em=str(linha["atualizado_em"]),
+        revisao=int(str(linha["revisao"])),
+        criado_por=None if por is None else int(str(por)),
+        atualizado_por=None if atualizado is None else int(str(atualizado)),
     )
+
+
+# --- histórico de alterações (§2.14) ---
+
+
+@dataclass(frozen=True)
+class EntradaDeHistorico:
+    id: int
+    registro_id: int
+    usuario_id: int | None
+    quando: str
+    acao: str
+    valores_anteriores: dict[str, ValorJson] | None
+    motivo: str | None
+
+
+def registrar_historico(
+    conexao: Conexao,
+    registro_id: int,
+    acao: str,
+    valores_anteriores: Mapping[str, ValorJson] | None,
+    agora: datetime,
+    motivo: str | None = None,
+) -> None:
+    conexao.execute(
+        "INSERT INTO historico_registro (grupo_id, registro_id, usuario_id, quando, acao,"
+        " valores_anteriores, motivo) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (
+            conexao.grupo_id,
+            registro_id,
+            conexao.usuario_id,
+            _iso(agora),
+            acao,
+            None if valores_anteriores is None else Jsonb(valores_anteriores),
+            motivo,
+        ),
+    )
+
+
+def listar_historico(conexao: Conexao, registro_id: int) -> list[EntradaDeHistorico]:
+    linhas = conexao.execute(
+        "SELECT id, registro_id, usuario_id, quando, acao, valores_anteriores, motivo"
+        " FROM historico_registro WHERE registro_id = %s AND grupo_id = %s ORDER BY id DESC",
+        (registro_id, conexao.grupo_id),
+    )
+    return [EntradaDeHistorico(**dict(linha)) for linha in linhas]
 
 
 # --- relações entre formulários e entre registros (§2.7) ---
@@ -646,76 +656,85 @@ _PROFUNDIDADE_MAXIMA = 1000
 
 
 def registrar_dependencias(
-    conexao: sqlite3.Connection, formulario_id: int, depende_de_ids: Collection[int]
+    conexao: Conexao, formulario_id: int, depende_de_ids: Collection[int]
 ) -> None:
     """Chamado ao publicar. O vínculo fica enquanto o formulário existir (versões antigas
     e seus registros ainda apontam para a origem)."""
-    conexao.executemany(
-        "INSERT OR IGNORE INTO dependencias_formulario (formulario_id, depende_de_id)"
-        " VALUES (?, ?)",
-        [(formulario_id, origem) for origem in sorted(depende_de_ids)],
-    )
+    with conexao.cursor() as cursor:
+        cursor.executemany(
+            "INSERT INTO dependencias_formulario (grupo_id, formulario_id, depende_de_id)"
+            " VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+            [(conexao.grupo_id, formulario_id, origem) for origem in sorted(depende_de_ids)],
+        )
 
 
-def listar_dependencias(conexao: sqlite3.Connection) -> list[tuple[int, int]]:
-    """Todas as arestas `(formulario, depende_de)`, para o serviço detectar ciclo."""
+def listar_dependencias(conexao: Conexao) -> list[tuple[int, int]]:
+    """Todas as arestas `(formulario, depende_de)` da equipe, para o serviço detectar ciclo."""
     linhas = conexao.execute(
-        "SELECT formulario_id, depende_de_id FROM dependencias_formulario"
-        " ORDER BY formulario_id, depende_de_id"
+        "SELECT formulario_id, depende_de_id FROM dependencias_formulario WHERE grupo_id = %s"
+        " ORDER BY formulario_id, depende_de_id",
+        (conexao.grupo_id,),
     )
     return [(linha[0], linha[1]) for linha in linhas]
 
 
-def formularios_dependentes(
-    conexao: sqlite3.Connection, formulario_id: int, *, transitivo: bool
-) -> list[int]:
+def formularios_dependentes(conexao: Conexao, formulario_id: int, *, transitivo: bool) -> list[int]:
     """Formulários que dependem deste, os mais próximos primeiro."""
     linhas = conexao.execute(
         """
         WITH RECURSIVE alcance(id, nivel) AS (
-            SELECT formulario_id, 1 FROM dependencias_formulario WHERE depende_de_id = ?
+            SELECT formulario_id, 1 FROM dependencias_formulario
+            WHERE depende_de_id = %s AND grupo_id = %s
             UNION ALL
             SELECT d.formulario_id, a.nivel + 1
             FROM dependencias_formulario d JOIN alcance a ON d.depende_de_id = a.id
-            WHERE ? AND a.nivel < ?
+            WHERE %s AND a.nivel < %s AND d.grupo_id = %s
         )
         SELECT id FROM alcance GROUP BY id ORDER BY MAX(nivel), id
         """,
-        (formulario_id, transitivo, _PROFUNDIDADE_MAXIMA),
+        (formulario_id, conexao.grupo_id, transitivo, _PROFUNDIDADE_MAXIMA, conexao.grupo_id),
     )
     return [linha[0] for linha in linhas]
 
 
 def substituir_referencias(
-    conexao: sqlite3.Connection, registro_id: int, referencias: Mapping[str, int]
+    conexao: Conexao, registro_id: int, referencias: Mapping[str, int]
 ) -> None:
     """Deixa as referências do registro exatamente como no último salvamento (campo -> destino)."""
-    conexao.execute("DELETE FROM referencias_registro WHERE registro_id = ?", (registro_id,))
-    conexao.executemany(
-        "INSERT INTO referencias_registro (registro_id, campo_id, destino_id) VALUES (?, ?, ?)",
-        [(registro_id, campo, destino) for campo, destino in referencias.items()],
+    conexao.execute(
+        "DELETE FROM referencias_registro WHERE registro_id = %s AND grupo_id = %s",
+        (registro_id, conexao.grupo_id),
     )
+    with conexao.cursor() as cursor:
+        cursor.executemany(
+            "INSERT INTO referencias_registro (grupo_id, registro_id, campo_id, destino_id)"
+            " VALUES (%s, %s, %s, %s)",
+            [
+                (conexao.grupo_id, registro_id, campo, destino)
+                for campo, destino in referencias.items()
+            ],
+        )
 
 
-def obter_referencias(conexao: sqlite3.Connection, registro_id: int) -> dict[str, int]:
+def obter_referencias(conexao: Conexao, registro_id: int) -> dict[str, int]:
     linhas = conexao.execute(
-        "SELECT campo_id, destino_id FROM referencias_registro WHERE registro_id = ?"
-        " ORDER BY campo_id",
-        (registro_id,),
+        "SELECT campo_id, destino_id FROM referencias_registro"
+        " WHERE registro_id = %s AND grupo_id = %s ORDER BY campo_id",
+        (registro_id, conexao.grupo_id),
     )
     return {linha[0]: linha[1] for linha in linhas}
 
 
-def registros_que_referenciam(conexao: sqlite3.Connection, registro_id: int) -> list[int]:
+def registros_que_referenciam(conexao: Conexao, registro_id: int) -> list[int]:
     linhas = conexao.execute(
-        "SELECT DISTINCT registro_id FROM referencias_registro WHERE destino_id = ?"
-        " ORDER BY registro_id",
-        (registro_id,),
+        "SELECT DISTINCT registro_id FROM referencias_registro"
+        " WHERE destino_id = %s AND grupo_id = %s ORDER BY registro_id",
+        (registro_id, conexao.grupo_id),
     )
     return [linha[0] for linha in linhas]
 
 
-def registros_dependentes(conexao: sqlite3.Connection, registro_id: int) -> list[int]:
+def registros_dependentes(conexao: Conexao, registro_id: int) -> list[int]:
     """Dependentes diretos e indiretos, em ordem de recálculo da cascata.
 
     Um registro só vem depois de todos aqueles dos quais depende: a ordenação usa o caminho
@@ -725,132 +744,37 @@ def registros_dependentes(conexao: sqlite3.Connection, registro_id: int) -> list
     linhas = conexao.execute(
         """
         WITH RECURSIVE alcance(id, nivel) AS (
-            SELECT registro_id, 1 FROM referencias_registro WHERE destino_id = ?
+            SELECT registro_id, 1 FROM referencias_registro
+            WHERE destino_id = %s AND grupo_id = %s
             UNION ALL
             SELECT r.registro_id, a.nivel + 1
             FROM referencias_registro r JOIN alcance a ON r.destino_id = a.id
-            WHERE a.nivel < ?
+            WHERE a.nivel < %s AND r.grupo_id = %s
         )
         SELECT id FROM alcance GROUP BY id ORDER BY MAX(nivel), id
         """,
-        (registro_id, _PROFUNDIDADE_MAXIMA),
+        (registro_id, conexao.grupo_id, _PROFUNDIDADE_MAXIMA, conexao.grupo_id),
     )
     return [linha[0] for linha in linhas]
 
 
-# --- anexos (metadados das fotos, §2.8) ---
+# --- vetores dos trechos de ajuda (busca semântica, §2.5) ---
 
 
-@dataclass(frozen=True)
-class Anexo:
-    id: int
-    registro_id: int | None
-    campo_id: str | None
-    caminho: str
-    largura: int
-    altura: int
-    tamanho_bytes: int
-    criado_em: str
-
-
-def criar_anexo(
-    conexao: sqlite3.Connection,
-    caminho: str | PurePath,
-    *,
-    largura: int,
-    altura: int,
-    tamanho_bytes: int,
-    agora: datetime,
-) -> Anexo:
-    """Anexo nasce solto (sem registro): o upload acontece antes de o registro existir."""
-    cursor = conexao.execute(
-        "INSERT INTO anexos (caminho, largura, altura, tamanho_bytes, criado_em)"
-        " VALUES (?, ?, ?, ?, ?)",
-        (_caminho_portavel(caminho), largura, altura, tamanho_bytes, _iso(agora)),
-    )
-    return obter_anexo(conexao, _id_inserido(cursor))
-
-
-def obter_anexo(conexao: sqlite3.Connection, anexo_id: int) -> Anexo:
-    linha = conexao.execute(
-        "SELECT id, registro_id, campo_id, caminho, largura, altura, tamanho_bytes, criado_em"
-        " FROM anexos WHERE id = ?",
-        (anexo_id,),
-    ).fetchone()
-    if linha is None:
-        raise NaoEncontrado(f"Anexo {anexo_id} não encontrado.")
-    return Anexo(**dict(linha))
-
-
-def vincular_anexo(
-    conexao: sqlite3.Connection, anexo_id: int, registro_id: int, campo_id: str
-) -> Anexo:
-    if obter_anexo(conexao, anexo_id).registro_id is not None:
-        raise ValorInvalido("O anexo já está vinculado a um registro.")
-    conexao.execute(
-        "UPDATE anexos SET registro_id = ?, campo_id = ? WHERE id = ?",
-        (registro_id, campo_id, anexo_id),
-    )
-    return obter_anexo(conexao, anexo_id)
-
-
-def desvincular_anexo(conexao: sqlite3.Connection, anexo_id: int) -> Anexo:
-    obter_anexo(conexao, anexo_id)
-    conexao.execute(
-        "UPDATE anexos SET registro_id = NULL, campo_id = NULL WHERE id = ?", (anexo_id,)
-    )
-    return obter_anexo(conexao, anexo_id)
-
-
-def apagar_anexo(conexao: sqlite3.Connection, anexo_id: int) -> None:
-    """Apaga só a linha; o arquivo `.webp` é apagado pelo serviço, depois do commit (§2.8)."""
-    cursor = conexao.execute("DELETE FROM anexos WHERE id = ?", (anexo_id,))
-    if cursor.rowcount == 0:
-        raise NaoEncontrado(f"Anexo {anexo_id} não encontrado.")
-
-
-def listar_anexos_do_registro(conexao: sqlite3.Connection, registro_id: int) -> list[Anexo]:
-    linhas = conexao.execute(
-        "SELECT id, registro_id, campo_id, caminho, largura, altura, tamanho_bytes, criado_em"
-        " FROM anexos WHERE registro_id = ? ORDER BY id",
-        (registro_id,),
-    )
-    return [Anexo(**dict(linha)) for linha in linhas]
-
-
-def listar_anexos_orfaos(conexao: sqlite3.Connection, *, criados_antes_de: datetime) -> list[Anexo]:
-    """Anexos nunca vinculados criados *antes* do instante dado (quem chama passa agora - 24 h)."""
-    linhas = conexao.execute(
-        "SELECT id, registro_id, campo_id, caminho, largura, altura, tamanho_bytes, criado_em"
-        " FROM anexos WHERE registro_id IS NULL AND criado_em < ? ORDER BY id",
-        (_iso(criados_antes_de),),
-    )
-    return [Anexo(**dict(linha)) for linha in linhas]
-
-
-def _caminho_portavel(caminho: str | PurePath) -> str:
-    """Caminho relativo à pasta de dados, com `/` em qualquer sistema e sem sair da pasta."""
-    texto = str(caminho).replace("\\", "/").strip()
-    partes = texto.split("/")
-    # Absoluto (`/x`, `C:/x`, `//servidor`), vazio ou com `..`/segmento vazio é recusado.
-    if not texto or re.match(r"[A-Za-z]:", texto) or any(parte in ("", "..") for parte in partes):
-        raise ValorInvalido("O caminho do anexo deve ser relativo à pasta de dados.")
-    return texto
-
-
-# --- vetores dos trechos (busca semântica, §2.5) ---
-
-
-def listar_vetores(conexao: sqlite3.Connection) -> dict[str, bytes]:
+def listar_vetores(conexao: Conexao) -> dict[str, bytes]:
     linhas = conexao.execute("SELECT chave, vetor FROM vetores_trechos")
-    return {linha["chave"]: linha["vetor"] for linha in linhas}
+    return {linha["chave"]: bytes(linha["vetor"]) for linha in linhas}
 
 
-def guardar_vetores(conexao: sqlite3.Connection, vetores: Mapping[str, bytes]) -> None:
-    conexao.executemany(
-        "INSERT OR REPLACE INTO vetores_trechos (chave, vetor) VALUES (?, ?)", vetores.items()
-    )
+def guardar_vetores(conexao: Conexao, vetores: Mapping[str, bytes]) -> None:
+    with conexao.cursor() as cursor:
+        cursor.executemany(
+            "INSERT INTO vetores_trechos (chave, vetor) VALUES (%s, %s)"
+            " ON CONFLICT (chave) DO UPDATE SET vetor = EXCLUDED.vetor",
+            list(vetores.items()),
+        )
 
 
-def apagar_vetores(conexao: sqlite3.Connection, chaves: Iterable[str]) -> None:
-    conexao.executemany("DELETE FROM vetores_trechos WHERE chave = ?", ((c,) for c in chaves))
+def apagar_vetores(conexao: Conexao, chaves: Iterable[str]) -> None:
+    with conexao.cursor() as cursor:
+        cursor.executemany("DELETE FROM vetores_trechos WHERE chave = %s", [(c,) for c in chaves])

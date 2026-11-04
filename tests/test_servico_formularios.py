@@ -1,11 +1,12 @@
-import sqlite3
 from datetime import UTC, datetime
 
 import pytest
+from psycopg import pq
 
 from forms import servico
+from forms.banco import Conexao
 from forms.models import DefinicaoInvalida, LoteInvalido, NaoEncontrado
-from forms.repositorio import abrir_conexao, listar_dependencias
+from forms.repositorio import listar_dependencias
 from forms.servico import Rascunho
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
@@ -51,18 +52,11 @@ INSITU = {
 }
 
 
-@pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
-
-
 def _criar(conexao, nome, definicao, quando=AGORA):
     return servico.criar_formulario(conexao, nome, definicao, quando)
 
 
-def _contagens(conexao: sqlite3.Connection) -> tuple[int, int, int]:
+def _contagens(conexao: Conexao) -> tuple[int, int, int]:
     def contar(tabela: str) -> int:
         # nome de tabela de constante do teste, nunca de entrada externa
         return conexao.execute(f"SELECT COUNT(*) FROM {tabela}").fetchone()[0]
@@ -163,7 +157,7 @@ def test_banco_fica_como_estava_se_a_gravacao_falhar_no_meio(conexao, monkeypatc
 
     # assert: nem o formulário ficou
     assert _contagens(conexao) == (0, 0, 0)
-    assert not conexao.in_transaction
+    assert conexao.info.transaction_status == pq.TransactionStatus.IDLE
 
 
 # --- publicar versão (#21) ---
@@ -683,9 +677,9 @@ def test_lote_cria_cadeia_embaralhada_com_origem_primeiro(conexao):
     assert _contagens(conexao) == (3, 3, 2)
 
 
-def test_lote_independe_da_ordem_de_entrada(conexao):
+def test_lote_independe_da_ordem_de_entrada(conexao, outra_equipe):
     # arrange
-    outra = abrir_conexao(":memory:")
+    outra = outra_equipe
     ordem_a = [Rascunho("ensaio", ENSAIO), Rascunho("proctor", PROCTOR), Rascunho("insitu", INSITU)]
     ordem_b = list(reversed(ordem_a))
 
@@ -697,7 +691,6 @@ def test_lote_independe_da_ordem_de_entrada(conexao):
 
     # assert
     assert nomes_a == nomes_b == ["ensaio", "proctor", "insitu"]
-    outra.close()
 
 
 def test_falha_no_ultimo_do_lote_nao_deixa_os_anteriores_no_banco(conexao):
@@ -821,7 +814,6 @@ def test_catalogo_sai_das_mesmas_tabelas_do_avaliador():
         "secao",
         "referencia",
         "localizacao",
-        "foto",
     }
     assert {f.nome for f in catalogo.funcoes} == set(servico.FUNCOES)
     assert [c.nome for c in catalogo.constantes] == ["pi"]

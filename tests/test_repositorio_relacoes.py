@@ -1,11 +1,11 @@
-import sqlite3
 from datetime import UTC, datetime
 
+import psycopg
 import pytest
 
+from forms.banco import Conexao
 from forms.models import Campo, Definicao, TipoCampo
 from forms.repositorio import (
-    abrir_conexao,
     criar_formulario,
     formularios_dependentes,
     inserir_registro,
@@ -22,14 +22,7 @@ AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 DEFINICAO = Definicao((Campo(id="a", tipo=TipoCampo.TEXTO, rotulo="A"),))
 
 
-@pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
-
-
-def _formulario(conexao: sqlite3.Connection, nome: str):
+def _formulario(conexao: Conexao, nome: str):
     formulario = criar_formulario(conexao, nome, AGORA)
     versao = inserir_versao(conexao, formulario.id, DEFINICAO, AGORA)
     return formulario, versao
@@ -170,7 +163,7 @@ def test_referencia_para_registro_inexistente_e_recusada_pelo_banco(conexao):
     proctor = _registro(conexao, versao)
 
     # act / assert
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(psycopg.errors.IntegrityError):
         substituir_referencias(conexao, proctor, {"ensaio": 999})
 
 

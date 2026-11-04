@@ -209,7 +209,7 @@ def test_campo_inexistente_e_rejeitado_ao_publicar():
     assert excecao.value.posicao == Posicao(5, 13)
 
 
-@pytest.mark.parametrize("tipo_do_campo", ["texto", "selecao", "secao", "localizacao", "foto"])
+@pytest.mark.parametrize("tipo_do_campo", ["texto", "selecao", "secao", "localizacao"])
 def test_campo_de_tipo_que_nao_entra_em_formula_e_rejeitado(tipo_do_campo: str):
     # act
     with pytest.raises(FormulaInvalida) as excecao:

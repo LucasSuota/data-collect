@@ -5,17 +5,14 @@ de domínio viram o status HTTP certo em `api.py`.
 """
 
 import re
-from collections.abc import Iterator
-from datetime import UTC, date, datetime
-from pathlib import Path
+from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
-from fastapi.security import APIKeyHeader
+from fastapi import APIRouter, Depends, Query, Response
 
-from forms import fotos, servico
+from forms import servico
+from forms.api_dependencias import DepAgora, DepConexao, autorizar
 from forms.api_esquemas import (
-    AnexoSaida,
     CatalogoSaida,
     DuplicarEntrada,
     ErroDeCampoSaida,
@@ -43,48 +40,21 @@ from forms.api_esquemas import (
     coluna_de,
 )
 from forms.models import ErroDeCampo, Formulario, RegistroInvalido, Versao
-from forms.servico import Conexao, Rascunho
-
-CABECALHO_DO_TOKEN = "X-Forms-Token"
-
-# O token é conferido pelo middleware; este esquema só o descreve no OpenAPI (botão "Authorize").
-esquema_do_token = APIKeyHeader(
-    name=CABECALHO_DO_TOKEN, auto_error=False, scheme_name="TokenDaExecucao"
-)
+from forms.servico import Rascunho
 
 # Erros comuns a (quase) todo endpoint, para o OpenAPI mostrar o formato uniforme.
 ERROS_COMUNS = {
-    401: {"model": ErroSaida, "description": "Token ausente ou inválido."},
+    401: {"model": ErroSaida, "description": "Sem token, token inválido ou expirado."},
+    403: {"model": ErroSaida, "description": "Sem permissão, sem equipe ou termos pendentes."},
     404: {"model": ErroSaida, "description": "Recurso inexistente."},
     422: {"model": ErroSaida, "description": "Dados inválidos, com os erros por campo."},
 }
 _ERRO_409 = {409: {"model": ErroSaida, "description": "Exclusão bloqueada por vínculo."}}
 
-roteador = APIRouter(dependencies=[Depends(esquema_do_token)], responses=ERROS_COMUNS)
+roteador = APIRouter(dependencies=[Depends(autorizar)], responses=ERROS_COMUNS)
 
 
 # --- dependências (injetadas por parâmetro, nunca globais) ---
-
-
-def obter_conexao(request: Request) -> Iterator[Conexao]:
-    conexao = servico.abrir_banco(request.app.state.configuracao.banco)
-    try:
-        yield conexao
-    finally:
-        conexao.close()
-
-
-def obter_agora() -> datetime:
-    return datetime.now(UTC)
-
-
-def obter_pasta_de_dados(request: Request) -> Path:
-    return request.app.state.configuracao.pasta_de_dados
-
-
-DepConexao = Annotated[Conexao, Depends(obter_conexao)]
-DepAgora = Annotated[datetime, Depends(obter_agora)]
-DepPasta = Annotated[Path, Depends(obter_pasta_de_dados)]
 
 
 # --- formulários e versões ---
@@ -468,11 +438,8 @@ def atualizar_registro(
     entrada: RegistroAtualizacao,
     conexao: DepConexao,
     agora: DepAgora,
-    pasta: DepPasta,
 ) -> RegistroSaida:
-    return RegistroSaida.de(
-        servico.atualizar_registro(conexao, registro_id, entrada.dados, agora, pasta)
-    )
+    return RegistroSaida.de(servico.atualizar_registro(conexao, registro_id, entrada.dados, agora))
 
 
 @roteador.delete(
@@ -484,55 +451,9 @@ def atualizar_registro(
     description="409 se outro registro o referencia.",
     responses=_ERRO_409,
 )
-def excluir_registro(registro_id: int, conexao: DepConexao, pasta: DepPasta) -> Response:
-    servico.excluir_registro(conexao, registro_id, pasta)
+def excluir_registro(registro_id: int, conexao: DepConexao) -> Response:
+    servico.excluir_registro(conexao, registro_id)
     return Response(status_code=204)
-
-
-# --- anexos (fotos) ---
-
-
-@roteador.post(
-    "/anexos",
-    status_code=201,
-    response_model=AnexoSaida,
-    tags=["anexos"],
-    summary="Envia uma foto (multipart, campo `arquivo`)",
-    description=(
-        "JPEG, PNG ou WebP até 20 MB; vira WebP sem metadados. O registro guarda a lista de `id`s. "
-        "O nome do arquivo enviado nunca é usado."
-    ),
-)
-def enviar_anexo(
-    conexao: DepConexao,
-    agora: DepAgora,
-    pasta: DepPasta,
-    arquivo: Annotated[UploadFile, File(description="A imagem.")],
-) -> AnexoSaida:
-    # Lê um byte além do limite: basta para `fotos` recusar sem carregar um arquivo gigante.
-    conteudo = arquivo.file.read(fotos.TAMANHO_MAXIMO_ENTRADA + 1)
-    anexo = servico.guardar_anexo(conexao, pasta, conteudo, agora)
-    return AnexoSaida(
-        id=anexo.id, largura=anexo.largura, altura=anexo.altura, tamanho_bytes=anexo.tamanho_bytes
-    )
-
-
-@roteador.get(
-    "/anexos/{anexo_id}",
-    response_class=Response,
-    responses={200: {"content": {"image/webp": {}}, "description": "A foto em WebP."}},
-    tags=["anexos"],
-    summary="A foto em WebP",
-)
-def obter_anexo(anexo_id: int, conexao: DepConexao, pasta: DepPasta) -> Response:
-    return Response(
-        content=servico.ler_anexo(conexao, pasta, anexo_id),
-        media_type="image/webp",
-        headers={
-            "Cache-Control": "private, max-age=31536000, immutable",
-            "X-Content-Type-Options": "nosniff",
-        },
-    )
 
 
 # --- apoio ---

@@ -14,9 +14,10 @@ from fastapi.responses import Response
 from pydantic import Field
 
 from forms import servico
+from forms.api_dependencias import DepConexao, autorizar
 from forms.api_esquemas import ErroDeCampoSaida, ErroSaida, FormularioEntrada, Modelo
 from forms.api_extensoes import Extensao, resposta_de_erro
-from forms.api_rotas import ERROS_COMUNS, DepConexao, esquema_do_token, ler_filtros
+from forms.api_rotas import ERROS_COMUNS, ler_filtros
 from forms.ia import gerador, resumo
 from forms.ia.cliente import ClienteDeLLM, IaIndisponivel, criar_cliente
 from forms.ia.gerador import MAXIMO_DE_FORMULARIOS, PEDIDO_MAXIMO, RespostaDaIaInvalida
@@ -73,9 +74,7 @@ def obter_cliente() -> ClienteDeLLM:
 
 DepCliente = Annotated[ClienteDeLLM, Depends(obter_cliente)]
 
-roteador = APIRouter(
-    dependencies=[Depends(esquema_do_token)], responses={**ERROS_COMUNS, **_ERROS_DA_IA}
-)
+roteador = APIRouter(dependencies=[Depends(autorizar)], responses={**ERROS_COMUNS, **_ERROS_DA_IA})
 
 
 # --- rotas ---

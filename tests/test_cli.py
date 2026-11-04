@@ -1,11 +1,11 @@
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from forms import cli, servico
-from forms.repositorio import abrir_conexao
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 TEMPLATES = Path(__file__).parent.parent / "templates"
@@ -13,12 +13,30 @@ CORPO = str(TEMPLATES / "corpo_de_prova.json")
 
 
 @pytest.fixture
-def banco(tmp_path: Path) -> Path:
-    return tmp_path / "forms.db"
+def banco(dsn: str, pessoa: dict) -> SimpleNamespace:
+    """O alvo da CLI: banco, equipe e pessoa (administradora) de teste."""
+    return SimpleNamespace(dsn=dsn, equipe=pessoa["grupo_id"], usuario=pessoa["usuario_id"])
 
 
-def _rodar(banco: Path, *argumentos: str) -> int:
-    return cli.main(["--banco", str(banco), *argumentos], relogio=lambda: AGORA)
+def _rodar(banco: SimpleNamespace, *argumentos: str) -> int:
+    return cli.main(
+        [
+            "--dsn",
+            banco.dsn,
+            "--equipe",
+            str(banco.equipe),
+            "--usuario",
+            str(banco.usuario),
+            *argumentos,
+        ],
+        relogio=lambda: AGORA,
+    )
+
+
+def abrir_conexao(banco: SimpleNamespace):
+    conexao = servico.abrir_banco(banco.dsn)
+    conexao.definir_contexto(servico.contexto_da_pessoa(conexao, banco.usuario, banco.equipe))
+    return conexao
 
 
 def _dados(tmp_path: Path, **valores: object) -> str:
@@ -335,9 +353,9 @@ def test_exportar_sem_saida_escreve_na_saida_padrao(banco, tmp_path, capsys):
 def test_sem_comando_ou_comando_desconhecido_e_erro_de_uso(banco, capsys):
     # act / assert: o argparse sai com código 2
     with pytest.raises(SystemExit) as sem_comando:
-        cli.main(["--banco", str(banco)])
+        cli.main(["--dsn", banco.dsn])
     with pytest.raises(SystemExit) as desconhecido:
-        cli.main(["--banco", str(banco), "voar"])
+        cli.main(["--dsn", banco.dsn, "voar"])
     assert sem_comando.value.code == 2 and desconhecido.value.code == 2
 
 
@@ -365,10 +383,68 @@ def test_cli_nao_importa_repositorio_nem_regras_do_nucleo():
         "forms.validacao",
         "forms.formulas",
         "forms.tipos_campo",
-        "sqlite3",
+        "psycopg",
     }
     assert importados.isdisjoint(proibidos)
     nomes = {
         alias.name for no in ast.walk(arvore) if isinstance(no, ast.Import) for alias in no.names
     }
-    assert "sqlite3" not in nomes
+    assert "psycopg" not in nomes
+
+
+# --- operação: migrar e criar equipe ---
+
+
+def test_migrar_e_idempotente(banco, capsys):
+    # act
+    codigo = _rodar(banco, "migrar")
+
+    # assert: o banco de teste já está migrado, então não há o que aplicar
+    assert codigo == 0 and "0 migração" in capsys.readouterr().out
+
+
+def test_criar_equipe_so_funciona_em_instalacao_vazia(banco, capsys):
+    # act: o banco de teste já tem a equipe da fixture
+    codigo = cli.main(
+        ["--dsn", banco.dsn, "criar-equipe", "Obra", "--email", "adm@exemplo.com"],
+        relogio=lambda: AGORA,
+    )
+
+    # assert
+    assert codigo == 1 and "Já existe uma equipe" in capsys.readouterr().err
+
+
+def test_comando_de_dados_sem_equipe_e_pessoa_e_erro_de_uso(banco, capsys, monkeypatch):
+    # arrange
+    monkeypatch.delenv("FORMS_EQUIPE", raising=False)
+    monkeypatch.delenv("FORMS_USUARIO", raising=False)
+
+    # act
+    codigo = cli.main(["--dsn", banco.dsn, "listar"], relogio=lambda: AGORA)
+
+    # assert
+    assert codigo == 1 and "--equipe" in capsys.readouterr().err
+
+
+def test_pessoa_de_outra_equipe_nao_roda_comandos_nesta(banco, dsn, capsys):
+    # arrange: uma pessoa que não é desta equipe
+    from conftest import criar_pessoa_na_equipe
+
+    outra = criar_pessoa_na_equipe(dsn, "outra")
+
+    # act
+    codigo = cli.main(
+        [
+            "--dsn",
+            dsn,
+            "--equipe",
+            str(banco.equipe),
+            "--usuario",
+            str(outra["usuario_id"]),
+            "listar",
+        ],
+        relogio=lambda: AGORA,
+    )
+
+    # assert
+    assert codigo == 1 and "não faz parte" in capsys.readouterr().err

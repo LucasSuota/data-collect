@@ -1,0 +1,27 @@
+# Ambiente do data-collect (AGENTS.md §4.1). Este arquivo cresce nas issues do roadmap;
+# por ora sobe o Postgres com pgvector usado pela API e pelos testes.
+name: data-collect
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-forms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forms}
+      POSTGRES_DB: ${POSTGRES_DB:-forms}
+      FORMS_APP_PASSWORD: ${FORMS_APP_PASSWORD:-forms_app}
+    volumes:
+      - dados-postgres:/var/lib/postgresql/data
+      - ./docker/postgres/01-init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    ports:
+      # Só em desenvolvimento: em produção o Postgres fica na rede interna.
+      - "127.0.0.1:${POSTGRES_PORTA:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forms} -d ${POSTGRES_DB:-forms}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  dados-postgres:

@@ -13,9 +13,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import Field
 
+from forms.api_dependencias import DepConexao, autorizar
 from forms.api_esquemas import Modelo
 from forms.api_extensoes import Extensao
-from forms.api_rotas import ERROS_COMUNS, DepConexao, esquema_do_token
+from forms.api_rotas import ERROS_COMUNS
 from forms.ia.cliente import ClienteDeLLM, IaIndisponivel, criar_cliente
 from forms.rag.chunker import Trecho, carregar_documentos
 from forms.rag.indice import Buscador, IndiceBm25
@@ -85,7 +86,7 @@ def obter_pasta_de_docs() -> Path | None:
 DepClienteOpcional = Annotated[ClienteDeLLM | None, Depends(obter_cliente_opcional)]
 DepPastaDeDocs = Annotated[Path | None, Depends(obter_pasta_de_docs)]
 
-roteador = APIRouter(dependencies=[Depends(esquema_do_token)], responses=ERROS_COMUNS)
+roteador = APIRouter(dependencies=[Depends(autorizar)], responses=ERROS_COMUNS)
 
 
 # --- rota ---

@@ -1,11 +1,11 @@
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import pytest
+from psycopg import pq
 
 from forms import servico
 from forms.models import ExclusaoBloqueada, NaoEncontrado, RegistroInvalido
-from forms.repositorio import abrir_conexao, obter_referencias
+from forms.repositorio import obter_referencias
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 DEPOIS = AGORA + timedelta(hours=3)
@@ -82,18 +82,6 @@ INSITU = {
         },
     ]
 }
-
-
-@pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
-
-
-@pytest.fixture
-def pasta(tmp_path: Path) -> Path:
-    return tmp_path / "dados"
 
 
 def _formulario(conexao, nome, definicao):
@@ -218,13 +206,13 @@ def test_dados_que_nao_sao_objeto_geram_erro(conexao, corpo):
 # --- atualizar (#23) ---
 
 
-def test_atualizar_substitui_os_valores_recalcula_e_mantem_a_versao(conexao, pasta, corpo):
+def test_atualizar_substitui_os_valores_recalcula_e_mantem_a_versao(conexao, corpo):
     # arrange
     registro = _registro(conexao, corpo, ENTRADA_VALIDA)
 
     # act: sem diâmetro nem carga; não é um PATCH, tudo é substituído
     novo = servico.atualizar_registro(
-        conexao, registro.id, {"fck_mpa": 30, "data_moldagem": "2026-12-01"}, DEPOIS, pasta
+        conexao, registro.id, {"fck_mpa": 30, "data_moldagem": "2026-12-01"}, DEPOIS
     )
 
     # assert
@@ -235,25 +223,25 @@ def test_atualizar_substitui_os_valores_recalcula_e_mantem_a_versao(conexao, pas
     assert novo.dados["resistencia_mpa"] == {"valor": None, "erro": None}
 
 
-def test_atualizar_com_erro_de_validacao_nao_altera_o_registro(conexao, pasta, corpo):
+def test_atualizar_com_erro_de_validacao_nao_altera_o_registro(conexao, corpo):
     # arrange
     registro = _registro(conexao, corpo, ENTRADA_VALIDA)
 
     # act
     with pytest.raises(RegistroInvalido):
-        servico.atualizar_registro(conexao, registro.id, {"fck_mpa": "abc"}, DEPOIS, pasta)
+        servico.atualizar_registro(conexao, registro.id, {"fck_mpa": "abc"}, DEPOIS)
 
     # assert
     assert servico.obter_registro(conexao, registro.id) == registro
 
 
-def test_atualizar_registro_inexistente_e_nao_encontrado(conexao, pasta):
+def test_atualizar_registro_inexistente_e_nao_encontrado(conexao):
     # act / assert
     with pytest.raises(NaoEncontrado):
-        servico.atualizar_registro(conexao, 99, {}, AGORA, pasta)
+        servico.atualizar_registro(conexao, 99, {}, AGORA)
 
 
-def test_registro_antigo_continua_valido_depois_de_publicar_a_v2(conexao, pasta, corpo):
+def test_registro_antigo_continua_valido_depois_de_publicar_a_v2(conexao, corpo):
     # arrange: a v2 acrescenta um campo obrigatório que o registro da v1 não tem
     registro = _registro(conexao, corpo, ENTRADA_VALIDA)
     v2 = {
@@ -264,7 +252,7 @@ def test_registro_antigo_continua_valido_depois_de_publicar_a_v2(conexao, pasta,
 
     # act: editar o registro antigo valida contra a versão dele, não contra a v2
     novo = servico.atualizar_registro(
-        conexao, registro.id, ENTRADA_VALIDA | {"fck_mpa": 40}, DEPOIS, pasta
+        conexao, registro.id, ENTRADA_VALIDA | {"fck_mpa": 40}, DEPOIS
     )
 
     # assert
@@ -288,22 +276,22 @@ def test_criar_na_versao_antiga_depois_da_v2_e_permitido_porque_a_versao_e_expli
 # --- excluir ---
 
 
-def test_excluir_registro_livre_apaga_de_verdade(conexao, pasta, corpo):
+def test_excluir_registro_livre_apaga_de_verdade(conexao, corpo):
     # arrange
     registro = _registro(conexao, corpo, ENTRADA_VALIDA)
 
     # act
-    servico.excluir_registro(conexao, registro.id, pasta)
+    servico.excluir_registro(conexao, registro.id)
 
     # assert
     with pytest.raises(NaoEncontrado):
         servico.obter_registro(conexao, registro.id)
 
 
-def test_excluir_registro_inexistente_e_nao_encontrado(conexao, pasta):
+def test_excluir_registro_inexistente_e_nao_encontrado(conexao):
     # act / assert
     with pytest.raises(NaoEncontrado):
-        servico.excluir_registro(conexao, 99, pasta)
+        servico.excluir_registro(conexao, 99)
 
 
 # --- referência e campos compartilhados (#26) ---
@@ -405,14 +393,14 @@ def test_varios_dependentes_podem_apontar_para_a_mesma_origem(conexao, cadeia):
     )
 
 
-def test_referencias_ficam_refletidas_depois_de_trocar_a_origem(conexao, pasta, cadeia):
+def test_referencias_ficam_refletidas_depois_de_trocar_a_origem(conexao, cadeia):
     # arrange
     e1, e2 = _ensaio(conexao, cadeia), _ensaio(conexao, cadeia, umidade="0.5")
     proctor = _proctor(conexao, cadeia, e1.id)
 
     # act
     novo = servico.atualizar_registro(
-        conexao, proctor.id, {"ensaio": e2.id, "massa": "100"}, DEPOIS, pasta
+        conexao, proctor.id, {"ensaio": e2.id, "massa": "100"}, DEPOIS
     )
 
     # assert
@@ -490,7 +478,7 @@ def test_erro_de_calculo_na_origem_propaga_citando_o_campo_de_origem(conexao):
 
 
 def test_atualizar_a_origem_recalcula_os_dependentes_transitivos_na_mesma_transacao(
-    conexao, pasta, cadeia
+    conexao, cadeia
 ):
     # arrange: ensaio -> proctor -> insitu
     ensaio = _ensaio(conexao, cadeia, umidade="0.1")
@@ -499,9 +487,7 @@ def test_atualizar_a_origem_recalcula_os_dependentes_transitivos_na_mesma_transa
     assert insitu.dados["grau"]["valor"] == "180.0"
 
     # act
-    servico.atualizar_registro(
-        conexao, ensaio.id, {"umidade": "0.5", "data": "2026-03-01"}, DEPOIS, pasta
-    )
+    servico.atualizar_registro(conexao, ensaio.id, {"umidade": "0.5", "data": "2026-03-01"}, DEPOIS)
 
     # assert
     proctor_depois = servico.obter_registro(conexao, proctor.id)
@@ -512,31 +498,27 @@ def test_atualizar_a_origem_recalcula_os_dependentes_transitivos_na_mesma_transa
     assert proctor_depois.dados["massa"] == "100"  # os campos de entrada do dependente não mudam
 
 
-def test_cascata_mantem_a_versao_de_cada_dependente(conexao, pasta, cadeia):
+def test_cascata_mantem_a_versao_de_cada_dependente(conexao, cadeia):
     # arrange: o proctor nasceu na v1; depois sai a v2 do proctor
     ensaio = _ensaio(conexao, cadeia)
     proctor = _proctor(conexao, cadeia, ensaio.id)
     servico.publicar_versao(conexao, cadeia[1].formulario.id, PROCTOR, DEPOIS)
 
     # act
-    servico.atualizar_registro(
-        conexao, ensaio.id, {"umidade": "0.2", "data": "2026-01-01"}, DEPOIS, pasta
-    )
+    servico.atualizar_registro(conexao, ensaio.id, {"umidade": "0.2", "data": "2026-01-01"}, DEPOIS)
 
     # assert
     assert servico.obter_registro(conexao, proctor.id).versao_id == cadeia[1].versao.id
 
 
-def test_cascata_atualiza_a_data_de_modificacao_so_de_quem_mudou(conexao, pasta, cadeia):
+def test_cascata_atualiza_a_data_de_modificacao_so_de_quem_mudou(conexao, cadeia):
     # arrange
     ensaio = _ensaio(conexao, cadeia)
     mudou = _proctor(conexao, cadeia, ensaio.id)
     quieto = _registro(conexao, cadeia[1], {"massa": "1"})  # sem referência: não depende do ensaio
 
     # act
-    servico.atualizar_registro(
-        conexao, ensaio.id, {"umidade": "0.9", "data": "2026-01-01"}, DEPOIS, pasta
-    )
+    servico.atualizar_registro(conexao, ensaio.id, {"umidade": "0.9", "data": "2026-01-01"}, DEPOIS)
 
     # assert
     assert servico.obter_registro(conexao, mudou.id).atualizado_em == DEPOIS.isoformat(
@@ -545,23 +527,21 @@ def test_cascata_atualiza_a_data_de_modificacao_so_de_quem_mudou(conexao, pasta,
     assert servico.obter_registro(conexao, quieto.id).atualizado_em == quieto.atualizado_em
 
 
-def test_atualizar_sem_mudar_o_que_o_dependente_usa_nao_regrava_o_dependente(
-    conexao, pasta, cadeia
-):
+def test_atualizar_sem_mudar_o_que_o_dependente_usa_nao_regrava_o_dependente(conexao, cadeia):
     # arrange
     ensaio = _ensaio(conexao, cadeia)
     proctor = _proctor(conexao, cadeia, ensaio.id)
 
     # act: só o campo não compartilhado muda
     servico.atualizar_registro(
-        conexao, ensaio.id, {"umidade": "0.1", "data": "2026-01-01", "obs": "novo"}, DEPOIS, pasta
+        conexao, ensaio.id, {"umidade": "0.1", "data": "2026-01-01", "obs": "novo"}, DEPOIS
     )
 
     # assert
     assert servico.obter_registro(conexao, proctor.id).atualizado_em == proctor.atualizado_em
 
 
-def test_erro_de_calculo_no_dependente_vira_erro_no_campo_e_nao_reverte_a_origem(conexao, pasta):
+def test_erro_de_calculo_no_dependente_vira_erro_no_campo_e_nao_reverte_a_origem(conexao):
     # arrange
     origem = {"campos": [{"id": "v", "tipo": "numero", "rotulo": "V", "compartilhado": True}]}
     dependente = {
@@ -577,7 +557,7 @@ def test_erro_de_calculo_no_dependente_vira_erro_no_campo_e_nao_reverte_a_origem
     assert reg_dependente.dados["inverso"]["valor"] == "0.5"
 
     # act: a edição da origem faz o dependente dividir por zero
-    servico.atualizar_registro(conexao, reg_origem.id, {"v": 0}, DEPOIS, pasta)
+    servico.atualizar_registro(conexao, reg_origem.id, {"v": 0}, DEPOIS)
 
     # assert
     assert servico.obter_registro(conexao, reg_origem.id).dados["v"] == "0"
@@ -592,59 +572,57 @@ def test_criar_registro_nao_dispara_cascata(conexao, cadeia):
     assert ensaio.dados["umidade"] == "0.1"
 
 
-def test_falha_no_meio_da_cascata_desfaz_tambem_a_edicao_da_origem(
-    conexao, pasta, cadeia, monkeypatch
-):
+def test_falha_no_meio_da_cascata_desfaz_tambem_a_edicao_da_origem(conexao, cadeia, monkeypatch):
     # arrange
     ensaio = _ensaio(conexao, cadeia, umidade="0.1")
     _proctor(conexao, cadeia, ensaio.id)
     original = servico.repositorio.atualizar_registro
     chamadas = []
 
-    def falha_no_segundo(conexao_, registro_id, dados, agora):
+    def falha_no_segundo(conexao_, registro_id, dados, agora, **nomeados):
         chamadas.append(registro_id)
         if len(chamadas) == 2:  # o primeiro é a origem; o segundo é o dependente
             raise RuntimeError("falha simulada na cascata")
-        return original(conexao_, registro_id, dados, agora)
+        return original(conexao_, registro_id, dados, agora, **nomeados)
 
     monkeypatch.setattr(servico.repositorio, "atualizar_registro", falha_no_segundo)
 
     # act
     with pytest.raises(RuntimeError):
         servico.atualizar_registro(
-            conexao, ensaio.id, {"umidade": "0.9", "data": "2026-01-01"}, DEPOIS, pasta
+            conexao, ensaio.id, {"umidade": "0.9", "data": "2026-01-01"}, DEPOIS
         )
 
     # assert: a origem voltou ao que era
     assert servico.obter_registro(conexao, ensaio.id).dados["umidade"] == "0.1"
-    assert not conexao.in_transaction
+    assert conexao.info.transaction_status == pq.TransactionStatus.IDLE
 
 
 # --- exclusão com bloqueio (#29) ---
 
 
-def test_registro_referenciado_nao_pode_ser_excluido(conexao, pasta, cadeia):
+def test_registro_referenciado_nao_pode_ser_excluido(conexao, cadeia):
     # arrange
     ensaio = _ensaio(conexao, cadeia)
     proctor = _proctor(conexao, cadeia, ensaio.id)
 
     # act
     with pytest.raises(ExclusaoBloqueada) as excecao:
-        servico.excluir_registro(conexao, ensaio.id, pasta)
+        servico.excluir_registro(conexao, ensaio.id)
 
     # assert
     assert str(proctor.id) in str(excecao.value)
     assert servico.obter_registro(conexao, ensaio.id) == ensaio
 
 
-def test_registro_pode_ser_excluido_quando_o_dependente_some(conexao, pasta, cadeia):
+def test_registro_pode_ser_excluido_quando_o_dependente_some(conexao, cadeia):
     # arrange
     ensaio = _ensaio(conexao, cadeia)
     proctor = _proctor(conexao, cadeia, ensaio.id)
 
     # act
-    servico.excluir_registro(conexao, proctor.id, pasta)
-    servico.excluir_registro(conexao, ensaio.id, pasta)
+    servico.excluir_registro(conexao, proctor.id)
+    servico.excluir_registro(conexao, ensaio.id)
 
     # assert
     with pytest.raises(NaoEncontrado):

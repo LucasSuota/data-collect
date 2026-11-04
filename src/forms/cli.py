@@ -1,7 +1,10 @@
-"""Linha de comando enxuta: importar template, criar registro, listar e exportar (§2.4).
+"""Linha de comando de operação: migrar, criar equipe, importar template, registros (§2.4).
 
 Só `argparse` e impressão: toda regra fica no `servico`. Erro de domínio vira mensagem em
 português e código de saída 1; erro de uso do `argparse` sai com 2.
+
+É para quem administra o servidor, não um atalho para furar permissões: os comandos de dados
+exigem `--equipe` e `--usuario` explícitos e valem só o que o cargo daquela pessoa permite.
 """
 
 import argparse
@@ -24,7 +27,7 @@ from forms.models import (
     TipoCampo,
 )
 
-BANCO_PADRAO = "forms.db"
+DSN_PADRAO = "postgresql://forms:forms@127.0.0.1:5433/forms"
 
 
 def main(
@@ -33,7 +36,15 @@ def main(
 ) -> int:
     args = _montar_parser().parse_args(argv)
     try:
-        with closing(servico.abrir_banco(args.banco)) as conexao:
+        with closing(servico.abrir_banco(args.dsn, migrar=args.migrar_antes)) as conexao:
+            if args.com_equipe:
+                if args.equipe is None or args.usuario is None:
+                    raise _UsoInvalido(
+                        "Informe --equipe e --usuario (ou FORMS_EQUIPE e FORMS_USUARIO)."
+                    )
+                conexao.definir_contexto(
+                    servico.contexto_da_pessoa(conexao, args.usuario, args.equipe)
+                )
             return args.executar(conexao, args, relogio())
     except ErroDeDominio as erro:
         _imprimir_erro(erro)
@@ -47,11 +58,33 @@ def _montar_parser() -> argparse.ArgumentParser:
         prog="forms", description="Construtor de formulários modulares (linha de comando)."
     )
     parser.add_argument(
-        "--banco",
-        default=os.environ.get("FORMS_DB_PATH", BANCO_PADRAO),
-        help=f"arquivo do banco SQLite (padrão: variável FORMS_DB_PATH ou {BANCO_PADRAO})",
+        "--dsn",
+        default=os.environ.get("FORMS_DATABASE_URL", DSN_PADRAO),
+        help="endereço do PostgreSQL (padrão: variável FORMS_DATABASE_URL)",
+    )
+    parser.add_argument(
+        "--equipe",
+        type=int,
+        default=_inteiro_do_ambiente("FORMS_EQUIPE"),
+        help="id da equipe (padrão: variável FORMS_EQUIPE)",
+    )
+    parser.add_argument(
+        "--usuario",
+        type=int,
+        default=_inteiro_do_ambiente("FORMS_USUARIO"),
+        help="id da pessoa em nome de quem o comando roda (padrão: variável FORMS_USUARIO)",
     )
     comandos = parser.add_subparsers(dest="comando", required=True, metavar="comando")
+
+    migrar = comandos.add_parser("migrar", help="aplica as migrações pendentes do banco")
+    migrar.set_defaults(executar=_migrar, com_equipe=False, migrar_antes=False)
+
+    equipe = comandos.add_parser(
+        "criar-equipe", help="cria uma equipe e o convite do primeiro administrador"
+    )
+    equipe.add_argument("nome", help="nome da equipe")
+    equipe.add_argument("--email", required=True, help="e-mail de quem será o administrador")
+    equipe.set_defaults(executar=_criar_equipe, com_equipe=False, migrar_antes=False)
 
     importar = comandos.add_parser(
         "importar-template", help="cria formulários a partir de arquivos JSON"
@@ -60,7 +93,7 @@ def _montar_parser() -> argparse.ArgumentParser:
         "arquivos", nargs="+", type=Path, help="templates (o nome do arquivo é o do formulário)"
     )
     importar.add_argument("--nome", help="nome do formulário (só com um arquivo)")
-    importar.set_defaults(executar=_importar_template)
+    importar.set_defaults(executar=_importar_template, com_equipe=True, migrar_antes=False)
 
     criar = comandos.add_parser("criar-registro", help="cria um registro a partir de um JSON")
     criar.add_argument("formulario", help="nome ou id do formulário")
@@ -68,7 +101,7 @@ def _montar_parser() -> argparse.ArgumentParser:
         "--dados", required=True, help="arquivo JSON com os valores (ou - para a entrada padrão)"
     )
     criar.add_argument("--versao", type=int, help="id da versão (padrão: a atual)")
-    criar.set_defaults(executar=_criar_registro)
+    criar.set_defaults(executar=_criar_registro, com_equipe=True, migrar_antes=False)
 
     listar = comandos.add_parser(
         "listar", help="lista os formulários ou os registros de um formulário"
@@ -77,13 +110,13 @@ def _montar_parser() -> argparse.ArgumentParser:
     _argumentos_de_consulta(listar)
     listar.add_argument("--limite", type=int, default=servico.LIMITE_PADRAO)
     listar.add_argument("--deslocamento", type=int, default=0)
-    listar.set_defaults(executar=_listar)
+    listar.set_defaults(executar=_listar, com_equipe=True, migrar_antes=False)
 
     exportar = comandos.add_parser("exportar", help="exporta os registros em CSV para o Excel")
     exportar.add_argument("formulario", help="nome ou id do formulário")
     _argumentos_de_consulta(exportar)
     exportar.add_argument("--saida", type=Path, help="arquivo CSV (padrão: saída padrão)")
-    exportar.set_defaults(executar=_exportar)
+    exportar.set_defaults(executar=_exportar, com_equipe=True, migrar_antes=False)
     return parser
 
 
@@ -99,6 +132,21 @@ def _argumentos_de_consulta(parser: argparse.ArgumentParser) -> None:
 
 
 # --- comandos ---
+
+
+def _migrar(conexao: servico.Conexao, args: argparse.Namespace, agora: datetime) -> int:
+    aplicadas = servico.migrar_banco(conexao)
+    print(f"{aplicadas} migração(ões) aplicada(s).")
+    return 0
+
+
+def _criar_equipe(conexao: servico.Conexao, args: argparse.Namespace, agora: datetime) -> int:
+    token = servico.garantir_primeiro_administrador(conexao, args.email, args.nome, agora)
+    if token is None:
+        print("Já existe uma equipe: use o convite dentro do app.", file=sys.stderr)
+        return 1
+    print(f"Equipe '{args.nome}' criada. Abra no app: /convite/{token}")
+    return 0
 
 
 def _importar_template(conexao: servico.Conexao, args: argparse.Namespace, agora: datetime) -> int:
@@ -176,6 +224,11 @@ def _exportar(conexao: servico.Conexao, args: argparse.Namespace, agora: datetim
 
 class _UsoInvalido(ErroDeDominio):
     """Combinação de argumentos que o `argparse` não consegue recusar sozinho."""
+
+
+def _inteiro_do_ambiente(nome: str) -> int | None:
+    valor = os.environ.get(nome, "").strip()
+    return int(valor) if valor.isdigit() else None
 
 
 def _ler_dados(origem: str) -> object:

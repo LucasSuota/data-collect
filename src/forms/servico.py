@@ -5,13 +5,13 @@ controla a transação, então cada caso de uso grava tudo ou nada.
 """
 
 import json
-import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
-from forms import repositorio, validacao
+from forms import banco, repositorio, validacao
+from forms.banco import Conexao
 from forms.formulas import CONSTANTES, FUNCOES, NOMES_RESERVADOS, ordenar_calculados
 from forms.models import (
     CicloDeDependencia,
@@ -26,7 +26,6 @@ from forms.models import (
     Versao,
 )
 from forms.repositorio import ResumoDeFormulario, ResumoDeVersao, chave_do_nome
-from forms.servico_anexos import guardar_anexo, ler_anexo, limpar_anexos_orfaos
 from forms.servico_base import (
     compartilhados_publicados,
     origens_publicadas,
@@ -39,6 +38,11 @@ from forms.servico_consulta import (
     ListagemDeRegistros,
     exportar_csv,
     listar_registros,
+)
+from forms.servico_equipes import (
+    contexto_da_pessoa,
+    criar_equipe,
+    garantir_primeiro_administrador,
 )
 from forms.servico_pastas import (
     atualizar_pasta,
@@ -59,9 +63,6 @@ from forms.servico_registros import (
 )
 from forms.tipos_campo import ESPECIFICACOES, PROPRIEDADES_COMUNS
 from forms.validacao import CampoCompartilhado
-
-# O tipo da conexão, para quem chama o `servico` sem importar `sqlite3` (a CLI, por exemplo).
-Conexao = sqlite3.Connection
 
 # --- tipos de entrada e saída ---
 
@@ -126,11 +127,14 @@ class Catalogo:
 # --- banco e leitura ---
 
 
-def abrir_banco(caminho: Path | str) -> Conexao:
-    """Abre (e cria, se preciso) o banco, com o esquema migrado para a versão atual."""
-    if str(caminho) != ":memory:":
-        Path(caminho).parent.mkdir(parents=True, exist_ok=True)
-    return repositorio.abrir_conexao(caminho)
+def abrir_banco(dsn: str, *, migrar: bool = False) -> Conexao:
+    """Abre uma conexão com o Postgres; com `migrar`, aplica as migrações pendentes."""
+    return banco.abrir_conexao(dsn, migrar_esquema=migrar)
+
+
+def migrar_banco(conexao: Conexao) -> int:
+    """Aplica as migrações pendentes; devolve quantas foram aplicadas."""
+    return banco.migrar(conexao)
 
 
 def localizar_formulario(conexao: Conexao, referencia: str) -> FormularioComVersao:
@@ -143,11 +147,11 @@ def localizar_formulario(conexao: Conexao, referencia: str) -> FormularioComVers
     return obter_formulario(conexao, formulario.id)
 
 
-def listar_formularios(conexao: sqlite3.Connection) -> list[ResumoDeFormulario]:
+def listar_formularios(conexao: Conexao) -> list[ResumoDeFormulario]:
     return repositorio.listar_formularios(conexao)
 
 
-def obter_formulario(conexao: sqlite3.Connection, formulario_id: int) -> FormularioComVersao:
+def obter_formulario(conexao: Conexao, formulario_id: int) -> FormularioComVersao:
     """O formulário com a versão atual completa: é de onde o front tira o `versao_id`."""
     return FormularioComVersao(
         formulario=repositorio.obter_formulario(conexao, formulario_id),
@@ -155,12 +159,12 @@ def obter_formulario(conexao: sqlite3.Connection, formulario_id: int) -> Formula
     )
 
 
-def listar_versoes(conexao: sqlite3.Connection, formulario_id: int) -> list[ResumoDeVersao]:
+def listar_versoes(conexao: Conexao, formulario_id: int) -> list[ResumoDeVersao]:
     repositorio.obter_formulario(conexao, formulario_id)  # 404 se o formulário não existe
     return repositorio.listar_versoes(conexao, formulario_id)
 
 
-def obter_versao(conexao: sqlite3.Connection, formulario_id: int, versao_id: int) -> Versao:
+def obter_versao(conexao: Conexao, formulario_id: int, versao_id: int) -> Versao:
     """Versão com a definição, para renderizar um registro antigo."""
     return repositorio.obter_versao(conexao, versao_id, formulario_id)
 
@@ -190,7 +194,7 @@ def catalogo() -> Catalogo:
     )
 
 
-def validar_definicao(conexao: sqlite3.Connection, definicao: ValorJson) -> ResultadoDaValidacao:
+def validar_definicao(conexao: Conexao, definicao: ValorJson) -> ResultadoDaValidacao:
     """Sem estado: não exige formulário criado. Definição incompleta é o caso normal enquanto o
     usuário edita, então devolve os erros (todos) em vez de levantar."""
     origens = origens_publicadas(conexao, referencias_brutas(definicao), {})
@@ -202,7 +206,7 @@ def validar_definicao(conexao: sqlite3.Connection, definicao: ValorJson) -> Resu
 
 
 def criar_formulario(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     nome: str,
     definicao: ValorJson,
     agora: datetime,
@@ -225,7 +229,7 @@ def criar_formulario(
 
 
 def duplicar_formulario(
-    conexao: sqlite3.Connection, formulario_id: int, nome: str | None, agora: datetime
+    conexao: Conexao, formulario_id: int, nome: str | None, agora: datetime
 ) -> FormularioCriado:
     """Cria um formulário novo com a v1 igual à definição da versão atual do original (§2.10).
 
@@ -241,7 +245,7 @@ def duplicar_formulario(
     return criar_formulario(conexao, nome, definicao.para_json(), agora, original.pasta_id)
 
 
-def _nome_livre_da_copia(conexao: sqlite3.Connection, nome: str) -> str:
+def _nome_livre_da_copia(conexao: Conexao, nome: str) -> str:
     """`<nome> (cópia)`, depois `(cópia 2)`, `(cópia 3)`… até achar um que não exista."""
     candidato = f"{nome} (cópia)"
     numero = 1
@@ -252,7 +256,7 @@ def _nome_livre_da_copia(conexao: sqlite3.Connection, nome: str) -> str:
 
 
 def publicar_versao(
-    conexao: sqlite3.Connection, formulario_id: int, definicao: ValorJson, agora: datetime
+    conexao: Conexao, formulario_id: int, definicao: ValorJson, agora: datetime
 ) -> Versao:
     """Publica a próxima versão (anterior + 1). A publicada nunca é alterada."""
     formulario = repositorio.obter_formulario(conexao, formulario_id)
@@ -266,9 +270,7 @@ def publicar_versao(
         return _gravar(conexao, conjunto, agora, versionando=formulario)[0].versao
 
 
-def validar_conjunto(
-    conexao: sqlite3.Connection, rascunhos: Sequence[Rascunho]
-) -> list[ErrosDoFormulario]:
+def validar_conjunto(conexao: Conexao, rascunhos: Sequence[Rascunho]) -> list[ErrosDoFormulario]:
     """Valida formulários ainda não publicados que podem se referenciar entre si, sem gravar.
 
     É o que o lote e o gerador por IA usam. Devolve só os formulários com erro.
@@ -277,7 +279,7 @@ def validar_conjunto(
 
 
 def criar_formularios_em_lote(
-    conexao: sqlite3.Connection, rascunhos: Sequence[Rascunho], agora: datetime
+    conexao: Conexao, rascunhos: Sequence[Rascunho], agora: datetime
 ) -> list[FormularioCriado]:
     """Cria todos numa só transação, origem primeiro, cada um com a versão 1. Qualquer erro
     levanta `LoteInvalido` e não cria nada. Independe da ordem de entrada."""
@@ -295,7 +297,7 @@ def criar_formularios_em_lote(
 
 
 def importar_template(
-    conexao: sqlite3.Connection, caminho: Path, agora: datetime, nome: str | None = None
+    conexao: Conexao, caminho: Path, agora: datetime, nome: str | None = None
 ) -> FormularioCriado:
     """Cria um formulário a partir de um arquivo de definição (por exemplo, `templates/*.json`).
 
@@ -308,7 +310,7 @@ def importar_template(
 
 
 def importar_templates(
-    conexao: sqlite3.Connection, caminhos: Sequence[Path], agora: datetime
+    conexao: Conexao, caminhos: Sequence[Path], agora: datetime
 ) -> list[FormularioCriado]:
     """Importa vários templates de uma vez, numa transação, origem primeiro (qualquer ordem)."""
     return criar_formularios_em_lote(conexao, [ler_template(c) for c in caminhos], agora)
@@ -348,7 +350,7 @@ class _Conjunto:
 
 
 def _validar_conjunto(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     rascunhos: Sequence[Rascunho],
     versionando: Formulario | None = None,
 ) -> _Conjunto:
@@ -368,7 +370,7 @@ def _validar_conjunto(
 
 
 def _validar_nomes(
-    conexao: sqlite3.Connection, itens: Sequence[_Item], versionando: Formulario | None
+    conexao: Conexao, itens: Sequence[_Item], versionando: Formulario | None
 ) -> dict[str, _Item]:
     """Devolve o primeiro item de cada nome; os repetidos ganham erro no campo `nome`."""
     por_chave: dict[str, _Item] = {}
@@ -416,7 +418,7 @@ def _registrar_ciclo(caminho: Sequence[str], por_chave: Mapping[str, _Item]) -> 
 
 
 def _analisar_item(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     item: _Item,
     por_chave: Mapping[str, _Item],
     cache: dict[int, dict[str, CampoCompartilhado]],
@@ -451,9 +453,7 @@ def _analisar_item(
         )
 
 
-def _conferir_ciclo_com_dependentes(
-    conexao: sqlite3.Connection, item: _Item, versionando: Formulario
-) -> None:
+def _conferir_ciclo_com_dependentes(conexao: Conexao, item: _Item, versionando: Formulario) -> None:
     """A nova versão de uma origem não pode passar a depender de quem já depende dela."""
     dependentes = set(repositorio.formularios_dependentes(conexao, versionando.id, transitivo=True))
     for campo_id, nome in item.referencias:
@@ -470,7 +470,7 @@ def _conferir_ciclo_com_dependentes(
 
 
 def _conferir_contrato(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     item: _Item,
     formulario: Formulario,
     cache: dict[int, dict[str, CampoCompartilhado]],
@@ -536,7 +536,7 @@ def _erros_do_conjunto(conjunto: _Conjunto) -> list[ErrosDoFormulario]:
 
 
 def _gravar(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     conjunto: _Conjunto,
     agora: datetime,
     versionando: Formulario | None,
@@ -571,6 +571,10 @@ __all__ = [
     "ResultadoDaPrevia",
     "ResultadoDaValidacao",
     "abrir_banco",
+    "contexto_da_pessoa",
+    "criar_equipe",
+    "garantir_primeiro_administrador",
+    "migrar_banco",
     "atualizar_pasta",
     "atualizar_registro",
     "catalogo",
@@ -583,11 +587,8 @@ __all__ = [
     "excluir_pasta",
     "excluir_registro",
     "exportar_csv",
-    "guardar_anexo",
     "importar_template",
     "importar_templates",
-    "ler_anexo",
-    "limpar_anexos_orfaos",
     "listar_formularios",
     "listar_pastas",
     "listar_registros",

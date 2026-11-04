@@ -7,11 +7,11 @@ o catálogo e os metadados dos formulários (nome e campos compartilhados).
 """
 
 import json
-import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 from forms import servico
+from forms.banco import Conexao
 from forms.ia.cliente import ClienteDeLLM
 from forms.models import ErroDeCampo, ErroDeDominio, ValorInvalido, ValorJson
 from forms.servico import Rascunho
@@ -53,7 +53,7 @@ Regras:
 
 
 def gerar(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     cliente: ClienteDeLLM,
     pedido: str,
     rascunhos: Sequence[Rascunho] = (),
@@ -105,9 +105,7 @@ def _catalogo_em_texto() -> str:
     )
 
 
-def _mensagem_inicial(
-    conexao: sqlite3.Connection, pedido: str, rascunhos: Sequence[Rascunho]
-) -> str:
+def _mensagem_inicial(conexao: Conexao, pedido: str, rascunhos: Sequence[Rascunho]) -> str:
     partes = [_existentes_em_texto(conexao)]
     if rascunhos:
         atuais = [{"nome": r.nome, "definicao": r.definicao} for r in rascunhos]
@@ -120,7 +118,7 @@ def _mensagem_inicial(
     return "\n\n".join(partes)
 
 
-def _existentes_em_texto(conexao: sqlite3.Connection) -> str:
+def _existentes_em_texto(conexao: Conexao) -> str:
     """Nome e campos que cada formulário COMPARTILHA (id, rótulo, tipo): nada de registros."""
     linhas = []
     for resumo in servico.listar_formularios(conexao):

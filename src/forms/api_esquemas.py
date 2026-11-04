@@ -64,6 +64,10 @@ class ErroSaida(Modelo):
 
     detalhe: str
     erros: list[ErroDeCampoSaida] = Field(default_factory=list)
+    codigo: str | None = Field(
+        default=None,
+        description="Código estável para o front agir (`token_expirado`, `termos_pendentes`...).",
+    )
 
 
 # --- formulários e versões ---
@@ -137,7 +141,6 @@ class CampoSaida(Modelo):
         "secao",
         "referencia",
         "localizacao",
-        "foto",
     ]
     rotulo: str
     obrigatorio: bool | None = None
@@ -147,7 +150,6 @@ class CampoSaida(Modelo):
     formula: str | None = None
     formulario: str | None = None
     compartilhado: bool | None = None
-    maximo: int | None = None
 
     # Sem anotação de retorno de propósito: com `-> dict` o Pydantic trocaria o esquema do OpenAPI
     # por um objeto genérico, e o TypeScript gerado perderia os campos.
@@ -381,7 +383,6 @@ class ColunaSaida(Modelo):
         "calculado",
         "referencia",
         "localizacao",
-        "foto",
     ]
     casas_decimais: int | None
     resultado: Literal["numero", "data", "booleano"] | None = Field(
@@ -415,11 +416,142 @@ class ListagemDeRegistrosSaida(Modelo):
     total: int
 
 
-# --- anexos ---
+# --- pessoa, equipe, cargos, convites e termos (§2.12 a §2.15) ---
 
 
-class AnexoSaida(Modelo):
+class PessoaSaida(Modelo):
     id: int
-    largura: int
-    altura: int
-    tamanho_bytes: int
+    nome: str
+    email: str | None
+
+
+class CargoResumoSaida(Modelo):
+    id: int
+    nome: str
+
+
+class EquipeDaPessoaSaida(Modelo):
+    id: int
+    nome: str
+    ativa: bool = Field(description="Falso quando a pessoa foi desativada nesta equipe.")
+    cargo: CargoResumoSaida
+    permissoes: list[str] = Field(description="Ids das permissões do cargo (para o front).")
+
+
+class EuSaida(Modelo):
+    """Quem sou eu: perfil, equipes com cargo e permissões, e os termos ainda por aceitar."""
+
+    pessoa: PessoaSaida
+    equipes: list[EquipeDaPessoaSaida]
+    termos_pendentes: list[str]
+
+
+class PermissaoSaida(Modelo):
+    id: str
+    grupo: str
+    rotulo: str
+    descricao: str
+
+
+class CatalogoDePermissoesSaida(Modelo):
+    permissoes: list[PermissaoSaida]
+
+
+class CargoSaida(Modelo):
+    id: int
+    nome: str
+    descricao: str
+    padrao: bool
+    permissoes: list[str]
+    pessoas: int
+
+
+class CargoEntrada(Modelo):
+    nome: str = Field(min_length=1, max_length=80)
+    descricao: str = Field(default="", max_length=300)
+    permissoes: list[str] = Field(max_length=64)
+
+
+class EquipeSaida(Modelo):
+    id: int
+    nome: str
+
+
+class EquipeEntrada(Modelo):
+    nome: str = Field(min_length=1, max_length=120)
+
+
+class MembroSaida(Modelo):
+    usuario_id: int
+    nome: str
+    email: str | None
+    cargo: CargoResumoSaida
+    ativo: bool
+    entrou_em: str
+
+
+class TrocarCargoEntrada(Modelo):
+    cargo_id: int
+
+
+class ConviteSaida(Modelo):
+    id: int
+    email: str
+    cargo: CargoResumoSaida
+    criado_em: str
+    expira_em: str
+
+
+class ConviteCriadoSaida(Modelo):
+    convite: ConviteSaida
+    token: str = Field(description="O token do convite. Só aparece nesta resposta.")
+
+
+class ConviteEntrada(Modelo):
+    email: str = Field(min_length=3, max_length=254)
+    cargo_id: int
+
+
+class AceitarConviteSaida(Modelo):
+    equipe: EquipeSaida
+
+
+class DocumentoLegalSaida(Modelo):
+    id: str
+    titulo: str
+    versao: str
+    markdown: str
+
+
+class DocumentosLegaisSaida(Modelo):
+    documentos: list[DocumentoLegalSaida]
+
+
+class ConsentimentoSaida(Modelo):
+    documento: str
+    versao: str
+    aceito_em: str
+
+
+class ConsentimentosSaida(Modelo):
+    aceites: list[ConsentimentoSaida]
+    pendentes: list[str]
+
+
+class ConsentimentoEntrada(Modelo):
+    documentos: list[str] | None = Field(
+        default=None, description="Documentos aceitos; omitido = todos os vigentes."
+    )
+
+
+class HistoricoSaida(Modelo):
+    id: int
+    usuario_id: int | None
+    quando: str
+    acao: str
+    valores_anteriores: object | None
+    motivo: str | None
+
+
+class SaudeSaida(Modelo):
+    status: Literal["ok"]

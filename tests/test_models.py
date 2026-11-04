@@ -17,7 +17,6 @@ from forms.models import (
     ExclusaoBloqueada,
     FormulaInvalida,
     Formulario,
-    FotoInvalida,
     LoteInvalido,
     NaoEncontrado,
     Posicao,
@@ -87,10 +86,9 @@ def test_campo_tem_defaults_seguros():
     assert campo.formula is None
     assert campo.casas_decimais is None
     assert campo.formulario is None
-    assert campo.maximo is None
 
 
-def test_tipo_campo_tem_os_dez_tipos_do_contrato():
+def test_tipo_campo_tem_os_nove_tipos_do_contrato():
     # assert
     assert {tipo.value for tipo in TipoCampo} == {
         "texto",
@@ -102,7 +100,6 @@ def test_tipo_campo_tem_os_dez_tipos_do_contrato():
         "secao",
         "referencia",
         "localizacao",
-        "foto",
     }
 
 
@@ -202,7 +199,6 @@ def test_formula_invalida_aceita_posicao_ausente():
         NaoEncontrado("x"),
         ExclusaoBloqueada("x"),
         ValorInvalido("x"),
-        FotoInvalida("x"),
         LoteInvalido(()),
     ],
 )
@@ -243,7 +239,6 @@ DEFINICAO_COMPLETA = {
         {"id": "dia", "tipo": "data", "rotulo": "Dia"},
         {"id": "r", "tipo": "selecao", "rotulo": "R", "opcoes": ["A", "B"]},
         {"id": "ref", "tipo": "referencia", "rotulo": "Ref", "formulario": "ensaio"},
-        {"id": "fotos", "tipo": "foto", "rotulo": "Fotos", "maximo": 3},
         {"id": "dobro", "tipo": "calculado", "rotulo": "Dobro", "formula": "fck * 2"},
     ]
 }

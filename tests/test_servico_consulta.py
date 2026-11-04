@@ -4,7 +4,6 @@ import pytest
 
 from forms import servico
 from forms.models import NaoEncontrado, RegistroInvalido, TipoCampo
-from forms.repositorio import abrir_conexao
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 
@@ -27,13 +26,6 @@ DEFINICAO = {
         {"id": "local", "tipo": "localizacao", "rotulo": "Local"},
     ]
 }
-
-
-@pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
 
 
 @pytest.fixture

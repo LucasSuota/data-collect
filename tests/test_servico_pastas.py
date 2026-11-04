@@ -1,24 +1,16 @@
-import sqlite3
 from datetime import UTC, datetime
 
 import pytest
 
 from forms import servico
+from forms.banco import Conexao
 from forms.models import ExclusaoBloqueada, NaoEncontrado, PastaInvalida
-from forms.repositorio import abrir_conexao
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 DEFINICAO = {"campos": [{"id": "obs", "tipo": "texto", "rotulo": "Observação"}]}
 
 
-@pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
-
-
-def _formulario(conexao: sqlite3.Connection, nome: str = "ensaio") -> int:
+def _formulario(conexao: Conexao, nome: str = "ensaio") -> int:
     return servico.criar_formulario(conexao, nome, DEFINICAO, AGORA).formulario.id
 
 

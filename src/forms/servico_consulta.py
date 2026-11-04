@@ -4,12 +4,12 @@ A listagem e a exportação passam pelo mesmo caminho (`_consultar`), então a m
 mesmos filtros valem nas duas.
 """
 
-import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
 
 from forms import repositorio
+from forms.banco import Conexao
 from forms.exportacao import Coluna, gerar_csv
 from forms.formulas import TipoFormula
 from forms.models import ErroDeCampo, Registro, RegistroInvalido, TipoCampo, Versao
@@ -33,7 +33,7 @@ class ListagemDeRegistros:
 
 
 def listar_registros(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     formulario_id: int,
     *,
     versao_id: int | None = None,
@@ -59,7 +59,7 @@ def listar_registros(
 
 
 def exportar_csv(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     formulario_id: int,
     *,
     versao_id: int | None = None,
@@ -88,7 +88,7 @@ def exportar_csv(
 
 
 def _consultar(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
     formulario_id: int,
     versao_id: int | None,
     filtros: Mapping[str, str | bool],

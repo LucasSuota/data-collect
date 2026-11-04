@@ -19,8 +19,8 @@ class Localizacao:
     longitude: Decimal
 
 
-# Foto é a lista de ids dos anexos; referência é o id do registro de origem (§2.7 e §2.8).
-type ValorNormalizado = str | bool | int | Decimal | date | Localizacao | tuple[int, ...] | None
+# Referência é o id do registro de origem (§2.7).
+type ValorNormalizado = str | bool | int | Decimal | date | Localizacao | None
 
 _LATITUDE_MAXIMA = Decimal(90)
 _LONGITUDE_MAXIMA = Decimal(180)
@@ -65,7 +65,6 @@ ESPECIFICACOES: dict[TipoCampo, EspecificacaoDeTipo] = {
         EspecificacaoDeTipo(TipoCampo.SECAO, "Seção", ()),
         EspecificacaoDeTipo(TipoCampo.REFERENCIA, "Referência", ("obrigatorio", "formulario")),
         EspecificacaoDeTipo(TipoCampo.LOCALIZACAO, "Localização", ("obrigatorio", "compartilhado")),
-        EspecificacaoDeTipo(TipoCampo.FOTO, "Foto", ("obrigatorio", "maximo", "compartilhado")),
     )
 }
 
@@ -191,21 +190,6 @@ def _coordenada(valor: ValorJson, nome: str, limite: Decimal) -> Decimal:
     return coordenada
 
 
-def _normalizar_foto(campo: Campo, valor: ValorJson) -> tuple[int, ...] | None:
-    if not isinstance(valor, list):
-        raise ValorInvalido("As fotos devem ser uma lista de ids de anexo.")
-    if not valor:
-        return None
-    if not all(_eh_id(item) for item in valor):
-        raise ValorInvalido("Cada foto deve ser o id (inteiro positivo) de um anexo enviado.")
-    ids = tuple(item for item in valor if isinstance(item, int))
-    if len(set(ids)) != len(ids):
-        raise ValorInvalido("A mesma foto não pode aparecer duas vezes.")
-    if campo.maximo is not None and len(ids) > campo.maximo:
-        raise ValorInvalido(f"Envie no máximo {campo.maximo} fotos.")
-    return ids
-
-
 def _normalizar_referencia(campo: Campo, valor: ValorJson) -> int:
     # Aqui só se confere o formato; a existência do registro é do serviço (§2.7).
     if not _eh_id(valor) or not isinstance(valor, int):
@@ -225,6 +209,5 @@ _NORMALIZADORES: dict[TipoCampo, Callable[[Campo, ValorJson], ValorNormalizado]]
     TipoCampo.SELECAO: _normalizar_selecao,
     TipoCampo.SIM_NAO: _normalizar_sim_nao,
     TipoCampo.LOCALIZACAO: _normalizar_localizacao,
-    TipoCampo.FOTO: _normalizar_foto,
     TipoCampo.REFERENCIA: _normalizar_referencia,
 }

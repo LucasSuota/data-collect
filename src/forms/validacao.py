@@ -297,7 +297,6 @@ _LEITORES_DE_PROPRIEDADE = {
     "casas_decimais": _inteiro_a_partir_de(
         0, "As casas decimais devem ser um inteiro a partir de 0."
     ),
-    "maximo": _inteiro_a_partir_de(1, "O máximo de fotos deve ser um inteiro a partir de 1."),
     "opcoes": _opcoes,
     "formulario": _formulario,
     "formula": _formula,

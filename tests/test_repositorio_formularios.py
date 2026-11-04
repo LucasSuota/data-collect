@@ -1,11 +1,9 @@
-import json
-import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 
-from forms import repositorio
+from forms import banco, repositorio
+from forms.banco import Conexao
 from forms.models import (
     Campo,
     Definicao,
@@ -14,7 +12,6 @@ from forms.models import (
     TipoCampo,
 )
 from forms.repositorio import (
-    abrir_conexao,
     criar_formulario,
     excluir_formulario,
     inserir_versao,
@@ -34,17 +31,10 @@ def _definicao(*ids: str) -> Definicao:
     return Definicao(tuple(Campo(id=i, tipo=TipoCampo.TEXTO, rotulo=i.upper()) for i in ids))
 
 
-@pytest.fixture
-def conexao():
-    conexao = abrir_conexao(":memory:")
-    yield conexao
-    conexao.close()
-
-
 # --- formulários ---
 
 
-def test_criar_e_buscar_formulario(conexao: sqlite3.Connection):
+def test_criar_e_buscar_formulario(conexao: Conexao):
     # act
     criado = criar_formulario(conexao, "Ensaio", AGORA)
 
@@ -55,10 +45,7 @@ def test_criar_e_buscar_formulario(conexao: sqlite3.Connection):
     assert obter_formulario_por_nome(conexao, "Ensaio") == criado
 
 
-def test_nome_e_guardado_sem_espacos_nas_pontas():
-    # arrange
-    conexao = abrir_conexao(":memory:")
-
+def test_nome_e_guardado_sem_espacos_nas_pontas(conexao: Conexao):
     # act
     criado = criar_formulario(conexao, "  Ensaio  ", AGORA)
 
@@ -68,7 +55,7 @@ def test_nome_e_guardado_sem_espacos_nas_pontas():
 
 @pytest.mark.parametrize("repetido", ["ensaio", "ENSAIO", "  Ensaio ", "eNsAiO"])
 def test_nome_repetido_com_outra_caixa_ou_espacos_e_erro_de_dominio(
-    conexao: sqlite3.Connection, repetido: str
+    conexao: Conexao, repetido: str
 ):
     # arrange
     criar_formulario(conexao, "Ensaio", AGORA)
@@ -83,7 +70,7 @@ def test_nome_repetido_com_outra_caixa_ou_espacos_e_erro_de_dominio(
 
 
 def test_nome_repetido_com_acento_em_forma_decomposta_tambem_e_repetido(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
 ):
     # arrange: "é" composto (U+00E9) e decomposto (e + U+0301) são o mesmo nome para quem lê
     criar_formulario(conexao, "Concreto Armado Té", AGORA)
@@ -94,7 +81,7 @@ def test_nome_repetido_com_acento_em_forma_decomposta_tambem_e_repetido(
 
 
 def test_nome_com_maiuscula_acentuada_e_comparado_sem_diferenciar_caixa(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
 ):
     # arrange: o `lower()` do SQLite só entende ASCII; a chave é calculada em Python
     criar_formulario(conexao, "Inspeção", AGORA)
@@ -104,7 +91,7 @@ def test_nome_com_maiuscula_acentuada_e_comparado_sem_diferenciar_caixa(
         criar_formulario(conexao, "INSPEÇÃO".replace("Ã", "ã"), AGORA)
 
 
-def test_nomes_diferentes_convivem(conexao: sqlite3.Connection):
+def test_nomes_diferentes_convivem(conexao: Conexao):
     # act
     criar_formulario(conexao, "Ensaio", AGORA)
     criar_formulario(conexao, "Proctor", AGORA)
@@ -113,14 +100,14 @@ def test_nomes_diferentes_convivem(conexao: sqlite3.Connection):
     assert [f.nome for f in listar_formularios(conexao)] == ["Ensaio", "Proctor"]
 
 
-def test_formulario_inexistente_e_nao_encontrado(conexao: sqlite3.Connection):
+def test_formulario_inexistente_e_nao_encontrado(conexao: Conexao):
     # act / assert
     with pytest.raises(NaoEncontrado):
         obter_formulario(conexao, 99)
     assert obter_formulario_por_nome(conexao, "Fantasma") is None
 
 
-def test_buscar_por_nome_ignora_caixa_e_espacos(conexao: sqlite3.Connection):
+def test_buscar_por_nome_ignora_caixa_e_espacos(conexao: Conexao):
     # arrange
     criado = criar_formulario(conexao, "Ensaio", AGORA)
 
@@ -131,7 +118,7 @@ def test_buscar_por_nome_ignora_caixa_e_espacos(conexao: sqlite3.Connection):
 # --- versões ---
 
 
-def test_primeira_versao_e_a_1_e_guarda_a_definicao_em_json(conexao: sqlite3.Connection):
+def test_primeira_versao_e_a_1_e_guarda_a_definicao_em_json(conexao: Conexao):
     # arrange
     formulario = criar_formulario(conexao, "Ensaio", AGORA)
 
@@ -142,7 +129,7 @@ def test_primeira_versao_e_a_1_e_guarda_a_definicao_em_json(conexao: sqlite3.Con
     assert versao.numero == 1 and versao.formulario_id == formulario.id
     assert versao.definicao == _definicao("a", "b")
     bruto = conexao.execute("SELECT definicao FROM versoes_formulario").fetchone()[0]
-    assert json.loads(bruto) == {
+    assert bruto == {
         "campos": [
             {"id": "a", "tipo": "texto", "rotulo": "A"},
             {"id": "b", "tipo": "texto", "rotulo": "B"},
@@ -150,7 +137,7 @@ def test_primeira_versao_e_a_1_e_guarda_a_definicao_em_json(conexao: sqlite3.Con
     }
 
 
-def test_versao_atual_apos_duas_publicacoes_e_a_2(conexao: sqlite3.Connection):
+def test_versao_atual_apos_duas_publicacoes_e_a_2(conexao: Conexao):
     # arrange
     formulario = criar_formulario(conexao, "Ensaio", AGORA)
     primeira = inserir_versao(conexao, formulario.id, _definicao("a"), AGORA)
@@ -164,7 +151,7 @@ def test_versao_atual_apos_duas_publicacoes_e_a_2(conexao: sqlite3.Connection):
     assert obter_versao(conexao, primeira.id) == primeira
 
 
-def test_numeracao_das_versoes_e_independente_por_formulario(conexao: sqlite3.Connection):
+def test_numeracao_das_versoes_e_independente_por_formulario(conexao: Conexao):
     # arrange
     a = criar_formulario(conexao, "A", AGORA)
     b = criar_formulario(conexao, "B", AGORA)
@@ -178,7 +165,7 @@ def test_numeracao_das_versoes_e_independente_por_formulario(conexao: sqlite3.Co
     assert primeira_de_b.numero == 1
 
 
-def test_versao_antiga_continua_com_a_definicao_original(conexao: sqlite3.Connection):
+def test_versao_antiga_continua_com_a_definicao_original(conexao: Conexao):
     # arrange
     formulario = criar_formulario(conexao, "Ensaio", AGORA)
     primeira = inserir_versao(conexao, formulario.id, _definicao("a"), AGORA)
@@ -188,7 +175,7 @@ def test_versao_antiga_continua_com_a_definicao_original(conexao: sqlite3.Connec
     assert obter_versao(conexao, primeira.id).definicao == _definicao("a")
 
 
-def test_listar_versoes_traz_numero_e_data_sem_a_definicao(conexao: sqlite3.Connection):
+def test_listar_versoes_traz_numero_e_data_sem_a_definicao(conexao: Conexao):
     # arrange
     formulario = criar_formulario(conexao, "Ensaio", AGORA)
     inserir_versao(conexao, formulario.id, _definicao("a"), AGORA)
@@ -205,7 +192,7 @@ def test_listar_versoes_traz_numero_e_data_sem_a_definicao(conexao: sqlite3.Conn
 
 
 def test_versao_de_outro_formulario_nao_e_encontrada_quando_se_informa_o_dono(
-    conexao: sqlite3.Connection,
+    conexao: Conexao,
 ):
     # arrange
     a = criar_formulario(conexao, "A", AGORA)
@@ -218,7 +205,7 @@ def test_versao_de_outro_formulario_nao_e_encontrada_quando_se_informa_o_dono(
         obter_versao(conexao, versao_de_a.id, formulario_id=b.id)
 
 
-def test_formulario_sem_versao_nao_tem_versao_atual(conexao: sqlite3.Connection):
+def test_formulario_sem_versao_nao_tem_versao_atual(conexao: Conexao):
     # arrange
     formulario = criar_formulario(conexao, "Ensaio", AGORA)
 
@@ -227,13 +214,13 @@ def test_formulario_sem_versao_nao_tem_versao_atual(conexao: sqlite3.Connection)
         obter_versao_atual(conexao, formulario.id)
 
 
-def test_versao_inexistente_e_nao_encontrada(conexao: sqlite3.Connection):
+def test_versao_inexistente_e_nao_encontrada(conexao: Conexao):
     # act / assert
     with pytest.raises(NaoEncontrado):
         obter_versao(conexao, 99)
 
 
-def test_inserir_versao_em_formulario_inexistente_e_nao_encontrado(conexao: sqlite3.Connection):
+def test_inserir_versao_em_formulario_inexistente_e_nao_encontrado(conexao: Conexao):
     # act / assert
     with pytest.raises(NaoEncontrado):
         inserir_versao(conexao, 99, _definicao("a"), AGORA)
@@ -252,7 +239,7 @@ def test_o_modulo_nao_oferece_atualizar_nem_apagar_versao():
 # --- listagem ---
 
 
-def test_listagem_traz_versao_atual_e_nao_traz_definicoes(conexao: sqlite3.Connection):
+def test_listagem_traz_versao_atual_e_nao_traz_definicoes(conexao: Conexao):
     # arrange
     ensaio = criar_formulario(conexao, "Ensaio", AGORA)
     inserir_versao(conexao, ensaio.id, _definicao("a"), AGORA)
@@ -272,7 +259,7 @@ def test_listagem_traz_versao_atual_e_nao_traz_definicoes(conexao: sqlite3.Conne
 # --- exclusão ---
 
 
-def test_excluir_formulario_apaga_suas_versoes(conexao: sqlite3.Connection):
+def test_excluir_formulario_apaga_suas_versoes(conexao: Conexao):
     # arrange
     formulario = criar_formulario(conexao, "Ensaio", AGORA)
     inserir_versao(conexao, formulario.id, _definicao("a"), AGORA)
@@ -286,13 +273,13 @@ def test_excluir_formulario_apaga_suas_versoes(conexao: sqlite3.Connection):
         obter_formulario(conexao, formulario.id)
 
 
-def test_excluir_formulario_inexistente_e_nao_encontrado(conexao: sqlite3.Connection):
+def test_excluir_formulario_inexistente_e_nao_encontrado(conexao: Conexao):
     # act / assert
     with pytest.raises(NaoEncontrado):
         excluir_formulario(conexao, 99)
 
 
-def test_nome_de_formulario_excluido_pode_ser_reutilizado(conexao: sqlite3.Connection):
+def test_nome_de_formulario_excluido_pode_ser_reutilizado(conexao: Conexao):
     # arrange
     formulario = criar_formulario(conexao, "Ensaio", AGORA)
     excluir_formulario(conexao, formulario.id)
@@ -304,7 +291,7 @@ def test_nome_de_formulario_excluido_pode_ser_reutilizado(conexao: sqlite3.Conne
 # --- segurança ---
 
 
-def test_nome_com_aspas_e_sql_e_tratado_como_dado(conexao: sqlite3.Connection):
+def test_nome_com_aspas_e_sql_e_tratado_como_dado(conexao: Conexao):
     # arrange
     nome = "x'); DROP TABLE formularios; --"
 
@@ -316,18 +303,13 @@ def test_nome_com_aspas_e_sql_e_tratado_como_dado(conexao: sqlite3.Connection):
     assert conexao.execute("SELECT COUNT(*) FROM formularios").fetchone()[0] == 1
 
 
-def test_banco_em_arquivo_guarda_e_devolve_a_mesma_versao(tmp_path: Path):
+def test_outra_conexao_da_mesma_equipe_enxerga_a_mesma_versao(conexao: Conexao, dsn: str):
     # arrange
-    caminho = tmp_path / "dados.db"
-    primeira = abrir_conexao(caminho)
-    formulario = criar_formulario(primeira, "Ensaio", AGORA)
-    inserida = inserir_versao(primeira, formulario.id, _definicao("a"), AGORA)
-    primeira.commit()
-    primeira.close()
+    formulario = criar_formulario(conexao, "Ensaio", AGORA)
+    inserida = inserir_versao(conexao, formulario.id, _definicao("a"), AGORA)
+    segunda = banco.abrir_conexao(dsn)
+    segunda.definir_contexto(conexao.contexto)
 
-    # act
-    segunda = abrir_conexao(caminho)
-
-    # assert
+    # act / assert
     assert obter_versao_atual(segunda, formulario.id) == inserida
     segunda.close()

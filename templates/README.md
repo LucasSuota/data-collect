@@ -9,7 +9,7 @@ Guardar exemplos de definição (JSON, o formato do contrato de AGENTS.md §5.2)
 | Arquivo | Papel |
 |---|---|
 | `corpo_de_prova.json` | Controle de corpos de prova de concreto: resistência (com `casas_decimais`), data de ruptura aos 28 dias e conformidade |
-| `inspecao_obra.json` | Inspeção de obra: seções, seleção, sim/não, localização, foto e um calculado sobre dois sim/não |
+| `inspecao_obra.json` | Inspeção de obra: seções, seleção, sim/não, localização e um calculado sobre dois sim/não |
 | `ensaio_umidade.json` | Teor de umidade do solo pelas pesagens (cápsula, úmido, seco); libera `umidade_pct` para quem depende dele |
 | `proctor.json` | Ensaio de compactação: depende do `ensaio_umidade` (umidade natural), calcula o desvio para a umidade ótima e libera `umidade_otima_pct` e `gamad_max` |
 | `densidade_insitu.json` | Controle de compactação em campo: depende do `proctor` e do `ensaio_umidade`, calcula a massa específica seca de campo, o grau de compactação e a conformidade |

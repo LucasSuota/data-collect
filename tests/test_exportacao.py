@@ -157,12 +157,6 @@ def test_localizacao_sai_como_latitude_barra_longitude_com_virgula():
     assert formatar_celula(coluna, None) == ""
 
 
-def test_foto_sai_como_quantidade():
-    # act / assert
-    assert formatar_celula(_coluna(TipoCampo.FOTO), [3, 4, 5]) == "3"
-    assert formatar_celula(_coluna(TipoCampo.FOTO), None) == ""
-
-
 # --- injeção de fórmula em planilha (AGENTS.md §12) ---
 
 

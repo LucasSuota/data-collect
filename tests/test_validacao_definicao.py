@@ -296,7 +296,7 @@ def test_casas_decimais_deve_ser_inteiro_nao_negativo(casas: object):
     assert campos == ["a.casas_decimais"]
 
 
-@pytest.mark.parametrize("tipo", ["texto", "data", "sim_nao", "secao", "foto", "localizacao"])
+@pytest.mark.parametrize("tipo", ["texto", "data", "sim_nao", "secao", "localizacao"])
 def test_casas_decimais_em_tipo_nao_numerico_e_rejeitada(tipo: str):
     # act
     campos = _campos_com_erro(
@@ -360,37 +360,29 @@ def test_opcoes_em_outro_tipo_e_rejeitada():
     ) == ["a.opcoes"]
 
 
-# --- foto ---
+# --- foto (removida) ---
 
 
-@pytest.mark.parametrize("maximo", [1, 5])
-def test_maximo_de_foto_valido(maximo: int):
-    # act / assert
-    assert not _erros(_definicao({"id": "f", "tipo": "foto", "rotulo": "F", "maximo": maximo}))
-
-
-@pytest.mark.parametrize("maximo", [0, -1, 1.5, "3", True, None])
-def test_maximo_de_foto_deve_ser_inteiro_a_partir_de_1(maximo: object):
+def test_tipo_foto_nao_existe_mais_e_e_rejeitado_como_tipo_desconhecido():
     # act
-    campos = _campos_com_erro(
-        _definicao({"id": "f", "tipo": "foto", "rotulo": "F", "maximo": maximo})
-    )
+    campos = _campos_com_erro(_definicao({"id": "f", "tipo": "foto", "rotulo": "F"}))
 
     # assert
-    assert campos == ["f.maximo"]
+    assert campos == ["f.tipo"]
 
 
-def test_maximo_em_outro_tipo_e_rejeitado():
+def test_propriedade_maximo_nao_existe_mais():
     # act
-    assert _campos_com_erro(
-        _definicao({"id": "a", "tipo": "numero", "rotulo": "A", "maximo": 2})
-    ) == ["a.maximo"]
+    campos = _campos_com_erro(_definicao({"id": "a", "tipo": "numero", "rotulo": "A", "maximo": 2}))
+
+    # assert
+    assert campos == ["a.maximo"]
 
 
 # --- compartilhado ---
 
 
-@pytest.mark.parametrize("tipo", ["texto", "numero", "data", "sim_nao", "localizacao", "foto"])
+@pytest.mark.parametrize("tipo", ["texto", "numero", "data", "sim_nao", "localizacao"])
 def test_compartilhado_e_aceito_nos_tipos_comuns(tipo: str):
     # arrange
     campo = {"id": "a", "tipo": tipo, "rotulo": "A", "compartilhado": True}
@@ -606,7 +598,7 @@ def test_formula_com_campo_inexistente_e_rejeitada_ao_publicar():
     assert "'x'" in erros[0][1]
 
 
-@pytest.mark.parametrize("tipo", ["texto", "selecao", "secao", "localizacao", "foto"])
+@pytest.mark.parametrize("tipo", ["texto", "selecao", "secao", "localizacao"])
 def test_formula_nao_pode_referenciar_campo_de_tipo_proibido(tipo: str):
     # arrange
     campo = {"id": "t", "tipo": tipo, "rotulo": "T"}
@@ -724,7 +716,6 @@ def test_devolve_todos_os_erros_de_uma_vez_e_nao_so_o_primeiro():
         {"id": "c", "tipo": "selecao", "rotulo": "C", "opcoes": []},
         {"id": "d", "tipo": "numero", "rotulo": "D", "casas_decimais": -1},
         {"id": "e", "tipo": "calculado", "rotulo": "E", "formula": "x + 1"},
-        {"id": "f", "tipo": "foto", "rotulo": "F", "maximo": 0},
     )
 
     # act
@@ -737,7 +728,6 @@ def test_devolve_todos_os_erros_de_uma_vez_e_nao_so_o_primeiro():
         "c.opcoes",
         "d.casas_decimais",
         "e.formula",
-        "f.maximo",
     }
 
 

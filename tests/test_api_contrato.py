@@ -34,7 +34,6 @@ MODELOS_DE_RESPOSTA = {
         "formula": False,
         "formulario": False,
         "compartilhado": False,
-        "maximo": False,
     },
     "DefinicaoSaida": {"campos": True},
     "VersaoSaida": {
@@ -78,7 +77,6 @@ MODELOS_DE_RESPOSTA = {
         "filtravel": True,
     },
     "ListagemDeRegistrosSaida": {"versao_id": True, "colunas": True, "itens": True, "total": True},
-    "AnexoSaida": {"id": True, "largura": True, "altura": True, "tamanho_bytes": True},
     # extensões opcionais (ia/ e rag/): fazem parte do contrato quando o módulo existe
     "RascunhoGeradoSaida": {"nome": True, "definicao": True, "erros": True},
     "GerarSaida": {"formularios": True},
@@ -107,7 +105,6 @@ ROTAS = [
     ("delete", "/formularios/{formulario_id}"),
     ("delete", "/pastas/{pasta_id}"),
     ("delete", "/registros/{registro_id}"),
-    ("get", "/anexos/{anexo_id}"),
     ("get", "/catalogo"),
     ("get", "/formularios"),
     ("get", "/formularios/{formulario_id}"),
@@ -117,7 +114,6 @@ ROTAS = [
     ("get", "/formularios/{formulario_id}/versoes/{versao_id}"),
     ("get", "/pastas"),
     ("get", "/registros/{registro_id}"),
-    ("post", "/anexos"),
     ("post", "/assistente/perguntar"),
     ("post", "/definicoes/gerar"),
     ("post", "/definicoes/previa"),
@@ -139,7 +135,6 @@ SEM_MODELO = {
     ("delete", "/formularios/{formulario_id}"),
     ("delete", "/pastas/{pasta_id}"),
     ("delete", "/registros/{registro_id}"),
-    ("get", "/anexos/{anexo_id}"),
     ("get", "/formularios/{formulario_id}/registros/exportar"),
 }
 
@@ -170,7 +165,7 @@ def test_campos_de_cada_modelo_de_entrada_nao_mudaram_sem_querer(openapi, modelo
 def test_nao_ha_modelo_no_openapi_fora_do_contrato_conhecido(openapi):
     # arrange
     conhecidos = set(MODELOS_DE_RESPOSTA) | set(MODELOS_DE_ENTRADA)
-    pydantic = {"HTTPValidationError", "ValidationError", "Body_enviar_anexo_anexos_post"}
+    pydantic = {"HTTPValidationError", "ValidationError"}
 
     # act / assert: modelo novo precisa entrar neste arquivo, de propósito
     assert set(openapi["components"]["schemas"]) - conhecidos - pydantic == set()
