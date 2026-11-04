@@ -102,10 +102,16 @@ function PortaAutenticada({ config, children }: { config: ConfigDoApp; children:
       // eslint-disable-next-line react-hooks/refs -- as refs só são lidas dentro das chamadas à API, nunca na renderização
       criarCliente({
         urlBase: config.apiBase,
-        obterToken: async () =>
-          sdk.current.isAuthenticated
-            ? ((await sdk.current.getAccessToken(config.logto.resource)) ?? null)
-            : null,
+        // Sem login o SDK não tem token: devolve nulo e a chamada segue sem Authorization (páginas
+        // públicas). Não dá para confiar em `isAuthenticated` aqui: a ref dele só atualiza num efeito
+        // do pai, depois dos efeitos dos filhos, que já estão pedindo dados.
+        obterToken: async () => {
+          try {
+            return (await sdk.current.getAccessToken(config.logto.resource)) ?? null;
+          } catch {
+            return null;
+          }
+        },
         renovarToken: async () => {
           await sdk.current.clearAccessToken();
           return (await sdk.current.getAccessToken(config.logto.resource)) ?? null;
@@ -147,7 +153,9 @@ function PortaAutenticada({ config, children }: { config: ConfigDoApp; children:
       </ApiProvider>
     );
   }
-  if (isLoading) return <TelaDeCarregamento />;
+  // `isLoading` também liga a cada busca de token do SDK; só a carga inicial (ainda sem login)
+  // troca a tela. Senão a sessão inteira desmontaria e refaria `GET /eu` a cada renovação.
+  if (isLoading && !isAuthenticated) return <TelaDeCarregamento />;
   if (!isAuthenticated) {
     if (rota.nome === "convite") {
       return (
@@ -233,6 +241,25 @@ function SessaoIniciada({
     [equipeAtiva],
   );
 
+  // `sair` muda de identidade a cada render do SDK; a sessão só pode mudar quando mudam os dados,
+  // senão toda tela que depende de `pode` refaria suas chamadas a cada busca de token (laço!).
+  const sairAtual = useRef(sair);
+  useEffect(() => {
+    sairAtual.current = sair;
+  });
+  const sairEstavel = useCallback(() => sairAtual.current(), []);
+
+  const eu = estado.tipo === "pronto" ? estado.eu : null;
+  const equipe = eu ? escolherEquipe(eu, equipeId) : null;
+  const sessao = useMemo(
+    () =>
+      eu && equipe
+        ? // eslint-disable-next-line react-hooks/refs -- `sairEstavel` só lê a ref ao ser chamado, nunca na renderização
+          criarSessao(eu, equipe, { trocarEquipe, recarregar: carregar, sair: sairEstavel })
+        : null,
+    [eu, equipe, trocarEquipe, carregar, sairEstavel],
+  );
+
   if (estado.tipo === "carregando") return <TelaDeCarregamento />;
   if (estado.tipo === "erro") {
     return (
@@ -245,13 +272,10 @@ function SessaoIniciada({
       />
     );
   }
-  const { eu } = estado;
-  if (eu.termos_pendentes.length > 0) {
-    return <TelaDeTermos eu={eu} aoAceitar={carregar} aoSair={sair} />;
+  if (eu && eu.termos_pendentes.length > 0) {
+    return <TelaDeTermos eu={eu} aoAceitar={carregar} aoSair={sairEstavel} />;
   }
-  const equipe = escolherEquipe(eu, equipeId);
-  if (!equipe) return <TelaSemEquipe aoSair={sair} />;
-  const sessao = criarSessao(eu, equipe, { trocarEquipe, recarregar: carregar, sair });
+  if (!equipe || !sessao) return <TelaSemEquipe aoSair={sairEstavel} />;
   return (
     <ContextoDaSessao.Provider key={equipe.id} value={sessao}>
       {children}

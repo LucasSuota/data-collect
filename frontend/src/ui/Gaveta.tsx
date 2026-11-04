@@ -77,8 +77,11 @@ export function Gaveta({
         aria-labelledby={idDoTitulo}
         tabIndex={-1}
         onKeyDown={aoTeclar}
-        className="absolute inset-y-0 flex w-full max-w-xl flex-col bg-papel shadow-elevada outline-none"
-        style={{ right: profundidade * AFASTAMENTO_POR_NIVEL }}
+        // Celular: folha que sobe da base (ao alcance do polegar). A partir de 640 px: painel lateral.
+        className="absolute inset-x-0 bottom-0 flex max-h-[90dvh] w-full flex-col rounded-t-cartao bg-papel shadow-elevada outline-none sm:inset-y-0 sm:right-(--afastamento) sm:left-auto sm:max-h-none sm:max-w-xl sm:rounded-none"
+        style={
+          { "--afastamento": `${profundidade * AFASTAMENTO_POR_NIVEL}px` } as React.CSSProperties
+        }
       >
         <header className="flex items-start gap-3 border-b border-pedra-200 bg-superficie px-5 py-4">
           <div className="min-w-0 flex-1">
