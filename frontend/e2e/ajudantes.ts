@@ -42,14 +42,14 @@ export async function esvaziarCaixa(): Promise<void> {
 }
 
 export async function paginaDeLogto(page: Page) {
-  await page.waitForURL(/auth\.localhost/);
+  await page.waitForURL(/localhost:3001/);
 }
 
 export const EMAIL = process.env.E2E_EMAIL ?? "admin@exemplo.com";
 export const SENHA = process.env.E2E_SENHA ?? "Senha-de-teste-123";
 
 async function naPaginaDeLogto(page: Page) {
-  await page.waitForURL(/auth\.localhost/);
+  await page.waitForURL(/localhost:3001/);
   await page.waitForLoadState("networkidle");
 }
 
@@ -98,8 +98,7 @@ export function sessaoGuardada(): string | undefined {
 }
 
 /**
- * Já entra se a sessão guardada ainda vale; senão faz o login. Entrar toda vez não só demora: o
- * proxy limita as tentativas de login por minuto (30), de propósito.
+ * Já entra se a sessão guardada ainda vale; senão faz o login. Entrar toda vez só demora.
  */
 export async function entrarSeNecessario(page: Page): Promise<void> {
   await page.goto("/");

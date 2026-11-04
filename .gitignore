@@ -22,5 +22,8 @@ empacotamento/instaladores/
 frontend/test-results/
 frontend/playwright-report/
 
+# Configuração do front gerada no CI a partir do logto-setup (tem o id do aplicativo da instalação)
+frontend/public/config.json
+
 # Sessão guardada pelos testes e2e
 frontend/.auth/

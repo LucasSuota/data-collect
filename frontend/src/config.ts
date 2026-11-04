@@ -1,8 +1,9 @@
 /**
- * Configuração em tempo de execução. No compose, o `logto-setup` escreve o `/config.json` que o
- * proxy serve (endereço do login, id do aplicativo e API resource): a mesma imagem do front serve
- * qualquer instalação. No `npm run dev` esse arquivo não existe (o Vite devolve o `index.html`),
- * então valem as variáveis `VITE_*`.
+ * Configuração em tempo de execução. O `logto-setup` escreve o `frontend-config.json` (endereço do
+ * login, id do aplicativo e API resource); quem servir o front pode publicá-lo como `/config.json`
+ * (no CI ele vai para `frontend/public/`), e o mesmo build serve qualquer instalação. No
+ * `npm run dev` esse arquivo normalmente não existe (o Vite devolve o `index.html`), então valem
+ * as variáveis `VITE_*`.
  */
 export interface ConfigDoApp {
   apiBase: string;

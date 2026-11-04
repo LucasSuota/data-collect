@@ -80,7 +80,7 @@ jobs:
       - name: Testes
         run: uv run pytest
 
-  # As imagens têm de construir: a da API e a do proxy (que também compila o front)
+  # A imagem da API tem de construir (o front tem job próprio, com build)
   imagens:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -94,10 +94,7 @@ jobs:
         run: docker compose config -q
 
       - name: Construir as imagens
-        run: docker compose build api web
-
-      - name: Validar o Caddyfile
-        run: docker run --rm -e APP_HOST=localhost -e AUTH_HOST=auth.localhost data-collect-web:local caddy validate --config /etc/caddy/Caddyfile
+        run: docker compose build api
 
   # O front tem job próprio (AGENTS.md §14): lint, formatação, typecheck, testes e build
   frontend:
@@ -152,8 +149,9 @@ jobs:
       - name: Build
         run: npm run build
 
-  # Ponta a ponta contra a pilha REAL (AGENTS.md §8): sobe o compose, pega o link do primeiro convite
-  # no log da API e roda o Playwright (celular e desktop) com acessibilidade e orçamento de JS.
+  # Ponta a ponta contra a pilha REAL (AGENTS.md §8): sobe o compose (API, Logto, Mailpit), pega o
+  # link do primeiro convite no log da API e roda o Playwright (celular e desktop), que sobe o front
+  # no Vite, com acessibilidade e orçamento de JS.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -168,9 +166,14 @@ jobs:
         run: |
           docker compose up -d --build
           for i in $(seq 1 60); do
-            docker compose ps web --format '{{.Status}}' | grep -q '^Up' && break
+            [ "$(docker compose ps api --format '{{.Health}}')" = "healthy" ] && break
             sleep 5
           done
+
+      # O Vite serve `public/config.json` em `/config.json`: é como o front descobre o id do aplicativo
+      # que o logto-setup acabou de criar.
+      - name: Entregar a configuração do front
+        run: docker run --rm -v data-collect_config:/config alpine cat /config/frontend-config.json > frontend/public/config.json
 
       - name: Pegar o link do primeiro convite
         run: |
