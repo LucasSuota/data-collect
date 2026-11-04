@@ -29,7 +29,12 @@ from forms.api_extras import roteador as roteador_extras
 from forms.api_extras import roteador_aberto
 from forms.api_permissoes import verificar_matriz
 from forms.api_rotas import roteador
-from forms.api_seguranca import AcrescentarCabecalhosDeSeguranca, LimitadorDeTaxa, LimitarCorpo
+from forms.api_seguranca import (
+    AcrescentarCabecalhosDeSeguranca,
+    LimitadorDeTaxa,
+    LimitarCorpo,
+    RegistrarAcessos,
+)
 from forms.auth import ValidadorDeToken, validador_do_ambiente
 from forms.logto import ClienteLogto, GestorDeIdentidade, IdentidadeIndisponivel
 from forms.models import (
@@ -181,9 +186,11 @@ def criar_app(
         allow_origins=list(configuracao.origens_cors),
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=CABECALHOS_PERMITIDOS,
-        expose_headers=["Content-Disposition", "ETag"],
+        expose_headers=["Content-Disposition", "ETag", "X-Request-Id"],
         allow_credentials=False,
     )
+    # O mais externo de todos: registra também o que os outros recusam (413, 429, CORS).
+    app.add_middleware(RegistrarAcessos)
     return app
 
 
@@ -385,8 +392,26 @@ def _erro_do_pydantic(erro: Mapping[str, object]) -> ErroDeCampoSaida:
     return ErroDeCampoSaida(campo=campo or "requisicao", mensagem=mensagem)
 
 
+def _configurar_log() -> None:
+    """Manda os logs do app (`forms.*`) para a saída padrão, uma linha cada, sem dado pessoal.
+
+    O log de acesso do uvicorn fica desligado (`--no-access-log`): ele imprime o caminho real,
+    inclusive o token do convite. No lugar dele vale `forms.acesso` (`RegistrarAcessos`).
+    """
+    registro = logging.getLogger("forms")
+    if not registro.handlers:
+        manipulador = logging.StreamHandler()
+        manipulador.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        )
+        registro.addHandler(manipulador)
+        registro.setLevel(logging.INFO)
+        registro.propagate = False
+
+
 def app_do_ambiente() -> FastAPI:
     """Fábrica do uvicorn (`--factory`): importar o módulo não abre banco nem conexão."""
+    _configurar_log()
     return criar_app(Configuracao.do_ambiente(), extensoes=descobrir_extensoes())
 
 

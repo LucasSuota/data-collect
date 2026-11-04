@@ -8,6 +8,8 @@
 DDoS volumétrico não é coberto aqui nem em lugar nenhum do app (sem serviço de borda, §2.9).
 """
 
+import logging
+import secrets
 import threading
 import time
 from collections.abc import Callable
@@ -74,6 +76,54 @@ class LimitarCorpo:
             content={"detalhe": "Requisição grande demais (máximo de 1 MB).", "erros": []},
         )
         await resposta(scope, receive, send)
+
+
+_acessos = logging.getLogger("forms.acesso")
+
+
+class RegistrarAcessos:
+    """Uma linha de log por requisição, **sem dado pessoal** (AGENTS.md §2.15, §12).
+
+    Registra o identificador da requisição, o método, o **molde da rota** (por exemplo
+    `/convites/{token}/aceitar`, nunca o caminho real), o status e a duração. Não registra caminho
+    com id ou token, query string (a busca leva texto digitado), cabeçalhos, corpo nem IP. O mesmo
+    identificador volta no cabeçalho `X-Request-Id`, para a pessoa citar ao pedir ajuda.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        identificador = secrets.token_hex(6)
+        inicio = time.perf_counter()
+        status = 0
+
+        async def enviar(mensagem: Message) -> None:
+            nonlocal status
+            if mensagem["type"] == "http.response.start":
+                status = int(mensagem["status"])
+                mensagem["headers"] = [
+                    *mensagem.get("headers", []),
+                    (b"x-request-id", identificador.encode()),
+                ]
+            await send(mensagem)
+
+        try:
+            await self.app(scope, receive, enviar)
+        finally:
+            rota = scope.get("route")
+            molde = getattr(rota, "path", None) or "-"  # sem rota casada: nada do caminho real
+            _acessos.info(
+                "id=%s %s %s %d %dms",
+                identificador,
+                scope["method"],
+                molde,
+                status,
+                int((time.perf_counter() - inicio) * 1000),
+            )
 
 
 class AcrescentarCabecalhosDeSeguranca:

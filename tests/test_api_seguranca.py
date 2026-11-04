@@ -665,3 +665,57 @@ def test_baldes_de_chaves_diferentes_sao_independentes():
     assert balde.tentar(("a", "r"), Limite(1, 60)) is not None
     assert balde.tentar(("b", "r"), Limite(1, 60)) is None
     assert balde.tentar(("a", "outra-rota"), Limite(1, 60)) is None
+
+
+# --- registro de acessos sem dado pessoal (AGENTS.md §2.15, §12) ---
+
+
+def test_log_de_acesso_traz_o_molde_da_rota_e_nunca_o_token_do_convite(cliente, caplog):
+    # arrange
+    caplog.set_level("INFO", logger="forms.acesso")
+
+    # act
+    cliente.post("/convites/TOKEN-SECRETO-DO-CONVITE-123/aceitar")
+
+    # assert
+    texto = "\n".join(r.getMessage() for r in caplog.records if r.name == "forms.acesso")
+    assert "/convites/{token}/aceitar" in texto
+    assert "TOKEN-SECRETO" not in texto
+
+
+def test_log_de_acesso_nao_guarda_a_query_string_com_o_texto_buscado(cliente, caplog):
+    # arrange
+    caplog.set_level("INFO", logger="forms.acesso")
+
+    # act
+    cliente.get("/busca", params={"q": "maria@exemplo.com"})
+
+    # assert
+    texto = "\n".join(r.getMessage() for r in caplog.records if r.name == "forms.acesso")
+    assert "/busca" in texto
+    assert "maria" not in texto and "exemplo.com" not in texto
+
+
+def test_resposta_traz_um_identificador_de_requisicao_igual_ao_do_log(cliente, caplog):
+    # arrange
+    caplog.set_level("INFO", logger="forms.acesso")
+
+    # act
+    resposta = cliente.get("/healthz")
+
+    # assert
+    identificador = resposta.headers["X-Request-Id"]
+    assert identificador
+    assert any(f"id={identificador}" in r.getMessage() for r in caplog.records)
+
+
+def test_rota_inexistente_nao_vaza_o_caminho_no_log(cliente, caplog):
+    # arrange
+    caplog.set_level("INFO", logger="forms.acesso")
+
+    # act
+    cliente.get("/segredo/caminho-que-nao-existe")
+
+    # assert
+    texto = "\n".join(r.getMessage() for r in caplog.records if r.name == "forms.acesso")
+    assert "caminho-que-nao-existe" not in texto

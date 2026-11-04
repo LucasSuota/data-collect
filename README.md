@@ -52,6 +52,8 @@ O que sobe:
 
 **Só o proxy publica portas** (80 e 443). Em produção suba só o arquivo principal (`docker compose -f docker-compose.yml up -d`) e preencha o `.env` conforme o [.env.example](.env.example): `APP_HOST` e `AUTH_HOST` com dois nomes do seu domínio, SMTP real, `ACME_EMAIL`, `FORMS_CHAVE_MESTRA` (cifra a chave de IA de cada equipe; **guarde-a fora do backup do banco**).
 
+Mapa de dados, retenção, `fail2ban`, rotação de segredos, plano de resposta a incidente e a lista para ir à produção: [docker/OPERACAO.md](docker/OPERACAO.md).
+
 ### Backup e restauração
 
 ```bash
@@ -160,7 +162,7 @@ O contrato é o OpenAPI gerado pelo FastAPI (`/docs`, só em desenvolvimento); o
 - **Isolamento:** todo acesso filtra por `grupo_id`; testes de vazamento percorrem todas as rotas que recebem id. RLS no Postgres com um papel sem `BYPASSRLS`.
 - **Segredos:** senha é do Logto (hash); token de convite só como hash SHA-256; chave de LLM cifrada com Fernet e nunca devolvida.
 - **Limites:** taxa por IP no proxy (600 por minuto na API, 60 no login), corpo de no máximo 1 MB (413), limites por pessoa e por equipe nos endpoints caros (429 com `Retry-After`), timeouts contra conexão lenta e limites de CPU e memória por contêiner. Para bloquear reincidentes no servidor, use o `fail2ban` lendo o log do Caddy. **Não cobre DDoS volumétrico**: por decisão, não há serviço de borda na frente.
-- **LGPD:** aceite versionado dos Termos e da Política, exportação e exclusão dos dados da pessoa, IA desligada por padrão, campos com `"ia": false` nunca vão ao índice nem ao prompt, e logs sem e-mail, valores de campo nem corpo de requisição.
+- **LGPD:** aceite versionado dos Termos e da Política, exportação e exclusão dos dados da pessoa, IA desligada por padrão, campos com `"ia": false` nunca vão ao índice nem ao prompt, e logs sem e-mail, valores de campo, corpo, query string nem token (uma linha por requisição com o molde da rota e um `X-Request-Id`).
 - **IA:** a saída do LLM é dado não confiável (validada antes de aparecer) e o conteúdo de registro é entrada não confiável (prompt injection). O LLM nunca gera SQL.
 - Exportação CSV neutraliza injeção de fórmula em células de texto; o front renderiza Markdown sem HTML cru.
 
