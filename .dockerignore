@@ -1,0 +1,17 @@
+# Nada de segredo, cache nem artefato local entra no contexto de build (AGENTS.md §3.3, §12).
+.git
+.env
+.env.*
+!.env.example
+*.db
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+node_modules
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+.DS_Store
+.vscode

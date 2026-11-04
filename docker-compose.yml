@@ -1,27 +1,167 @@
-# Ambiente do data-collect (AGENTS.md §4.1). Este arquivo cresce nas issues do roadmap;
-# por ora sobe o Postgres com pgvector usado pela API e pelos testes.
+# Ambiente do data-collect (AGENTS.md §4.1): `docker compose up` sobe tudo.
+#
+# Só o proxy (`web`) publica portas. Postgres, Logto e API ficam na rede interna.
+# Em desenvolvimento, `docker-compose.override.yml` (carregado sozinho) abre o Postgres e o
+# Mailpit no localhost. Em produção use só este arquivo: `docker compose -f docker-compose.yml up -d`.
 name: data-collect
+
+x-limites: &limites
+  restart: unless-stopped
+  pids_limit: 256
+  security_opt: ["no-new-privileges:true"]
 
 services:
   postgres:
+    <<: *limites
     image: pgvector/pgvector:pg16
-    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-forms}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
       POSTGRES_DB: ${POSTGRES_DB:-forms}
-      FORMS_APP_PASSWORD: ${FORMS_APP_PASSWORD:-forms_app}
+      FORMS_APP_PASSWORD: ${FORMS_APP_PASSWORD:?defina FORMS_APP_PASSWORD no .env}
+    command: ["postgres", "-c", "idle_in_transaction_session_timeout=60000", "-c", "statement_timeout=30000"]
     volumes:
       - dados-postgres:/var/lib/postgresql/data
       - ./docker/postgres/01-init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
-    ports:
-      # Só em desenvolvimento: em produção o Postgres fica na rede interna.
-      - "127.0.0.1:${POSTGRES_PORTA:-5433}:5432"
+    networks: [interna]
+    mem_limit: 1g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forms} -d ${POSTGRES_DB:-forms}"]
       interval: 5s
       timeout: 5s
       retries: 20
 
+  logto:
+    <<: *limites
+    image: svhd/logto:1.45.0
+    depends_on:
+      postgres: {condition: service_healthy}
+    # O seed é idempotente: só cria o que falta (e roda em toda subida, para acompanhar atualizações).
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
+    environment:
+      TRUST_PROXY_HEADER: "1"
+      DB_URL: postgres://${POSTGRES_USER:-forms}:${POSTGRES_PASSWORD}@postgres:5432/logto
+      ENDPOINT: https://${AUTH_HOST:-auth.localhost}
+      # O console administrativo não é publicado: acesse por túnel SSH ou pelo override de dev.
+      ADMIN_ENDPOINT: https://${AUTH_ADMIN_HOST:-auth-admin.localhost}
+    networks: [interna]
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3001/api/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  # Provisiona o Logto como código (aplicativo, API resource, TTL do token, login por senha,
+  # termos). Idempotente: roda em toda subida e escreve a configuração que a API e o front leem.
+  logto-setup:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    image: data-collect-api:local
+    command: ["python", "-m", "forms.provisionar_logto"]
+    restart: "no"
+    depends_on:
+      logto: {condition: service_healthy}
+    environment:
+      LOGTO_INTERNO: http://logto:3001
+      LOGTO_DB_URL: postgresql://${POSTGRES_USER:-forms}:${POSTGRES_PASSWORD}@postgres:5432/logto
+      LOGTO_API_RESOURCE: https://${APP_HOST:-localhost}/api
+      APP_URL: https://${APP_HOST:-localhost}
+      AUTH_URL: https://${AUTH_HOST:-auth.localhost}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@data-collect.local}
+      SMTP_SEGURO: ${SMTP_SEGURO:-false}
+      FORMS_CONFIG_DIR: /config
+    volumes:
+      - config:/config
+    networks: [interna]
+
+  api:
+    <<: *limites
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    image: data-collect-api:local
+    depends_on:
+      postgres: {condition: service_healthy}
+      logto-setup: {condition: service_completed_successfully}
+    environment:
+      FORMS_AMBIENTE: producao
+      FORMS_DATABASE_URL: postgresql://forms_app:${FORMS_APP_PASSWORD}@postgres:5432/${POSTGRES_DB:-forms}
+      FORMS_MIGRATION_URL: postgresql://${POSTGRES_USER:-forms}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-forms}
+      FORMS_CORS_ORIGINS: https://${APP_HOST:-localhost}
+      FORMS_ADMIN_EMAIL: ${FORMS_ADMIN_EMAIL:-}
+      FORMS_EQUIPE_INICIAL: ${FORMS_EQUIPE_INICIAL:-Minha equipe}
+      FORMS_CHAVE_MESTRA: ${FORMS_CHAVE_MESTRA:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LOGTO_ENDPOINT: https://${AUTH_HOST:-auth.localhost}
+      LOGTO_INTERNO: http://logto:3001
+      LOGTO_API_RESOURCE: https://${APP_HOST:-localhost}/api
+      FORMS_CONFIG_DIR: /config
+    volumes:
+      - config:/config:ro
+    networks: [interna]
+    mem_limit: 1g
+    cpus: 1.5
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/readyz', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # Proxy reverso com HTTPS (Caddy + limite de taxa): serve o front, encaminha /api e o login.
+  web:
+    <<: *limites
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    image: data-collect-web:local
+    depends_on:
+      api: {condition: service_healthy}
+    environment:
+      APP_HOST: ${APP_HOST:-localhost}
+      AUTH_HOST: ${AUTH_HOST:-auth.localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@exemplo.invalid}
+    ports:
+      - "${HTTP_PORTA:-80}:80"
+      - "${HTTPS_PORTA:-443}:443"
+    volumes:
+      - config:/etc/data-collect:ro
+      - dados-caddy:/data
+    networks: [interna]
+    mem_limit: 256m
+    cpus: 1
+
+  # Backup diário (pg_dump) para o volume `backups`. A chave-mestra NÃO vai junto (§12).
+  backup:
+    <<: *limites
+    image: pgvector/pgvector:pg16
+    depends_on:
+      postgres: {condition: service_healthy}
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-forms}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BANCOS: ${POSTGRES_DB:-forms} logto
+      RETENCAO_DIAS: ${BACKUP_RETENCAO_DIAS:-14}
+    volumes:
+      - ./docker/backup/backup.sh:/backup.sh:ro
+      - backups:/backups
+    networks: [interna]
+    mem_limit: 256m
+
 volumes:
   dados-postgres:
+  config:
+  dados-caddy:
+  backups:
+
+networks:
+  interna:
