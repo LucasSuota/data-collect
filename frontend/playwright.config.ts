@@ -21,6 +21,9 @@ export default defineConfig({
   },
   projects: [
     { name: "celular", use: { ...devices["Pixel 7"] } },
-    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },
+    {
+      name: "desktop",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
+    },
   ],
 });

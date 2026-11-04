@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import type { Page } from "@playwright/test";
 
 const MAILPIT = process.env.E2E_MAILPIT_URL ?? "http://localhost:8025";
@@ -87,4 +88,30 @@ export async function aceitarTermosSeFor(page: Page): Promise<void> {
     await page.getByRole("checkbox", { name: /Li e aceito/ }).check();
     await page.getByRole("button", { name: "Continuar" }).click();
   }
+}
+
+/** A sessão guardada pelo teste de primeiro acesso: os demais testes a reutilizam. */
+export const ESTADO_DA_SESSAO = ".auth/estado.json";
+
+export function sessaoGuardada(): string | undefined {
+  return existsSync(ESTADO_DA_SESSAO) ? ESTADO_DA_SESSAO : undefined;
+}
+
+/**
+ * Já entra se a sessão guardada ainda vale; senão faz o login. Entrar toda vez não só demora: o
+ * proxy limita as tentativas de login por minuto (30), de propósito.
+ */
+export async function entrarSeNecessario(page: Page): Promise<void> {
+  await page.goto("/");
+  const entrar = page.getByRole("button", { name: "Entrar com e-mail e senha" });
+  const inicio = page.getByRole("heading", { name: /^Olá, / });
+  await entrar.or(inicio).first().waitFor({ timeout: 30_000 });
+  if (await entrar.isVisible()) {
+    await entrar.click();
+    await naPaginaDeLogto(page);
+    await page.getByRole("textbox").first().fill(EMAIL);
+    await page.locator('input[type="password"]').fill(SENHA);
+    await page.getByRole("button", { name: /^Entrar$/ }).click();
+  }
+  await aceitarTermosSeFor(page);
 }

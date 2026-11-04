@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { aceitarTermosSeFor, entrarComSenha } from "./ajudantes";
+import { entrarSeNecessario, sessaoGuardada } from "./ajudantes";
 
 /**
  * O trabalho do dia a dia, no celular e no desktop: entrar, importar um exemplo, preencher um
@@ -8,9 +8,10 @@ import { aceitarTermosSeFor, entrarComSenha } from "./ajudantes";
  * com verificação de acessibilidade e de desempenho.
  */
 
+test.use({ storageState: sessaoGuardada() });
+
 async function entrar(page: Page) {
-  await entrarComSenha(page);
-  await aceitarTermosSeFor(page);
+  await entrarSeNecessario(page);
   await expect(page.getByRole("heading", { name: /^Olá, / })).toBeVisible();
   const passeio = page.getByRole("button", { name: "Pular passeio" });
   if (await passeio.isVisible().catch(() => false)) await passeio.click();
@@ -49,11 +50,21 @@ test.describe("fluxo da equipe", () => {
   }) => {
     await entrar(page);
 
-    await ir(page, "#/exemplos");
-    await page.getByRole("checkbox", { name: /corpo_de_prova|Corpo de prova/i }).check();
-    await page.getByRole("button", { name: /^Importar/ }).click();
+    // O exemplo pode já existir (outra execução ou outro viewport): só importa se faltar.
+    await ir(page, "#/formularios");
     await expect(page.getByRole("heading", { name: "Formulários" })).toBeVisible();
-    await expect(page.getByText(/corpo.de.prova/i).first()).toBeVisible();
+    // Espera a lista assentar: o formulário ou o estado vazio, o que aparecer.
+    await expect(
+      page.getByText("corpo_de_prova").or(page.getByText("Nenhum formulário ainda")).first(),
+    ).toBeVisible();
+    const jaExiste = (await page.getByText("corpo_de_prova").count()) > 0;
+    if (!jaExiste) {
+      await ir(page, "#/exemplos");
+      await page.getByRole("checkbox", { name: /corpo_de_prova|Corpo de prova/i }).check();
+      await page.getByRole("button", { name: /^Importar/ }).click();
+      await expect(page.getByRole("heading", { name: "Formulários" })).toBeVisible();
+    }
+    await expect(page.getByText("corpo_de_prova").first()).toBeVisible();
     await acessibilidade(page);
 
     await page
@@ -68,7 +79,7 @@ test.describe("fluxo da equipe", () => {
     await expect(page.getByText(/Conforme/).first()).toBeVisible({ timeout: 20_000 });
     await page.getByRole("button", { name: "Salvar registro" }).click();
 
-    await expect(page.getByRole("button", { name: /^Conformes · 1/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Conformes · [1-9]\d*/ })).toBeVisible();
     await acessibilidade(page);
   });
 
@@ -79,11 +90,13 @@ test.describe("fluxo da equipe", () => {
     await expect(page.getByText("(você)")).toBeVisible();
 
     await page.getByRole("button", { name: "Convidar" }).click();
-    await page.getByLabel("E-mail").fill("tecnico@exemplo.com");
+    const convidada = `tecnico+${Date.now()}@exemplo.com`; // único por execução
+    await page.getByLabel("E-mail").fill(convidada);
     await page.getByRole("button", { name: "Criar convite" }).click();
     await expect(page.getByLabel("Link do convite")).toHaveValue(/\/convite\//);
     await page.getByRole("button", { name: "Concluir" }).click();
-    await expect(page.getByRole("tab", { name: /Convites · 1/ })).toBeVisible();
+    await page.getByRole("tab", { name: /^Convites · \d+/ }).click();
+    await expect(page.getByText(convidada)).toBeVisible();
     await acessibilidade(page);
   });
 
