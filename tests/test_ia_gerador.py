@@ -4,15 +4,15 @@ from datetime import UTC, datetime
 import pytest
 from psycopg import pq
 
-from forms import servico
+from forms.dominio.models import ValorInvalido
 from forms.ia.cliente import ClienteFalso, IaIndisponivel
 from forms.ia.gerador import (
     PEDIDO_MAXIMO,
     RespostaDaIaInvalida,
     gerar,
 )
-from forms.models import ValorInvalido
-from forms.servico import Rascunho
+from forms.servicos import servico
+from forms.servicos.servico import Rascunho
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 

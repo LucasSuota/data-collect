@@ -2,8 +2,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from forms import servico
-from forms.models import NaoEncontrado, RegistroInvalido, TipoCampo
+from forms.dominio.models import NaoEncontrado, RegistroInvalido, TipoCampo
+from forms.servicos import servico
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 

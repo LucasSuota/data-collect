@@ -9,10 +9,10 @@ lista dá `1 / (60 + posição)` ao documento, e as notas se somam. Sem embeddin
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
 
-from forms.banco import Conexao
 from forms.ia import repositorio
 from forms.ia.cliente import IaIndisponivel, ProvedorDeLLM
 from forms.ia.repositorio import DocumentoGravado
+from forms.infra.banco import Conexao
 from forms.rag.chunker import Trecho
 from forms.rag.indice import IndiceBm25
 

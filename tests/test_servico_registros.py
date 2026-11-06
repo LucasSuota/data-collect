@@ -3,9 +3,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from psycopg import pq
 
-from forms import servico
-from forms.models import ExclusaoBloqueada, NaoEncontrado, RegistroInvalido
-from forms.repositorio import obter_referencias
+from forms.dominio.models import ExclusaoBloqueada, NaoEncontrado, RegistroInvalido
+from forms.repositorios.formularios import obter_referencias
+from forms.servicos import servico
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 DEPOIS = AGORA + timedelta(hours=3)

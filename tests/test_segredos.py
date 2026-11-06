@@ -2,8 +2,8 @@
 
 import pytest
 
-from forms import segredos
-from forms.segredos import Cifra, SegredoIndisponivel
+from forms.infra import segredos
+from forms.infra.segredos import Cifra, SegredoIndisponivel
 
 
 def test_token_novo_tem_256_bits_e_nunca_se_repete():

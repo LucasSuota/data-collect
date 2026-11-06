@@ -5,11 +5,11 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi.testclient import TestClient
 
-from forms import servico_equipes
-from forms.api import Configuracao, criar_app
-from forms.auth import ALGORITMOS_ACEITOS
-from forms.banco import abrir_conexao
-from forms.models import Contexto
+from forms.api.app import Configuracao, criar_app
+from forms.api.auth import ALGORITMOS_ACEITOS
+from forms.dominio.models import Contexto
+from forms.infra.banco import abrir_conexao
+from forms.servicos import equipes as servico_equipes
 
 # Os mesmos valores do conftest.py (`tests/` não é um pacote, então não dá para importar).
 ORIGEM_PERMITIDA = "http://localhost:5173"
@@ -281,7 +281,7 @@ def test_pessoa_desativada_perde_o_acesso_na_hora(app, cliente, emitir, pessoa, 
 
 def test_toda_rota_do_app_tem_decisao_na_matriz(app):
     # act / assert: `criar_app` já verifica; aqui o contrato fica explícito
-    from forms.api_permissoes import classificar, rotas_do_app  # noqa: PLC0415
+    from forms.api.matriz_permissoes import classificar, rotas_do_app  # noqa: PLC0415
 
     assert [r for r in rotas_do_app(app) if classificar(r) == "negada"] == []
 
@@ -292,7 +292,7 @@ def test_rota_nova_sem_decisao_derruba_a_montagem_do_app(configuracao, validador
 
     esquecida = APIRouter()
     esquecida.add_api_route("/rota-esquecida", lambda: None)
-    from forms.api_extensoes import Extensao  # noqa: PLC0415
+    from forms.api.extensoes import Extensao  # noqa: PLC0415
 
     # act / assert
     with pytest.raises(RuntimeError, match="rota-esquecida"):
@@ -478,7 +478,7 @@ def test_campo_extra_no_corpo_e_recusado_em_vez_de_ignorado(cliente):
 
 def test_erro_inesperado_vira_500_uniforme_sem_vazar_a_causa(cliente, monkeypatch):
     # arrange
-    from forms import servico
+    from forms.servicos import servico
 
     def explodir(*argumentos, **nomeados):
         raise RuntimeError("segredo interno /etc/passwd")
@@ -504,9 +504,9 @@ def test_importar_o_modulo_nao_cria_arquivo_nem_abre_banco(tmp_path, monkeypatch
     # act
     import importlib
 
-    import forms.api
+    import forms.api.app
 
-    importlib.reload(forms.api)
+    importlib.reload(forms.api.app)
 
     # assert
     assert list(tmp_path.iterdir()) == []
@@ -575,12 +575,12 @@ def test_o_401_tambem_leva_os_cabecalhos_de_seguranca(app):
 
 def test_rota_cara_responde_429_com_retry_after_depois_do_limite(cliente, monkeypatch):
     # arrange
-    from forms import api_seguranca
+    from forms.api import seguranca as api_seguranca
 
     monkeypatch.setitem(
         api_seguranca.LIMITES_POR_ROTA, ("GET", "/busca"), api_seguranca.Limite(2, 60)
     )
-    monkeypatch.setattr("forms.api_dependencias.LIMITES_POR_ROTA", api_seguranca.LIMITES_POR_ROTA)
+    monkeypatch.setattr("forms.api.dependencias.LIMITES_POR_ROTA", api_seguranca.LIMITES_POR_ROTA)
 
     # act
     respostas = [cliente.get("/busca?q=ab") for _ in range(3)]
@@ -597,12 +597,12 @@ def test_o_limite_e_por_pessoa_uma_nao_gasta_as_fichas_da_outra(
 ):
     # arrange
     from conftest import cliente_da_pessoa, criar_pessoa_na_equipe
-    from forms import api_seguranca
+    from forms.api import seguranca as api_seguranca
 
     monkeypatch.setitem(
         api_seguranca.LIMITES_POR_ROTA, ("GET", "/busca"), api_seguranca.Limite(1, 60)
     )
-    monkeypatch.setattr("forms.api_dependencias.LIMITES_POR_ROTA", api_seguranca.LIMITES_POR_ROTA)
+    monkeypatch.setattr("forms.api.dependencias.LIMITES_POR_ROTA", api_seguranca.LIMITES_POR_ROTA)
     outra = cliente_da_pessoa(app, chave_privada, criar_pessoa_na_equipe(dsn, "bia"))
 
     # act
@@ -619,7 +619,7 @@ def test_o_limite_e_por_pessoa_uma_nao_gasta_as_fichas_da_outra(
 
 def test_balde_deixa_passar_ate_a_capacidade_e_depois_diz_quanto_esperar():
     # arrange
-    from forms.api_seguranca import LimitadorDeTaxa, Limite
+    from forms.api.seguranca import LimitadorDeTaxa, Limite
 
     agora = [100.0]
     balde = LimitadorDeTaxa(relogio=lambda: agora[0])
@@ -634,7 +634,7 @@ def test_balde_deixa_passar_ate_a_capacidade_e_depois_diz_quanto_esperar():
 
 def test_balde_repoe_as_fichas_com_o_tempo_mas_nunca_acima_da_capacidade():
     # arrange
-    from forms.api_seguranca import LimitadorDeTaxa, Limite
+    from forms.api.seguranca import LimitadorDeTaxa, Limite
 
     agora = [0.0]
     balde = LimitadorDeTaxa(relogio=lambda: agora[0])
@@ -656,7 +656,7 @@ def test_balde_repoe_as_fichas_com_o_tempo_mas_nunca_acima_da_capacidade():
 
 def test_baldes_de_chaves_diferentes_sao_independentes():
     # arrange
-    from forms.api_seguranca import LimitadorDeTaxa, Limite
+    from forms.api.seguranca import LimitadorDeTaxa, Limite
 
     balde = LimitadorDeTaxa(relogio=lambda: 0.0)
 

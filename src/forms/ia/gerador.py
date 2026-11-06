@@ -10,11 +10,11 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from forms import servico
-from forms.banco import Conexao
+from forms.dominio.models import ErroDeCampo, ErroDeDominio, ValorInvalido, ValorJson
 from forms.ia.cliente import ClienteDeLLM
-from forms.models import ErroDeCampo, ErroDeDominio, ValorInvalido, ValorJson
-from forms.servico import Rascunho
+from forms.infra.banco import Conexao
+from forms.servicos import servico
+from forms.servicos.servico import Rascunho
 
 PEDIDO_MAXIMO = 4000
 MAXIMO_DE_CORRECOES = 2  # volta ao LLM com os erros no máximo 2 vezes

@@ -3,8 +3,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from forms import ajuda
-from forms.models import NaoEncontrado
+from forms.dominio.models import NaoEncontrado
+from forms.infra import ajuda
 
 
 def test_todos_os_guias_do_repositorio_tem_titulo_e_conteudo():

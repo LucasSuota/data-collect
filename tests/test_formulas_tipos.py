@@ -1,7 +1,7 @@
 import pytest
 
-from forms.formulas import TipoFormula, carregar_formula, inferir_tipo
-from forms.models import FormulaInvalida, Posicao
+from forms.dominio.formulas import TipoFormula, carregar_formula, inferir_tipo
+from forms.dominio.models import FormulaInvalida, Posicao
 
 N, DT, B, DU = (
     TipoFormula.NUMERO,

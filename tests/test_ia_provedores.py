@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
-from forms.banco import Conexao
 from forms.ia import configuracao, repositorio
 from forms.ia.cliente import (
     ClienteAnthropic,
@@ -16,7 +15,8 @@ from forms.ia.cliente import (
     IaIndisponivel,
     validar_base_url,
 )
-from forms.segredos import Cifra, nova_chave_mestra
+from forms.infra.banco import Conexao
+from forms.infra.segredos import Cifra, nova_chave_mestra
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 

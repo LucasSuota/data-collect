@@ -10,10 +10,7 @@ from collections.abc import Callable, Mapping
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-from forms import repositorio, servico
-from forms.banco import Conexao
-from forms.ia.indexacao import campos_da_ia
-from forms.models import (
+from forms.dominio.models import (
     Campo,
     NaoEncontrado,
     RegistroInvalido,
@@ -22,6 +19,10 @@ from forms.models import (
     ValorJson,
     Versao,
 )
+from forms.ia.indexacao import campos_da_ia
+from forms.infra.banco import Conexao
+from forms.repositorios import formularios as repositorio
+from forms.servicos import servico
 
 LIMITE_DE_REGISTROS_LISTADOS = 20
 TETO_DE_REGISTROS_NO_AGREGADO = 5000

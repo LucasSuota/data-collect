@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from forms import models
-from forms.models import (
+from forms.dominio import models
+from forms.dominio.models import (
     Campo,
     CicloDeDependencia,
     Definicao,

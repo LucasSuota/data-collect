@@ -4,9 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from forms import banco, repositorio_equipes, segredos, servico_equipes
-from forms.banco import Conexao
-from forms.models import (
+from forms.dominio.models import (
     CargoInvalido,
     Contexto,
     NaoEncontrado,
@@ -14,14 +12,18 @@ from forms.models import (
     SemPermissao,
     ValorInvalido,
 )
-from forms.permissoes import CARGOS_PADRAO, IDS_DE_PERMISSAO
+from forms.dominio.permissoes import CARGOS_PADRAO, IDS_DE_PERMISSAO
+from forms.infra import banco, segredos
+from forms.infra.banco import Conexao
+from forms.repositorios import equipes as repositorio_equipes
+from forms.servicos import equipes as servico_equipes
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture
 def sem_contexto(dsn: str) -> Conexao:
-    from forms import banco
+    from forms.infra import banco
 
     con = banco.abrir_conexao(dsn)
     yield con
@@ -410,7 +412,7 @@ def test_termos_pendentes_ate_aceitar_e_voltam_quando_a_versao_muda(
 
     # assert
     assert servico_equipes.termos_pendentes(sem_contexto, pessoa) == ()
-    from forms import legal
+    from forms.infra import legal
 
     monkeypatch.setattr(
         legal, "vigentes", lambda pasta=None: {"termos": "2027-01-01", "privacidade": "2026-11-03"}

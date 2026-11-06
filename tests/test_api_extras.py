@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import cliente_da_pessoa, criar_pessoa_na_equipe
-from forms.logto import ClienteLogto, IdentidadeIndisponivel
+from forms.infra.logto import ClienteLogto, IdentidadeIndisponivel
 
 DEFINICAO = {
     "campos": [

@@ -90,8 +90,8 @@ def test_o_ruff_tem_a_regra_s608_ligada():
 
 def test_filtro_por_json_so_aceita_campo_da_definicao_e_com_formato_de_identificador():
     # arrange
-    from forms.models import ValorInvalido
-    from forms.repositorio import FiltroDeIgualdade, _caminho_json
+    from forms.dominio.models import ValorInvalido
+    from forms.repositorios.formularios import FiltroDeIgualdade, _caminho_json
 
     # act / assert
     assert _caminho_json(FiltroDeIgualdade("obs", "x"), {"obs"}) == ["obs"]

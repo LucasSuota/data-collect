@@ -10,11 +10,11 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from forms import servico
-from forms.banco import Conexao
+from forms.dominio.models import Contexto, LimiteExcedido, ValorInvalido
 from forms.ia import busca, chat, ferramentas, indexacao, repositorio
 from forms.ia.cliente import ClienteFalso, IaIndisponivel
-from forms.models import Contexto, LimiteExcedido, ValorInvalido
+from forms.infra.banco import Conexao
+from forms.servicos import servico
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 DEFINICAO = {

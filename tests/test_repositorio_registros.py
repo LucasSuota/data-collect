@@ -2,9 +2,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from forms.banco import Conexao
-from forms.models import Campo, Definicao, NaoEncontrado, TipoCampo, ValorInvalido
-from forms.repositorio import (
+from forms.dominio.models import Campo, Definicao, NaoEncontrado, TipoCampo, ValorInvalido
+from forms.infra.banco import Conexao
+from forms.repositorios.formularios import (
     FiltroDeIgualdade,
     atualizar_registro,
     contar_registros,

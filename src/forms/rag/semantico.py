@@ -10,12 +10,12 @@ import math
 import struct
 from collections.abc import Sequence
 
-from forms import repositorio
-from forms.banco import Conexao
 from forms.ia.cliente import ClienteDeLLM, IaIndisponivel
+from forms.infra.banco import Conexao
 from forms.rag.chunker import Trecho
 from forms.rag.indice import IndiceBm25, ResultadoDeBusca
-from forms.servico_base import transacao
+from forms.repositorios import formularios as repositorio
+from forms.servicos.base import transacao
 
 # Cosseno mínimo para um trecho contar como relacionado. Sem isso, "o vizinho mais próximo"
 # sempre apareceria e a resposta "não encontrei" nunca existiria. O valor depende do modelo de

@@ -10,8 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import AGORA, cliente_da_pessoa
-from forms.api import Configuracao, criar_app, descobrir_extensoes
-from forms.api_dependencias import obter_agora
+from forms.api.app import Configuracao, criar_app, descobrir_extensoes
+from forms.api.dependencias import obter_agora
 from forms.ia import extensao as extensao_ia
 from forms.ia.cliente import ClienteFalso, IaIndisponivel
 from forms.rag import extensao as extensao_rag
@@ -32,7 +32,7 @@ def montar(configuracao, validador, dsn, chave_privada, pessoa):
 
 
 def _montar_app(configuracao, validador, dsn, chave_privada, pessoa, llm, docs):
-    from forms import banco
+    from forms.infra import banco
 
     app = criar_app(
         configuracao,
@@ -66,7 +66,7 @@ def docs(tmp_path: Path) -> Path:
 
 
 def _linhas(configuracao: Configuracao) -> tuple[int, int, int]:
-    from forms import banco
+    from forms.infra import banco
 
     conexao = banco.abrir_conexao(configuracao.dsn)
     try:
@@ -116,7 +116,7 @@ def test_app_sem_extensoes_nao_tem_as_rotas_de_ia(app, cliente):
 
 def test_rotas_de_ia_exigem_o_token(configuracao, validador, dsn):
     # arrange
-    from forms import banco
+    from forms.infra import banco
 
     app = criar_app(
         configuracao,

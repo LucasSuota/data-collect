@@ -3,9 +3,9 @@ from datetime import UTC, datetime
 import psycopg
 import pytest
 
-from forms.banco import Conexao
-from forms.models import Campo, Definicao, TipoCampo
-from forms.repositorio import (
+from forms.dominio.models import Campo, Definicao, TipoCampo
+from forms.infra.banco import Conexao
+from forms.repositorios.formularios import (
     criar_formulario,
     formularios_dependentes,
     inserir_registro,

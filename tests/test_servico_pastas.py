@@ -2,9 +2,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from forms import servico
-from forms.banco import Conexao
-from forms.models import ExclusaoBloqueada, NaoEncontrado, PastaInvalida
+from forms.dominio.models import ExclusaoBloqueada, NaoEncontrado, PastaInvalida
+from forms.infra.banco import Conexao
+from forms.servicos import servico
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 DEFINICAO = {"campos": [{"id": "obs", "tipo": "texto", "rotulo": "Observação"}]}

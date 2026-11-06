@@ -16,7 +16,7 @@ dependencies = [
 
 [project.scripts]
 forms = "forms.cli:main"
-forms-openapi = "forms.exportar_openapi:main"
+forms-openapi = "forms.api.exportar_openapi:main"
 
 [project.optional-dependencies]
 ia = [

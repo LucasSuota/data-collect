@@ -10,7 +10,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, localcontext
 
-from forms.models import ErroDeDominio
+from forms.dominio.models import ErroDeDominio
 
 MAXIMO_DO_TITULO = 120
 MAXIMO_DE_PARAGRAFOS = 6

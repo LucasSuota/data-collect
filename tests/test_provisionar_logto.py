@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from forms.provisionar_logto import (
+from forms.infra.provisionar_logto import (
     Ambiente,
     ApiLogto,
     ProvisionamentoFalhou,

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from forms.formulas import ValorDeCampo, calcular_campos
-from forms.models import Campo, CicloDeDependencia, ResultadoCalculado, TipoCampo
+from forms.dominio.formulas import ValorDeCampo, calcular_campos
+from forms.dominio.models import Campo, CicloDeDependencia, ResultadoCalculado, TipoCampo
 
 D = Decimal
 
@@ -306,11 +306,11 @@ def test_modulo_de_formulas_nao_e_importado_por_camadas_acima():
     # assert: o núcleo de cálculo não depende de api, servico, repositorio nem de IA
     import ast
 
-    from forms import formulas
+    from forms.dominio import formulas
 
     arvore = ast.parse(Path(formulas.__file__).read_text(encoding="utf-8"))
     importados = {
-        (no.module or "").split(".")[1] if (no.module or "").startswith("forms.") else ""
+        (no.module or "").split(".")[-1] if (no.module or "").startswith("forms.") else ""
         for no in ast.walk(arvore)
         if isinstance(no, ast.ImportFrom)
     }

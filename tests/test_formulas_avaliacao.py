@@ -3,8 +3,8 @@ from decimal import Decimal
 
 import pytest
 
-from forms.formulas import PI, avaliar, carregar_formula
-from forms.models import ErroDeCalculo
+from forms.dominio.formulas import PI, avaliar, carregar_formula
+from forms.dominio.models import ErroDeCalculo
 
 D = Decimal
 

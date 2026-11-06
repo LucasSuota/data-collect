@@ -3,8 +3,8 @@ from decimal import Decimal
 
 import pytest
 
-from forms.models import Campo, TipoCampo, ValorInvalido
-from forms.tipos_campo import (
+from forms.dominio.models import Campo, TipoCampo, ValorInvalido
+from forms.dominio.tipos_campo import (
     ESPECIFICACOES,
     PROPRIEDADES_COMUNS,
     Localizacao,

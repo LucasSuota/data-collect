@@ -61,7 +61,7 @@ services:
       context: .
       dockerfile: docker/api/Dockerfile
     image: data-collect-api:local
-    command: ["python", "-m", "forms.provisionar_logto"]
+    command: ["python", "-m", "forms.infra.provisionar_logto"]
     restart: "no"
     depends_on:
       logto: {condition: service_healthy}

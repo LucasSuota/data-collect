@@ -9,7 +9,7 @@ import re
 from fastapi.testclient import TestClient
 
 from conftest import cliente_da_pessoa, criar_pessoa_na_equipe
-from forms.api_permissoes import (
+from forms.api.matriz_permissoes import (
     PERMISSAO_DA_ROTA,
     PUBLICAS,
     QUALQUER_MEMBRO,
@@ -89,7 +89,7 @@ def test_cada_rota_barra_quem_nao_tem_a_permissao_e_deixa_passar_quem_tem(
 
 def test_matriz_so_cita_permissoes_que_existem_e_nao_repete_rota(app):
     # arrange
-    from forms.permissoes import IDS_DE_PERMISSAO
+    from forms.dominio.permissoes import IDS_DE_PERMISSAO
 
     # act
     citadas = {p for spec in PERMISSAO_DA_ROTA.values() for p in spec.split("|")}

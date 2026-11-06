@@ -2,16 +2,17 @@ from datetime import UTC, datetime
 
 import pytest
 
-from forms import banco, repositorio
-from forms.banco import Conexao
-from forms.models import (
+from forms.dominio.models import (
     Campo,
     Definicao,
     DefinicaoInvalida,
     NaoEncontrado,
     TipoCampo,
 )
-from forms.repositorio import (
+from forms.infra import banco
+from forms.infra.banco import Conexao
+from forms.repositorios import formularios as repositorio
+from forms.repositorios.formularios import (
     criar_formulario,
     excluir_formulario,
     inserir_versao,
