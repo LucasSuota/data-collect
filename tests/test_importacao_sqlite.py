@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from forms import cli, servico
-from forms.banco import Conexao
+from forms import cli
+from forms.infra.banco import Conexao
+from forms.servicos import servico
 
 AGORA = datetime(2026, 12, 1, 9, 0, 0, tzinfo=UTC)
 

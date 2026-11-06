@@ -3,9 +3,8 @@ import struct
 
 import pytest
 
-from forms import repositorio
-from forms.banco import Conexao
 from forms.ia.cliente import ClienteFalso, IaIndisponivel
+from forms.infra.banco import Conexao
 from forms.rag.chunker import Trecho
 from forms.rag.indice import IndiceBm25, ResultadoDeBusca
 from forms.rag.responder import MENSAGEM_SEM_RESULTADO, perguntar
@@ -19,6 +18,7 @@ from forms.rag.semantico import (
     similaridade_de_cosseno,
     texto_para_vetorizar,
 )
+from forms.repositorios import formularios as repositorio
 
 CURA = Trecho("moldagem.md", "Moldagem > Cura", "Manter o concreto úmido por 7 dias.")
 RUPTURA = Trecho("moldagem.md", "Moldagem > Ruptura", "Romper os corpos de prova aos 28 dias.")

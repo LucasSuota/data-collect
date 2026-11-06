@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from forms import formulas
-from forms.formulas import analisar_formula
-from forms.models import FormulaInvalida, Posicao
+from forms.dominio import formulas
+from forms.dominio.formulas import analisar_formula
+from forms.dominio.models import FormulaInvalida, Posicao
 
 
 @pytest.mark.parametrize(
@@ -180,7 +180,7 @@ def test_formula_longa_dentro_do_limite_e_aceita_e_avaliada():
     # arrange
     from decimal import Decimal
 
-    from forms.formulas import avaliar, carregar_formula
+    from forms.dominio.formulas import avaliar, carregar_formula
 
     formula = carregar_formula("a" + " + a" * 100)
 

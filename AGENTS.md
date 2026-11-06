@@ -299,21 +299,31 @@ tests/       test_formulas.py  test_validacao.py  test_servico.py  test_api.py .
 ### 5.1. Camadas e direção de dependência
 
 ```
-api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py, segredos.py
-                                →  repositorio.py  →  psycopg  →  PostgreSQL
+api/ , cli.py  →  servicos/  →  dominio/ (validacao, formulas, tipos_campo, models...)
+                              →  infra/segredos.py
+                              →  repositorios/  →  infra/banco.py  →  psycopg  →  PostgreSQL
 ```
+Cada camada é um **subpacote de `src/forms/`**; o nome da pasta diz o papel, e o arquivo dentro dela diz o assunto (`servicos/registros.py`, `repositorios/equipes.py`, `api/rotas_equipes.py`). Nome novo segue o mesmo padrão: **uma pasta por camada, um arquivo por assunto**.
 
-- **`models.py`**: `dataclasses` do domínio. Sem Pydantic, sem I/O.
-- **`tipos_campo.py`**: o que cada tipo aceita, valida e normaliza.
-- **`formulas.py`**: parse, grafo de dependências, detecção de ciclo e avaliação. Funções puras, sem I/O.
-- **`validacao.py`**: valida um registro contra uma definição.
-- **`segredos.py`**: hash de token (SHA-256, comparação em tempo constante) e cifra e decifra da chave de LLM (Fernet). É o **único** lugar que mexe com criptografia.
-- **`repositorio.py`**: único módulo que fala SQL. Sempre com parâmetros (`%s`), nunca f-string em SQL (a regra `S608` do `ruff` e um teste de varredura garantem); identificador dinâmico, se um dia houver, só com `psycopg.sql`. **Todo método recebe o `grupo_id`** e o aplica na consulta. O esquema vem de `migracoes/` (§5.2).
-- **`servico.py`**: casos de uso (importar template, publicar versão, validar definição, prévia de fórmulas, catálogo, criar/atualizar registro, listar, exportar). Ponto de entrada comum de API e CLI. Cada caso de uso recebe o **contexto da requisição** (`usuario_id`, `grupo_id`, permissões) por parâmetro; o `servico` não sabe de HTTP. Para não virar um arquivo gigante, os casos de uso de registros (`servico_registros.py`), consulta/exportação (`servico_consulta.py`), pastas (`servico_pastas.py`), equipes, cargos e convites (`servico_equipes.py`) e rascunhos de versão (`servico_rascunhos.py`) moram em módulos próprios, e as peças comuns (transação, campos compartilhados) em `servico_base.py`; `servico.py` os reexporta, então API e CLI chamam tudo por `servico.<função>`.
-- **`exportacao.py`**: formatação das células e geração do CSV (§2.3, §12). Funções puras, sem I/O; usada por `servico_consulta.py`.
-- **`api.py`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP. Fica dividida em `api.py` (app, CORS, cabeçalhos de segurança, limites, tratadores de erro), `auth.py` (validação do JWT do Logto e montagem do contexto da requisição), `api_esquemas.py` (modelos Pydantic de entrada e saída) e `api_rotas.py` (endpoints); `api_extensoes.py` descobre e monta as rotas dos módulos opcionais; `exportar_openapi.py` gera o `openapi.json` do front.
-- **`cli.py`**: `argparse` fino, só para operação (§2.4); só chama `servico.py`.
-- Dependências apontam **para baixo**: o núcleo nunca importa `api`, `cli`, `rag` ou `ia`.
+
+Nas menções abaixo e no resto deste arquivo, `servico.py` quer dizer `servicos/servico.py`, `repositorio.py` quer dizer `repositorios/formularios.py`, e assim por diante.
+
+- **`dominio/`**: regras puras, sem I/O e sem HTTP; não importa nenhuma outra camada.
+  - **`models.py`**: `dataclasses` do domínio e exceções de domínio. Sem Pydantic.
+  - **`tipos_campo.py`**: o que cada tipo aceita, valida e normaliza.
+  - **`formulas.py`**: parse, grafo de dependências, detecção de ciclo e avaliação. Funções puras.
+  - **`validacao.py`**: valida um registro contra uma definição.
+  - **`exportacao.py`**: formatação das células e geração do CSV (§2.3, §12); usada por `servicos/consulta.py`.
+  - **`permissoes.py`**: as 17 permissões e os cargos de partida (a matriz **endpoint → permissão** fica em `api/matriz_permissoes.py`).
+- **`infra/`**: peças técnicas que não são regra de negócio.
+  - **`banco.py`**: conexão, pool, Row Level Security e o executor de `migracoes/` (§5.2).
+  - **`segredos.py`**: hash de token (SHA-256, comparação em tempo constante) e cifra e decifra da chave de LLM (Fernet). É o **único** lugar que mexe com criptografia.
+  - **`logto.py`** e **`provisionar_logto.py`**: Management API e provisionamento do Logto; **`legal.py`** e **`ajuda.py`**: carregam `legal/` e `ajuda/`.
+- **`repositorios/`**: **único lugar que fala SQL** (`formularios.py` para formulários, versões e registros; `equipes.py`; `extras.py`). Sempre com parâmetros (`%s`), nunca f-string em SQL (a regra `S608` do `ruff` e um teste de varredura garantem); identificador dinâmico, se um dia houver, só com `psycopg.sql`. **Todo método recebe o `grupo_id`** e o aplica na consulta.
+- **`servicos/`**: casos de uso, ponto de entrada comum de API e CLI. Cada caso de uso recebe o **contexto da requisição** (`usuario_id`, `grupo_id`, permissões) por parâmetro; o serviço não sabe de HTTP. Um arquivo por assunto (`registros.py`, `consulta.py`, `pastas.py`, `equipes.py` para equipes, cargos e convites, `rascunhos.py`, `extras.py`, `importacao.py`), com as peças comuns (transação, campos compartilhados) em `base.py`. **`servico.py` é a fachada** que os reexporta, então API e CLI chamam tudo por `servico.<função>`.
+- **`api/`**: Pydantic e HTTP só aqui; traduz erros de domínio em respostas HTTP. `app.py` (app, CORS, cabeçalhos de segurança, limites, tratadores de erro; ponto de entrada `forms.api.app:app_do_ambiente`), `auth.py` (validação do JWT do Logto e contexto da requisição), `esquemas.py` (modelos Pydantic de entrada e saída), `rotas_*.py` (os endpoints, um arquivo por assunto), `matriz_permissoes.py` (liga cada rota à permissão), `dependencias.py` e `seguranca.py` (dependências do FastAPI, limites de uso, log de acesso), `extensoes.py` (descobre e monta as rotas dos módulos opcionais) e `exportar_openapi.py` (gera o `openapi.json` do front).
+- **`cli.py`**: `argparse` fino, só para operação (§2.4); só chama `servicos/`.
+- Dependências apontam **para baixo**: `dominio/` não importa nada acima; o núcleo nunca importa `api`, `cli`, `rag` ou `ia`.
 - **Módulos opcionais** (`rag/`, `ia/`) dependem do núcleo, nunca o contrário; o app inteiro funciona com eles removidos. Cada um publica um `EXTENSAO` em `extensao.py` (rotas e tratadores de erro), e o núcleo o procura **pelo nome** em execução (`descobrir_extensoes()`), sem importá-lo; só a ausência do próprio módulo é tolerada. Sem a pasta do módulo, o app sobe normalmente.
 
 ### 5.2. Modelo de dados (PostgreSQL)

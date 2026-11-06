@@ -15,11 +15,11 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from forms.banco import Conexao
+from forms.dominio.models import ErroDeDominio, LimiteExcedido, ValorInvalido, ValorJson
 from forms.ia import busca, ferramentas, indexacao, repositorio
 from forms.ia.cliente import IaIndisponivel, ProvedorDeLLM
 from forms.ia.validacao import conferir_numeros, extrair_numeros
-from forms.models import ErroDeDominio, LimiteExcedido, ValorInvalido, ValorJson
+from forms.infra.banco import Conexao
 from forms.rag.chunker import Trecho, carregar_documentos
 from forms.rag.indice import IndiceBm25
 
@@ -213,7 +213,7 @@ def _fontes_da_busca(
 
 
 def repositorio_formularios(conexao: Conexao) -> list[tuple[int, str]]:
-    from forms import servico  # noqa: PLC0415 - evita ciclo na importação
+    from forms.servicos import servico  # noqa: PLC0415 - evita ciclo na importação
 
     return [(f.id, f.nome) for f in servico.listar_formularios(conexao)]
 

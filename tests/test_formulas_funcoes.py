@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from forms.formulas import (
+from forms.dominio.formulas import (
     CONSTANTES,
     FUNCOES,
     NOMES_RESERVADOS,
@@ -11,7 +11,7 @@ from forms.formulas import (
     avaliar,
     carregar_formula,
 )
-from forms.models import ErroDeCalculo, FormulaInvalida
+from forms.dominio.models import ErroDeCalculo, FormulaInvalida
 
 D = Decimal
 

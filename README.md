@@ -116,11 +116,13 @@ Um campo calculado sempre chega ao front como `{"valor": ..., "erro": ...}`, par
 ```
 frontend/      React + TypeScript + Vite + Tailwind (+ Playwright em e2e/)
 src/forms/     backend Python
-  models.py  tipos_campo.py  formulas.py  validacao.py  exportacao.py
-  banco.py  repositorio*.py  migracoes/*.sql
-  servico.py (+ servico_*.py)  permissoes.py  segredos.py  legal.py  ajuda.py
-  api.py (+ api_*.py)  auth.py  logto.py  provisionar_logto.py  cli.py
-  rag/  ia/                                  (opcionais; achados pelo nome em api_extensoes.py)
+  dominio/       models  tipos_campo  formulas  validacao  exportacao  permissoes (regras puras)
+  repositorios/  formularios  equipes  extras (único lugar com SQL)
+  servicos/      servico (fachada) + um arquivo por assunto (casos de uso)
+  api/           app  esquemas  rotas_*  matriz_permissoes  seguranca  auth  extensoes
+  infra/         banco  segredos  logto  provisionar_logto  legal  ajuda  migracoes/*.sql
+  cli.py
+  rag/  ia/                                  (opcionais; achados pelo nome em api/extensoes.py)
 templates/     corpo_de_prova.json  inspecao_obra.json
 ajuda/ legal/ docs/   guias, textos legais e procedimentos em Markdown
 docker/        Dockerfiles, backup, init do Postgres
@@ -132,12 +134,12 @@ Resumo de cada pasta com código: [src/forms/README.md](src/forms/README.md), [f
 A dependência sempre aponta para baixo:
 
 ```
-api.py / cli.py  →  servico.py  →  validacao.py, formulas.py, tipos_campo.py, segredos.py
-                                →  repositorio.py  →  psycopg  →  PostgreSQL
+api/ , cli.py  →  servicos/  →  dominio/ (validacao, formulas, tipos_campo...), infra/segredos.py
+                              →  repositorios/  →  infra/banco.py  →  psycopg  →  PostgreSQL
 ```
 
-- Regra de negócio fica em `servico.py` e abaixo; `api.py` e `cli.py` são camadas finas.
-- Só os módulos `repositorio*.py` falam SQL, sempre parametrizado (a regra `S608` do `ruff` e um teste de varredura garantem). Sem ORM.
+- Regra de negócio fica em `servicos/` e abaixo; `api/` e `cli.py` são camadas finas.
+- Só o pacote `repositorios/` fala SQL, sempre parametrizado (a regra `S608` do `ruff` e um teste de varredura garantem). Sem ORM.
 - Pydantic só na borda da API. O domínio usa `dataclasses`.
 - Os módulos opcionais (`rag/`, `ia/`) dependem do núcleo, nunca o contrário.
 

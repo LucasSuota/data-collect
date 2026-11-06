@@ -2,8 +2,8 @@
 
 import pytest
 
-from forms.models import Campo, Definicao, TipoCampo
-from forms.validacao import analisar_definicao
+from forms.dominio.models import Campo, Definicao, TipoCampo
+from forms.dominio.validacao import analisar_definicao
 
 CAMPOS = [
     {"id": "carga", "tipo": "numero", "rotulo": "Carga", "unidade": "kN"},

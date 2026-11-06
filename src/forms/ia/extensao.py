@@ -1,6 +1,6 @@
 """Rotas de IA da API: gerador de formulários e resumo de registros (AGENTS.md §2.5).
 
-É uma extensão opcional: o núcleo a encontra pelo nome (`api_extensoes.py`) e o app funciona sem
+É uma extensão opcional: o núcleo a encontra pelo nome (`api/extensoes.py`) e o app funciona sem
 esta pasta. Aqui só há HTTP; a regra está em `gerador.py`, `resumo.py` e `validacao.py`.
 Nenhuma rota grava nada: o gerador devolve rascunhos e o resumo só lê.
 """
@@ -16,17 +16,17 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import Field
 
-from forms import servico
-from forms.api_dependencias import DepAgora, DepConexao, autorizar
-from forms.api_esquemas import ErroDeCampoSaida, ErroSaida, FormularioEntrada, Modelo
-from forms.api_extensoes import Extensao, resposta_de_erro
-from forms.api_rotas import ERROS_COMUNS, ler_filtros
+from forms.api.dependencias import DepAgora, DepConexao, autorizar
+from forms.api.esquemas import ErroDeCampoSaida, ErroSaida, FormularioEntrada, Modelo
+from forms.api.extensoes import Extensao, resposta_de_erro
+from forms.api.rotas_formularios import ERROS_COMUNS, ler_filtros
 from forms.ia import chat, configuracao, gerador, indexacao, resumo
 from forms.ia import repositorio as ia_repositorio
 from forms.ia.cliente import ClienteDeLLM, IaIndisponivel
 from forms.ia.gerador import MAXIMO_DE_FORMULARIOS, PEDIDO_MAXIMO, RespostaDaIaInvalida
 from forms.ia.validacao import ResumoRejeitado
-from forms.segredos import Cifra
+from forms.infra.segredos import Cifra
+from forms.servicos import servico
 
 _ERROS_DA_IA = {
     502: {"model": ErroSaida, "description": "A IA respondeu, mas fora do formato esperado."},

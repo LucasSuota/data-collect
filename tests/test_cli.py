@@ -5,7 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from forms import cli, servico
+from forms import cli
+from forms.servicos import servico
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 TEMPLATES = Path(__file__).parent.parent / "templates"
@@ -379,10 +380,10 @@ def test_cli_nao_importa_repositorio_nem_regras_do_nucleo():
 
     # assert
     proibidos = {
-        "forms.repositorio",
-        "forms.validacao",
-        "forms.formulas",
-        "forms.tipos_campo",
+        "forms.repositorios.formularios",
+        "forms.dominio.validacao",
+        "forms.dominio.formulas",
+        "forms.dominio.tipos_campo",
         "psycopg",
     }
     assert importados.isdisjoint(proibidos)

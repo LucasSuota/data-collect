@@ -10,13 +10,13 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-from forms import servico
-from forms.banco import Conexao
-from forms.exportacao import Coluna
-from forms.formulas import TipoFormula
+from forms.dominio.exportacao import Coluna
+from forms.dominio.formulas import TipoFormula
+from forms.dominio.models import Registro, TipoCampo, ValorInvalido
 from forms.ia.cliente import ClienteDeLLM
 from forms.ia.validacao import Resumo, extrair_numeros, validar_resumo
-from forms.models import Registro, TipoCampo, ValorInvalido
+from forms.infra.banco import Conexao
+from forms.servicos import servico
 
 MAXIMO_DE_TOKENS = 1500
 _POR_PAGINA = servico.LIMITE_MAXIMO

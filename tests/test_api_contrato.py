@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from forms.api import Configuracao, criar_app, descobrir_extensoes
-from forms.exportar_openapi import gerar
-from forms.exportar_openapi import main as exportar
+from forms.api.app import Configuracao, criar_app, descobrir_extensoes
+from forms.api.exportar_openapi import gerar
+from forms.api.exportar_openapi import main as exportar
 
 # Campos de cada modelo de resposta: nome -> obrigatório. É o JSON esperado pelo front.
 MODELOS_DE_RESPOSTA = {

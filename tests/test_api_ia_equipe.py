@@ -5,13 +5,13 @@ import json
 import pytest
 
 from conftest import AGORA, cliente_da_pessoa, criar_pessoa_na_equipe
-from forms import banco
-from forms.api import criar_app, descobrir_extensoes
-from forms.api_dependencias import obter_agora
+from forms.api.app import criar_app, descobrir_extensoes
+from forms.api.dependencias import obter_agora
 from forms.ia import configuracao
 from forms.ia import extensao as extensao_ia
 from forms.ia.cliente import ClienteFalso, IaIndisponivel
-from forms.segredos import Cifra, nova_chave_mestra
+from forms.infra import banco
+from forms.infra.segredos import Cifra, nova_chave_mestra
 
 DEFINICAO = {"campos": [{"id": "obs", "tipo": "texto", "rotulo": "Observação"}]}
 CHAVE_MESTRA = nova_chave_mestra()
@@ -316,13 +316,13 @@ def test_gerador_e_resumo_usam_o_provedor_da_equipe_e_ia_desligada_vira_503(app_
 
 def test_chat_cai_no_limite_de_taxa_com_429(app_ia, adm, monkeypatch):
     # arrange
-    from forms import api_seguranca
+    from forms.api import seguranca as api_seguranca
 
     _com_llm(app_ia, None)
     monkeypatch.setitem(
         api_seguranca.LIMITES_POR_ROTA, ("POST", "/chat"), api_seguranca.Limite(1, 60)
     )
-    monkeypatch.setattr("forms.api_dependencias.LIMITES_POR_ROTA", api_seguranca.LIMITES_POR_ROTA)
+    monkeypatch.setattr("forms.api.dependencias.LIMITES_POR_ROTA", api_seguranca.LIMITES_POR_ROTA)
 
     # act
     primeira = adm.post("/chat", json={"mensagem": "como exportar?"})

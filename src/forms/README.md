@@ -5,11 +5,11 @@
 Este arquivo resume cada módulo (o que é, como se conecta, como testar). As **regras** e o alvo estão no [AGENTS.md](../../AGENTS.md); aqui está o que **existe** no código.
 
 ```
-api.py / cli.py  →  servico.py (+ servico_*.py)  →  validacao.py, formulas.py, tipos_campo.py, segredos.py
-                                                →  repositorio*.py  →  banco.py  →  psycopg  →  PostgreSQL
+api/ , cli.py  →  servicos/  →  dominio/ (validacao, formulas, tipos_campo...), infra/segredos.py
+                              →  repositorios/  →  infra/banco.py  →  psycopg  →  PostgreSQL
 ```
 
-## models.py
+## dominio/models.py
 
 ### Responsabilidade
 Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e não faz I/O.
@@ -50,7 +50,7 @@ Tipos comuns do domínio e exceções de domínio. Não valida, não calcula e n
 - Não importar nenhuma outra camada do projeto aqui; um teste confere isso.
 - Renomear atributo de `Campo` ou de `ErroDeCampo` quebra o contrato com o `frontend/`.
 
-## formulas.py
+## dominio/formulas.py
 
 ### Responsabilidade
 Tudo sobre fórmulas, sem I/O: ler o texto e verificar a árvore, inferir tipos ao publicar, achar a ordem de cálculo e avaliar com `Decimal`. Não conhece registro, banco nem API. Quem monta os tipos dos campos e os valores de entrada é a validação e o serviço.
@@ -88,7 +88,7 @@ Tudo sobre fórmulas, sem I/O: ler o texto e verificar a árvore, inferir tipos 
 - Mudar `FUNCOES` muda o parser, a inferência, o avaliador e o catálogo ao mesmo tempo, de propósito.
 - Este arquivo ficou grande (parse, tipos, grafo e avaliação). Se crescer mais, dividir é a próxima refatoração.
 
-## tipos_campo.py
+## dominio/tipos_campo.py
 
 ### Responsabilidade
 Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. Não olha o registro inteiro (isso é da validação) e não calcula fórmulas.
@@ -120,7 +120,7 @@ Dizer o que cada tipo de campo aceita, validar e normalizar um valor isolado. N�
 - `bool` é subclasse de `int`: o número rejeita `true`/`false` de propósito.
 - Mudar o rótulo ou as propriedades de um tipo muda o catálogo que o front lê.
 
-## validacao.py
+## dominio/validacao.py
 
 ### Responsabilidade
 Validar uma definição de formulário e um registro contra ela, devolvendo **todos** os erros de uma vez, localizados pelo `id` do campo (AGENTS.md §5.3). Não calcula (isso é de `formulas.py`), não normaliza valor isolado (isso é de `tipos_campo.py`) e não faz I/O: o que viria do banco entra por parâmetro.
@@ -152,7 +152,7 @@ Validar uma definição de formulário e um registro contra ela, devolvendo **to
 - `tipos_calculados` é a base da regra de contrato dos compartilhados (nova versão da origem não pode mudar o tipo inferido).
 - `compartilhados_da_definicao` entrega o que o formulário libera aos dependentes; ciclo entre *formulários* e o contrato entre versões são do serviço, que conhece os outros formulários.
 
-## banco.py e migracoes/
+## infra/banco.py e infra/migracoes/
 
 ### Responsabilidade
 A conexão com o PostgreSQL e o esquema versionado. `Conexao` (subclasse de `psycopg.Connection`) carrega o **contexto da requisição** (`grupo_id`, `usuario_id`, permissões) e o declara no banco: `definir_contexto` grava `app.grupo_id`, que o Row Level Security lê.
@@ -171,7 +171,7 @@ A conexão com o PostgreSQL e o esquema versionado. `Conexao` (subclasse de `psy
 ### Como testar
 `docker compose up -d postgres` e `uv run pytest tests/test_banco.py` (Postgres real em `127.0.0.1:5433`, ou `FORMS_TEST_DSN`).
 
-## repositorio.py, repositorio_equipes.py, repositorio_extras.py
+## repositorios/ (formularios.py, equipes.py, extras.py)
 
 ### Responsabilidade
 **Único** lugar que fala SQL, sempre com parâmetros (`%s`); identificador dinâmico só com `psycopg.sql`. Todo método de dados da equipe recebe o `grupo_id` e o aplica na consulta (e o RLS repete a barreira no banco). Sem ORM.
@@ -180,22 +180,23 @@ A conexão com o PostgreSQL e o esquema versionado. `Conexao` (subclasse de `psy
 | Arquivo | Papel |
 |---|---|
 | `repositorio.py` | Formulários, versões, rascunhos, pastas, registros (com `revisao`, autoria e histórico), referências, dependências, busca e contagem por estado |
-| `repositorio_equipes.py` | Pessoas, equipes, membros, cargos e permissões, convites (token só como hash) e consentimentos |
-| `repositorio_extras.py` | Notificações, progresso do passeio e os dados que a busca global e o Início usam |
+| `repositorios/equipes.py` | Pessoas, equipes, membros, cargos e permissões, convites (token só como hash) e consentimentos |
+| `repositorios/extras.py` | Notificações, progresso do passeio e os dados que a busca global e o Início usam |
 
 ### Como testar
 `uv run pytest tests/test_repositorio_*.py tests/test_sql_seguro.py` (o segundo varre o código: SQL por f-string ou `%` é rejeitado; exceção só com `noqa` e justificativa na linha).
 
-## segredos.py, permissoes.py, legal.py, ajuda.py
+## infra/segredos.py, dominio/permissoes.py, infra/legal.py, infra/ajuda.py
 
 | Arquivo | Papel |
 |---|---|
 | `segredos.py` | **Único** lugar com criptografia: `hash_do_token` (SHA-256), comparação em tempo constante e Fernet para a chave de LLM de cada equipe |
-| `permissoes.py` | As 17 permissões, os cargos de partida e a **matriz endpoint → permissão** (uma tabela só, usada pela API e por `GET /catalogo/permissoes`) |
+| `permissoes.py` (dominio) | As 17 permissões e os cargos de partida |
+| `api/matriz_permissoes.py` | A **matriz endpoint → permissão** (uma tabela só, usada pela API e por `GET /catalogo/permissoes`) |
 | `legal.py` | Lê `legal/*.md` (a primeira linha traz a `versao:`): é a versão que o aceite LGPD compara |
 | `ajuda.py` | Lê os guias de `ajuda/*.md` (central de ajuda e base do chatbot) |
 
-## servico.py (e servico_*.py)
+## servicos/ (servico.py e um arquivo por assunto)
 
 ### Responsabilidade
 Os casos de uso, chamados igualmente por `api*.py` e `cli.py`. Toda regra de negócio fica aqui e abaixo. Recebe a conexão (com o contexto: equipe, pessoa, permissões) e o relógio (`agora`) por parâmetro, controla a transação e não conhece HTTP.
@@ -204,14 +205,14 @@ Os casos de uso, chamados igualmente por `api*.py` e `cli.py`. Toda regra de neg
 | Arquivo | Papel |
 |---|---|
 | `servico.py` | Fachada: formulários e versões (criar, publicar, lote, duplicar, validar, catálogo) e reexportação de todo o resto, então a API chama `servico.<função>` |
-| `servico_base.py` | Transação (`conexao.transaction()`), campos compartilhados dos formulários publicados e o `Cache` de uma operação |
-| `servico_registros.py` | Criar, atualizar (com `revisao`, histórico e cascata), excluir registro, excluir formulário e prévia |
-| `servico_rascunhos.py` | Rascunho compartilhado da próxima versão (salvar com `revisao`, publicar, descartar) |
-| `servico_pastas.py` | Pastas e subpastas e mover formulário |
-| `servico_consulta.py` | Listagem com colunas da definição, filtros, `meus`, paginação, contagens por estado e exportação CSV |
-| `servico_equipes.py` | Pessoas, equipes, cargos, convites, consentimentos e o contexto da requisição (`contexto_da_pessoa`, `declarar_equipe`) |
-| `servico_extras.py` | Início (recentes com estado), busca global, notificações, passeio, exportar e excluir os dados da pessoa (LGPD) |
-| `servico_importacao.py` | Importar o `forms.db` antigo (SQLite) e a galeria de exemplos (`templates/`) |
+| `servicos/base.py` | Transação (`conexao.transaction()`), campos compartilhados dos formulários publicados e o `Cache` de uma operação |
+| `servicos/registros.py` | Criar, atualizar (com `revisao`, histórico e cascata), excluir registro, excluir formulário e prévia |
+| `servicos/rascunhos.py` | Rascunho compartilhado da próxima versão (salvar com `revisao`, publicar, descartar) |
+| `servicos/pastas.py` | Pastas e subpastas e mover formulário |
+| `servicos/consulta.py` | Listagem com colunas da definição, filtros, `meus`, paginação, contagens por estado e exportação CSV |
+| `servicos/equipes.py` | Pessoas, equipes, cargos, convites, consentimentos e o contexto da requisição (`contexto_da_pessoa`, `declarar_equipe`) |
+| `servicos/extras.py` | Início (recentes com estado), busca global, notificações, passeio, exportar e excluir os dados da pessoa (LGPD) |
+| `servicos/importacao.py` | Importar o `forms.db` antigo (SQLite) e a galeria de exemplos (`templates/`) |
 
 ### Decisões que moldam este código
 - Publicar um formulário, uma versão, um rascunho e um lote usam **o mesmo motor** de validação: mensagens e posições são idênticas.
@@ -223,7 +224,7 @@ Os casos de uso, chamados igualmente por `api*.py` e `cli.py`. Toda regra de neg
 ### Como testar
 `uv run pytest tests/test_servico_*.py tests/test_rascunhos.py tests/test_exportacao.py`
 
-## auth.py, logto.py e provisionar_logto.py
+## api/auth.py, infra/logto.py e infra/provisionar_logto.py
 
 | Arquivo | Papel |
 |---|---|
@@ -233,9 +234,9 @@ Os casos de uso, chamados igualmente por `api*.py` e `cli.py`. Toda regra de neg
 
 ### Cuidados
 - O Logto escolhe o tenant pelo **host** da requisição: o token do `m-default` só sai de `localhost:3002` (o provisionador envia esse `Host`).
-- Testes: `uv run pytest tests/test_provisionar_logto.py tests/test_api_seguranca.py` (o Logto real nunca é usado nos testes; o token é assinado com chaves geradas no teste).
+- Testes: `uv run pytest tests/test_provisionar_logto.py tests/test_api/seguranca.py` (o Logto real nunca é usado nos testes; o token é assinado com chaves geradas no teste).
 
-## api.py (e api_*.py, exportar_openapi.py)
+## api/ (app.py, rotas_*.py, esquemas.py...)
 
 ### Responsabilidade
 A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio em status HTTP. **Nenhuma regra de negócio.** Pydantic só existe aqui.
@@ -244,11 +245,11 @@ A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio 
 | Arquivo | Papel |
 |---|---|
 | `api.py` | `criar_app(Configuracao)`, `app_do_ambiente` (fábrica do uvicorn), CORS, cabeçalhos de segurança, limite de corpo (413), tratadores de erro e o primeiro administrador (`FORMS_ADMIN_EMAIL`) |
-| `api_dependencias.py` | Autenticação e contexto por requisição: identifica a pessoa, valida `X-Equipe` contra `membros_grupo`, lê o cargo do banco, exige os termos e confere a permissão da matriz |
-| `api_seguranca.py` | Limite de requisições por pessoa e por equipe nos endpoints caros (429 com `Retry-After`) |
-| `api_esquemas.py` | Modelos Pydantic de entrada e saída; nomes e campos são o contrato com o front |
-| `api_rotas.py`, `api_equipes.py`, `api_extras.py`, `api_permissoes.py` | Os endpoints: formulários e registros, equipes/cargos/convites, Início/busca/notificações/LGPD e o catálogo de permissões |
-| `api_extensoes.py` | `descobrir_extensoes()`: monta as rotas de `ia/` e `rag/` **pelo nome**, em execução, sem o núcleo importá-los |
+| `api/dependencias.py` | Autenticação e contexto por requisição: identifica a pessoa, valida `X-Equipe` contra `membros_grupo`, lê o cargo do banco, exige os termos e confere a permissão da matriz |
+| `api/seguranca.py` | Limite de requisições por pessoa e por equipe nos endpoints caros (429 com `Retry-After`) |
+| `api/esquemas.py` | Modelos Pydantic de entrada e saída; nomes e campos são o contrato com o front |
+| `rotas_formularios.py`, `rotas_equipes.py`, `rotas_extras.py`, `matriz_permissoes.py` | Os endpoints: formulários e registros, equipes/cargos/convites, Início/busca/notificações/LGPD e o catálogo de permissões |
+| `api/extensoes.py` | `descobrir_extensoes()`: monta as rotas de `ia/` e `rag/` **pelo nome**, em execução, sem o núcleo importá-los |
 | `exportar_openapi.py` | `forms-openapi`: grava o `openapi.json` do front; `--conferir` falha se estiver desatualizado |
 
 ### Configuração (variáveis de ambiente, ver `.env.example`)
@@ -267,7 +268,7 @@ A fronteira HTTP. Traduz JSON em chamadas ao `servico` e exceções de domínio 
 
 CLI de **operação** (`argparse`, só chama `servico.py`; nenhuma regra de negócio): `forms migrar`, `forms importar-template`, `forms importar-sqlite` (traz o `forms.db` antigo), `forms reindexar` (IA), `forms criar-registro`, `forms listar` e `forms exportar`. Sempre com `--equipe` e `--usuario` explícitos: a CLI é para quem administra o servidor, não um caminho para furar permissões. Teste: `uv run pytest tests/test_cli.py tests/test_importacao_sqlite.py`.
 
-## exportacao.py
+## dominio/exportacao.py
 
 Funções puras que formatam as células e geram o CSV para o Excel em português (UTF-8 com BOM, `;`, vírgula decimal; números arredondados por `casas_decimais`; células de texto que começam por `=`, `+`, `-`, `@`, tab ou CR recebem `'`). Teste: `uv run pytest tests/test_exportacao.py`.
 

@@ -13,16 +13,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import Field
 
-from forms.api_dependencias import DepConexao, autorizar
-from forms.api_esquemas import Modelo
-from forms.api_extensoes import Extensao
-from forms.api_rotas import ERROS_COMUNS
+from forms.api.dependencias import DepConexao, autorizar
+from forms.api.esquemas import Modelo
+from forms.api.extensoes import Extensao
+from forms.api.rotas_formularios import ERROS_COMUNS
 from forms.ia.cliente import ClienteDeLLM, IaIndisponivel
 from forms.rag.chunker import Trecho, carregar_documentos
 from forms.rag.indice import Buscador, IndiceBm25
 from forms.rag.responder import perguntar
 from forms.rag.semantico import IndiceHibrido, IndiceSemantico, carregar_vetores
-from forms.servico import Conexao
+from forms.servicos.servico import Conexao
 
 PERGUNTA_MAXIMA = 1000
 

@@ -11,11 +11,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-from forms import repositorio, repositorio_extras
-from forms.banco import Conexao
+from forms.dominio.models import Campo, TipoCampo, ValorJson, Versao
 from forms.ia import repositorio as ia_repositorio
 from forms.ia.cliente import IaIndisponivel, ProvedorDeLLM
-from forms.models import Campo, TipoCampo, ValorJson, Versao
+from forms.infra.banco import Conexao
+from forms.repositorios import extras as repositorio_extras
+from forms.repositorios import formularios as repositorio
 
 LOTE = 200
 LOTE_DE_VETORES = 64

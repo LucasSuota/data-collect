@@ -1,6 +1,6 @@
-from forms.exportacao import Coluna, formatar_celula, gerar_csv
-from forms.formulas import TipoFormula
-from forms.models import Registro, TipoCampo
+from forms.dominio.exportacao import Coluna, formatar_celula, gerar_csv
+from forms.dominio.formulas import TipoFormula
+from forms.dominio.models import Registro, TipoCampo
 
 N, DT, B = TipoFormula.NUMERO, TipoFormula.DATA, TipoFormula.BOOLEANO
 

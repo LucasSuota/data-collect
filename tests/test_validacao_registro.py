@@ -3,9 +3,9 @@ from decimal import Decimal
 
 import pytest
 
-from forms.models import Campo, Definicao, TipoCampo
-from forms.tipos_campo import Localizacao
-from forms.validacao import validar_registro
+from forms.dominio.models import Campo, Definicao, TipoCampo
+from forms.dominio.tipos_campo import Localizacao
+from forms.dominio.validacao import validar_registro
 
 D = Decimal
 

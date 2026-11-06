@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from forms import servico
+from forms.dominio.models import ValorInvalido
 from forms.ia.cliente import ClienteFalso, IaIndisponivel
 from forms.ia.resumo import calcular_agregados, resumir
 from forms.ia.validacao import (
@@ -13,7 +13,7 @@ from forms.ia.validacao import (
     extrair_numeros,
     validar_resumo,
 )
-from forms.models import ValorInvalido
+from forms.servicos import servico
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 D = Decimal

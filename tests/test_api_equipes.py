@@ -38,7 +38,8 @@ def test_eu_nao_exige_o_cabecalho_de_equipe(app, chave_privada, pessoa):
 def test_pessoa_em_duas_equipes_precisa_dizer_qual(app, chave_privada, pessoa, dsn):
     # arrange: a mesma pessoa entra numa segunda equipe
     outra = criar_pessoa_na_equipe(dsn, "outra-equipe")
-    from forms import banco, servico_equipes
+    from forms.infra import banco
+    from forms.servicos import equipes as servico_equipes
 
     con = banco.abrir_conexao(dsn)
     usuario = servico_equipes.repositorio_equipes.obter_usuario_por_sub(con, str(pessoa["sub"]))

@@ -10,8 +10,8 @@ from datetime import datetime
 
 from psycopg.types.json import Jsonb
 
-from forms.banco import Conexao
-from forms.models import NaoEncontrado, ValorJson
+from forms.dominio.models import NaoEncontrado, ValorJson
+from forms.infra.banco import Conexao
 
 
 def _iso(momento: datetime) -> str:

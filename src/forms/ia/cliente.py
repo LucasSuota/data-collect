@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from forms.models import ErroDeDominio
+from forms.dominio.models import ErroDeDominio
 
 MODELO_PADRAO = "claude-sonnet-5-5"
 VARIAVEL_DA_CHAVE = "ANTHROPIC_API_KEY"

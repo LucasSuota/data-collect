@@ -3,9 +3,9 @@
 import psycopg
 import pytest
 
-from forms import banco
-from forms.banco import Conexao, Migracao, SemContexto
-from forms.models import Contexto
+from forms.dominio.models import Contexto
+from forms.infra import banco
+from forms.infra.banco import Conexao, Migracao, SemContexto
 
 
 def test_migracoes_do_pacote_estao_numeradas_em_sequencia():

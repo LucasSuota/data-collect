@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
-from forms.banco import Conexao
+from forms.dominio.models import ErroDeCampo, ValorInvalido
 from forms.ia import repositorio
 from forms.ia.cliente import (
     ClienteAnthropic,
@@ -20,8 +20,8 @@ from forms.ia.cliente import (
     criar_cliente,
     validar_base_url,
 )
-from forms.models import ErroDeCampo, ValorInvalido
-from forms.segredos import Cifra, SegredoIndisponivel, cifra_do_ambiente
+from forms.infra.banco import Conexao
+from forms.infra.segredos import Cifra, SegredoIndisponivel, cifra_do_ambiente
 
 PROVEDORES = ("anthropic", "openai_compativel")
 MODELOS_PADRAO = {"anthropic": "claude-sonnet-5-5"}

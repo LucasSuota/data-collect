@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from forms import servico
-from forms.models import DefinicaoInvalida, LoteInvalido, NaoEncontrado
+from forms.dominio.models import DefinicaoInvalida, LoteInvalido, NaoEncontrado
+from forms.servicos import servico
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 TEMPLATES = Path(__file__).parent.parent / "templates"

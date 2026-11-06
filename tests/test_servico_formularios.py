@@ -3,11 +3,11 @@ from datetime import UTC, datetime
 import pytest
 from psycopg import pq
 
-from forms import servico
-from forms.banco import Conexao
-from forms.models import DefinicaoInvalida, LoteInvalido, NaoEncontrado
-from forms.repositorio import listar_dependencias
-from forms.servico import Rascunho
+from forms.dominio.models import DefinicaoInvalida, LoteInvalido, NaoEncontrado
+from forms.infra.banco import Conexao
+from forms.repositorios.formularios import listar_dependencias
+from forms.servicos import servico
+from forms.servicos.servico import Rascunho
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 DEPOIS = datetime(2026, 11, 3, 10, 0, 0, tzinfo=UTC)

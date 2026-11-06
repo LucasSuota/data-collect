@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from forms import servico
-from forms.models import DefinicaoInvalida, ExclusaoBloqueada, NaoEncontrado
-from forms.repositorio import listar_dependencias
+from forms.dominio.models import DefinicaoInvalida, ExclusaoBloqueada, NaoEncontrado
+from forms.repositorios.formularios import listar_dependencias
+from forms.servicos import servico
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 DEPOIS = datetime(2026, 11, 3, 10, 0, 0, tzinfo=UTC)

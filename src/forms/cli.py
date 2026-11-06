@@ -17,9 +17,8 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
-from forms import servico
-from forms.exportacao import formatar_celula
-from forms.models import (
+from forms.dominio.exportacao import formatar_celula
+from forms.dominio.models import (
     DefinicaoInvalida,
     ErroDeCampo,
     ErroDeDominio,
@@ -27,6 +26,7 @@ from forms.models import (
     RegistroInvalido,
     TipoCampo,
 )
+from forms.servicos import servico
 
 DSN_PADRAO = "postgresql://forms:forms@127.0.0.1:5433/forms"
 

@@ -6,9 +6,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from forms import banco, repositorio, repositorio_equipes, servico, servico_equipes
-from forms.banco import Conexao
-from forms.models import ConflitoDeRevisao, Contexto, NaoEncontrado, SemPermissao
+from forms.dominio.models import ConflitoDeRevisao, Contexto, NaoEncontrado, SemPermissao
+from forms.infra import banco
+from forms.infra.banco import Conexao
+from forms.repositorios import equipes as repositorio_equipes
+from forms.repositorios import formularios as repositorio
+from forms.servicos import equipes as servico_equipes
+from forms.servicos import servico
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 DEPOIS = AGORA + timedelta(hours=1)

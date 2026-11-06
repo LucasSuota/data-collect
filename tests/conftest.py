@@ -11,10 +11,10 @@ from datetime import UTC, datetime
 import psycopg
 import pytest
 
-from forms import banco
-from forms.banco import Conexao
-from forms.models import Contexto
-from forms.permissoes import PERMISSOES
+from forms.dominio.models import Contexto
+from forms.dominio.permissoes import PERMISSOES
+from forms.infra import banco
+from forms.infra.banco import Conexao
 
 DSN_DE_TESTE = os.environ.get(
     "FORMS_TEST_DSN", "postgresql://forms:forms@127.0.0.1:5433/forms_test"
@@ -102,10 +102,10 @@ import jwt  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric import ec  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from forms import servico_equipes  # noqa: E402
-from forms.api import Configuracao, criar_app  # noqa: E402
-from forms.api_dependencias import obter_agora  # noqa: E402
-from forms.auth import ChaveFixa, ValidadorDeToken  # noqa: E402
+from forms.api.app import Configuracao, criar_app  # noqa: E402
+from forms.api.auth import ChaveFixa, ValidadorDeToken  # noqa: E402
+from forms.api.dependencias import obter_agora  # noqa: E402
+from forms.servicos import equipes as servico_equipes  # noqa: E402
 
 EMISSOR = "https://logto.teste/oidc"
 AUDIENCIA = "https://api.teste"

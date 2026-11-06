@@ -1,8 +1,8 @@
 import pytest
 
-from forms.formulas import TipoFormula
-from forms.models import DefinicaoInvalida, Posicao, TipoCampo
-from forms.validacao import (
+from forms.dominio.formulas import TipoFormula
+from forms.dominio.models import DefinicaoInvalida, Posicao, TipoCampo
+from forms.dominio.validacao import (
     CampoCompartilhado,
     analisar_definicao,
     exigir_definicao_valida,

@@ -1,7 +1,7 @@
 import pytest
 
-from forms.formulas import carregar_formula, nomes_usados, ordenar_calculados
-from forms.models import CicloDeDependencia, DefinicaoInvalida
+from forms.dominio.formulas import carregar_formula, nomes_usados, ordenar_calculados
+from forms.dominio.models import CicloDeDependencia, DefinicaoInvalida
 
 
 def _nomes(texto: str) -> tuple[str, ...]:

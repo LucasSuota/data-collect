@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from forms import servico
-from forms.banco import Conexao
-from forms.models import ConflitoDeRevisao, DefinicaoInvalida, NaoEncontrado, ValorInvalido
+from forms.dominio.models import ConflitoDeRevisao, DefinicaoInvalida, NaoEncontrado, ValorInvalido
+from forms.infra.banco import Conexao
+from forms.servicos import servico
 
 AGORA = datetime(2026, 11, 2, 10, 0, 0, tzinfo=UTC)
 V1 = {"campos": [{"id": "a", "tipo": "texto", "rotulo": "A"}]}

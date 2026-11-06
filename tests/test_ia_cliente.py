@@ -259,7 +259,7 @@ def test_o_sdk_do_llm_so_e_importado_em_ia_cliente():
 
 def test_o_nucleo_nunca_importa_ia_nem_rag():
     # arrange
-    nucleo = [a for a in RAIZ.glob("*.py")]
+    nucleo = [a for a in RAIZ.rglob("*.py") if a.relative_to(RAIZ).parts[0] not in {"ia", "rag"}]
 
     # act
     infratores = [
@@ -270,7 +270,7 @@ def test_o_nucleo_nunca_importa_ia_nem_rag():
     ]
 
     # assert: a única exceção é a raiz de composição, que carrega a extensão se ela existir
-    assert set(infratores) <= {"api.py"}
+    assert set(infratores) <= {"app.py"}
 
 
 def _importados_completos(arquivo: Path) -> set[str]:
